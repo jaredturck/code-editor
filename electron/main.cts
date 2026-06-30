@@ -15,6 +15,20 @@ import {
 } from './ollama.cjs'
 import { read_settings, update_settings, type AppSettings } from './settings.cjs'
 import {
+  copy_workspace_text,
+  create_workspace_entry,
+  paste_workspace_entry,
+  read_workspace_directory,
+  rename_workspace_entry,
+  reveal_workspace_entry,
+  stop_workspace_watch,
+  trash_workspace_entry,
+  watch_workspace,
+  type WorkspaceClipboardOperation,
+  type WorkspaceConflictMode,
+  type WorkspaceEntryKind,
+} from './workspace.cjs'
+import {
   create_terminal,
   kill_all_terminals,
   kill_terminal,
@@ -422,12 +436,61 @@ ipcMain.handle(
   },
 )
 
+ipcMain.handle('workspace:read-directory', async (_event, root_path: string, directory_path: string) => {
+  return read_workspace_directory(root_path, directory_path)
+})
+
+ipcMain.handle(
+  'workspace:create-entry',
+  async (_event, root_path: string, parent_path: string, name: string, kind: WorkspaceEntryKind) => {
+    return create_workspace_entry(root_path, parent_path, name, kind)
+  },
+)
+
+ipcMain.handle('workspace:rename-entry', async (_event, root_path: string, source_path: string, name: string) => {
+  return rename_workspace_entry(root_path, source_path, name)
+})
+
+ipcMain.handle(
+  'workspace:paste-entry',
+  async (
+    _event,
+    root_path: string,
+    source_path: string,
+    target_directory: string,
+    operation: WorkspaceClipboardOperation,
+    conflict_mode: WorkspaceConflictMode,
+  ) => {
+    return paste_workspace_entry(root_path, source_path, target_directory, operation, conflict_mode)
+  },
+)
+
+ipcMain.handle('workspace:trash-entry', async (_event, root_path: string, target_path: string) => {
+  return trash_workspace_entry(root_path, target_path)
+})
+
+ipcMain.on('workspace:reveal-entry', (_event, root_path: string, target_path: string) => {
+  reveal_workspace_entry(root_path, target_path)
+})
+
+ipcMain.on('workspace:copy-text', (_event, value: string) => {
+  copy_workspace_text(value)
+})
+
+ipcMain.handle('workspace:watch', (event, root_path: string) => {
+  return watch_workspace(event.sender, root_path)
+})
+
+ipcMain.on('workspace:unwatch', (event) => {
+  stop_workspace_watch(event.sender.id)
+})
+
 ipcMain.handle('diagnostics:analyze', async (_event, input: DiagnosticInput) => {
   return analyze_document(input)
 })
 
-ipcMain.handle('terminal:create', (event, terminal_id: number) => {
-  return create_terminal(event.sender, terminal_id)
+ipcMain.handle('terminal:create', (event, terminal_id: number, cwd?: string | null) => {
+  return create_terminal(event.sender, terminal_id, cwd || undefined)
 })
 
 ipcMain.on('terminal:write', (event, terminal_id: number, data: string) => {
@@ -627,6 +690,7 @@ function create_window() {
   main_window.on('closed', () => {
     destroy_window_browsers(owner_id)
     kill_window_terminals(owner_id)
+    stop_workspace_watch(owner_id)
   })
 
   if (app.isPackaged) {

@@ -1,4 +1,38 @@
 import type { AIModel, EditorSettings } from './editor'
+import type { WorkspaceNodeKind, WorkspacePasteResult } from './workspace'
+
+interface WorkspaceEntryResult {
+  path: string
+  parent_path: string | null
+  name: string
+  kind: WorkspaceNodeKind
+  is_symlink: boolean
+}
+
+interface WorkspaceApi {
+  read_directory: (root_path: string, directory_path: string) => Promise<WorkspaceEntryResult[]>
+  create_entry: (
+    root_path: string,
+    parent_path: string,
+    name: string,
+    kind: WorkspaceNodeKind,
+  ) => Promise<WorkspaceEntryResult>
+  rename_entry: (root_path: string, source_path: string, name: string) => Promise<WorkspaceEntryResult>
+  paste_entry: (
+    root_path: string,
+    source_path: string,
+    target_directory: string,
+    operation: 'copy' | 'cut',
+    conflict_mode: 'ask' | 'replace' | 'keep_both',
+  ) => Promise<WorkspacePasteResult>
+  trash_entry: (root_path: string, target_path: string) => Promise<{ path: string; kind: WorkspaceNodeKind }>
+  reveal_entry: (root_path: string, target_path: string) => void
+  copy_text: (value: string) => void
+  watch: (root_path: string) => Promise<boolean>
+  unwatch: () => void
+  on_change: (callback: (payload: { root_path: string; event_type: string; file_path: string }) => void) => () => void
+  on_watch_error: (callback: (payload: { root_path: string; message: string }) => void) => () => void
+}
 
 interface WindowControlsApi {
   minimize: () => void
@@ -119,7 +153,7 @@ interface BrowserApi {
 }
 
 interface TerminalApi {
-  create: (terminal_id: number) => Promise<{ shell: string; cwd: string }>
+  create: (terminal_id: number, cwd?: string | null) => Promise<{ shell: string; cwd: string }>
   write: (terminal_id: number, data: string) => void
   resize: (terminal_id: number, cols: number, rows: number) => void
   kill: (terminal_id: number) => void
@@ -185,6 +219,7 @@ interface EditorApi {
   file: FileApi
   settings: SettingsApi
   terminal: TerminalApi
+  workspace: WorkspaceApi
   window: WindowControlsApi
 }
 

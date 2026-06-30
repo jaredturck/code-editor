@@ -180,6 +180,7 @@ export interface TerminalSession {
   weight: number
   status: 'starting' | 'running' | 'exited' | 'error'
   exit_code: number | null
+  cwd: string | null
 }
 
 export interface AIModel {

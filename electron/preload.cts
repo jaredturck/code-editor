@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('editor_api', {
     update: (settings: unknown) => ipcRenderer.invoke('settings:update', settings),
   },
   terminal: {
-    create: (terminal_id: number) => ipcRenderer.invoke('terminal:create', terminal_id),
+    create: (terminal_id: number, cwd?: string | null) => ipcRenderer.invoke('terminal:create', terminal_id, cwd),
     write: (terminal_id: number, data: string) => ipcRenderer.send('terminal:write', terminal_id, data),
     resize: (terminal_id: number, cols: number, rows: number) =>
       ipcRenderer.send('terminal:resize', terminal_id, cols, rows),
@@ -126,6 +126,43 @@ contextBridge.exposeInMainWorld('editor_api', {
       ) => callback(payload)
       ipcRenderer.on('terminal:exit', listener)
       return () => ipcRenderer.removeListener('terminal:exit', listener)
+    },
+  },
+  workspace: {
+    read_directory: (root_path: string, directory_path: string) =>
+      ipcRenderer.invoke('workspace:read-directory', root_path, directory_path),
+    create_entry: (root_path: string, parent_path: string, name: string, kind: 'file' | 'directory') =>
+      ipcRenderer.invoke('workspace:create-entry', root_path, parent_path, name, kind),
+    rename_entry: (root_path: string, source_path: string, name: string) =>
+      ipcRenderer.invoke('workspace:rename-entry', root_path, source_path, name),
+    paste_entry: (
+      root_path: string,
+      source_path: string,
+      target_directory: string,
+      operation: 'copy' | 'cut',
+      conflict_mode: 'ask' | 'replace' | 'keep_both',
+    ) =>
+      ipcRenderer.invoke('workspace:paste-entry', root_path, source_path, target_directory, operation, conflict_mode),
+    trash_entry: (root_path: string, target_path: string) =>
+      ipcRenderer.invoke('workspace:trash-entry', root_path, target_path),
+    reveal_entry: (root_path: string, target_path: string) =>
+      ipcRenderer.send('workspace:reveal-entry', root_path, target_path),
+    copy_text: (value: string) => ipcRenderer.send('workspace:copy-text', value),
+    watch: (root_path: string) => ipcRenderer.invoke('workspace:watch', root_path),
+    unwatch: () => ipcRenderer.send('workspace:unwatch'),
+    on_change: (callback: (payload: { root_path: string; event_type: string; file_path: string }) => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        payload: { root_path: string; event_type: string; file_path: string },
+      ) => callback(payload)
+      ipcRenderer.on('workspace:changed', listener)
+      return () => ipcRenderer.removeListener('workspace:changed', listener)
+    },
+    on_watch_error: (callback: (payload: { root_path: string; message: string }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { root_path: string; message: string }) =>
+        callback(payload)
+      ipcRenderer.on('workspace:watch-error', listener)
+      return () => ipcRenderer.removeListener('workspace:watch-error', listener)
     },
   },
   window: {

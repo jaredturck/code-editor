@@ -136,7 +136,7 @@ function TerminalPane({
 
     resize_observer.observe(container_ref.current)
     void window.editor_api.terminal
-      .create(terminal.id)
+      .create(terminal.id, terminal.cwd)
       .then(() => {
         onTerminalStatusChange(terminal.id, 'running', null)
         requestAnimationFrame(() => {

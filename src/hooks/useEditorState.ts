@@ -17,6 +17,28 @@ import type {
 
 const browser_home_page = 'https://duckduckgo.com/'
 
+function normalize_editor_path(file_path: string) {
+  const normalized_path = file_path.replace(/\\/g, '/').replace(/\/$/, '')
+  return window.editor_api.platform === 'win32' ? normalized_path.toLowerCase() : normalized_path
+}
+
+function editor_path_is_same_or_child(parent_path: string, target_path: string) {
+  const normalized_parent = normalize_editor_path(parent_path)
+  const normalized_target = normalize_editor_path(target_path)
+
+  return normalized_target === normalized_parent || normalized_target.startsWith(`${normalized_parent}/`)
+}
+
+function remap_editor_path(old_path: string, new_path: string, target_path: string) {
+  return editor_path_is_same_or_child(old_path, target_path)
+    ? `${new_path}${target_path.slice(old_path.length)}`
+    : target_path
+}
+
+function get_editor_path_name(file_path: string) {
+  return file_path.split(/[\\/]/).filter(Boolean).pop() ?? file_path
+}
+
 const initial_terminals: TerminalSession[] = [
   {
     id: 1,
@@ -25,6 +47,7 @@ const initial_terminals: TerminalSession[] = [
     weight: 1,
     status: 'starting',
     exit_code: null,
+    cwd: null,
   },
 ]
 
@@ -135,6 +158,7 @@ function useEditorState() {
   const shutdown_queue_ref = useRef(shutdown_queue)
   const shutdown_in_progress_ref = useRef(shutdown_in_progress)
   const diagnostic_versions_ref = useRef(new Map<number, number>())
+  const opening_paths_ref = useRef(new Set<string>())
 
   documents_ref.current = documents
   active_document_id_ref.current = active_document_id
@@ -928,7 +952,7 @@ function useEditorState() {
     return () => window.removeEventListener('keydown', save_with_shortcut, true)
   })
 
-  const create_terminal = () => {
+  const create_terminal = (cwd: string | null = null) => {
     const terminal_id = get_next_terminal_id(terminals)
     const new_terminal: TerminalSession = {
       id: terminal_id,
@@ -937,6 +961,7 @@ function useEditorState() {
       weight: 1,
       status: 'starting',
       exit_code: null,
+      cwd,
     }
 
     set_terminals([...terminals, new_terminal])
@@ -946,9 +971,9 @@ function useEditorState() {
     close_overlays()
   }
 
-  const split_terminal = () => {
+  const split_terminal = (cwd: string | null = null) => {
     if (!active_terminal) {
-      create_terminal()
+      create_terminal(cwd)
       return
     }
 
@@ -962,6 +987,7 @@ function useEditorState() {
       weight: split_weight,
       status: 'starting',
       exit_code: null,
+      cwd,
     }
 
     set_terminals((current_terminals) => {
@@ -1060,11 +1086,112 @@ function useEditorState() {
     )
   }
 
+  const show_notice = (message: string) => set_notice(message)
+
+  const remap_document_paths = (old_path: string, new_path: string, is_directory: boolean) => {
+    const affected_media: Array<{ id: number; file_path: string }> = []
+    const next_documents = documents_ref.current.map((document) => {
+      if ((document.kind !== 'text' && document.kind !== 'media') || !document.file_path) {
+        return document
+      }
+
+      const path_matches = is_directory
+        ? editor_path_is_same_or_child(old_path, document.file_path)
+        : normalize_editor_path(document.file_path) === normalize_editor_path(old_path)
+
+      if (!path_matches) {
+        return document
+      }
+
+      const file_path = remap_editor_path(old_path, new_path, document.file_path)
+
+      if (document.kind === 'text') {
+        return {
+          ...document,
+          name: get_editor_path_name(file_path),
+          file_path,
+          language: get_language_for_file(file_path),
+          deleted: false,
+        }
+      }
+
+      affected_media.push({ id: document.id, file_path })
+      return {
+        ...document,
+        name: get_editor_path_name(file_path),
+        file_path,
+        deleted: false,
+      }
+    })
+
+    documents_ref.current = next_documents
+    set_documents(next_documents)
+    set_diagnostics((current_diagnostics) =>
+      current_diagnostics.map((diagnostic) => {
+        if (!diagnostic.file_path) {
+          return diagnostic
+        }
+
+        const path_matches = is_directory
+          ? editor_path_is_same_or_child(old_path, diagnostic.file_path)
+          : normalize_editor_path(diagnostic.file_path) === normalize_editor_path(old_path)
+
+        return path_matches
+          ? { ...diagnostic, file_path: remap_editor_path(old_path, new_path, diagnostic.file_path) }
+          : diagnostic
+      }),
+    )
+
+    const next_recent_files = settings_ref.current.recent_files.map((recent_file) =>
+      is_directory
+        ? remap_editor_path(old_path, new_path, recent_file)
+        : normalize_editor_path(recent_file) === normalize_editor_path(old_path)
+          ? new_path
+          : recent_file,
+    )
+    update_recent_files(next_recent_files)
+
+    for (const media of affected_media) {
+      void window.editor_api.file.open(media.file_path).then((opened_file) => {
+        if (opened_file.status !== 'opened' || opened_file.kind === 'text') {
+          return
+        }
+
+        set_documents((current_documents) =>
+          current_documents.map((document) =>
+            document.kind === 'media' && document.id === media.id
+              ? { ...document, url: opened_file.resource_url ?? document.url, mime_type: opened_file.mime_type }
+              : document,
+          ),
+        )
+      })
+    }
+  }
+
+  const mark_document_paths_deleted = (target_path: string, is_directory: boolean) => {
+    const next_documents = documents_ref.current.map((document) => {
+      if ((document.kind !== 'text' && document.kind !== 'media') || !document.file_path) {
+        return document
+      }
+
+      const path_matches = is_directory
+        ? editor_path_is_same_or_child(target_path, document.file_path)
+        : normalize_editor_path(document.file_path) === normalize_editor_path(target_path)
+
+      return path_matches ? { ...document, deleted: true } : document
+    })
+
+    documents_ref.current = next_documents
+    set_documents(next_documents)
+  }
+
   const open_file_path = async (file_path: string) => {
     close_overlays()
-
+    const normalized_file_path = normalize_editor_path(file_path)
     const existing_document = documents_ref.current.find(
-      (document) => (document.kind === 'text' || document.kind === 'media') && document.file_path === file_path,
+      (document) =>
+        (document.kind === 'text' || document.kind === 'media') &&
+        normalize_editor_path(document.file_path ?? '') === normalized_file_path,
     )
 
     if (existing_document) {
@@ -1073,53 +1200,77 @@ function useEditorState() {
       return
     }
 
-    const opened_file = await window.editor_api.file.open(file_path)
-
-    if (opened_file.status !== 'opened') {
-      if (opened_file.status === 'missing') {
-        remove_recent_file(file_path)
-      }
-
-      set_notice(opened_file.message)
+    if (opening_paths_ref.current.has(normalized_file_path)) {
       return
     }
 
-    const current_documents = documents_ref.current
-    const document_id = get_next_document_id(current_documents)
-    let new_document: EditorDocument
+    opening_paths_ref.current.add(normalized_file_path)
 
-    if (opened_file.kind === 'text') {
-      new_document = {
-        kind: 'text',
-        id: document_id,
-        name: opened_file.name,
-        content: opened_file.content ?? '',
-        saved_content: opened_file.content ?? '',
-        file_path: opened_file.file_path,
-        language: get_language_for_file(opened_file.file_path),
-        indent_style: settings_ref.current.editor.default_indent_style,
-        indent_size: settings_ref.current.editor.default_indent_size,
-        dirty: false,
-        deleted: false,
-        markdown_view: 'source',
+    try {
+      const opened_file = await window.editor_api.file.open(file_path)
+
+      if (opened_file.status !== 'opened') {
+        if (opened_file.status === 'missing') {
+          remove_recent_file(file_path)
+        }
+
+        set_notice(opened_file.message)
+        return
       }
-    } else {
-      new_document = {
-        kind: 'media',
-        id: document_id,
-        name: opened_file.name,
-        file_path: opened_file.file_path,
-        media_type: opened_file.kind,
-        mime_type: opened_file.mime_type,
-        url: opened_file.resource_url ?? '',
-        size: opened_file.size,
-        deleted: false,
+
+      const current_documents = documents_ref.current
+      const duplicate_document = current_documents.find(
+        (document) =>
+          (document.kind === 'text' || document.kind === 'media') &&
+          normalize_editor_path(document.file_path ?? '') === normalize_editor_path(opened_file.file_path),
+      )
+
+      if (duplicate_document) {
+        set_active_document_id(duplicate_document.id)
+        add_recent_file(opened_file.file_path)
+        return
       }
+
+      const document_id = get_next_document_id(current_documents)
+      let new_document: EditorDocument
+
+      if (opened_file.kind === 'text') {
+        new_document = {
+          kind: 'text',
+          id: document_id,
+          name: opened_file.name,
+          content: opened_file.content ?? '',
+          saved_content: opened_file.content ?? '',
+          file_path: opened_file.file_path,
+          language: get_language_for_file(opened_file.file_path),
+          indent_style: settings_ref.current.editor.default_indent_style,
+          indent_size: settings_ref.current.editor.default_indent_size,
+          dirty: false,
+          deleted: false,
+          markdown_view: 'source',
+        }
+      } else {
+        new_document = {
+          kind: 'media',
+          id: document_id,
+          name: opened_file.name,
+          file_path: opened_file.file_path,
+          media_type: opened_file.kind,
+          mime_type: opened_file.mime_type,
+          url: opened_file.resource_url ?? '',
+          size: opened_file.size,
+          deleted: false,
+        }
+      }
+
+      const next_documents = [...current_documents, new_document]
+      documents_ref.current = next_documents
+      set_documents(next_documents)
+      set_active_document_id(new_document.id)
+      add_recent_file(opened_file.file_path)
+    } finally {
+      opening_paths_ref.current.delete(normalized_file_path)
     }
-
-    set_documents([...current_documents, new_document])
-    set_active_document_id(new_document.id)
-    add_recent_file(opened_file.file_path)
   }
 
   const open_file_dialog = async () => {
@@ -1136,12 +1287,6 @@ function useEditorState() {
     set_open_menu(null)
     set_menu_pinned(false)
     await open_file_path(file_path)
-  }
-
-  const open_folder_dialog = async () => {
-    set_open_menu(null)
-    set_menu_pinned(false)
-    await window.editor_api.dialog.open_folder()
   }
 
   const open_diagnostic = (diagnostic: EditorDiagnostic) => {
@@ -1199,16 +1344,17 @@ function useEditorState() {
     open_diagnostic,
     open_file_dialog,
     open_file_path,
-    open_folder_dialog,
     open_menu,
     open_new_file_modal,
     open_recent_file,
     overlay_open,
     pending_close_document,
     recent_files: settings.recent_files,
+    remap_document_paths,
     resize_terminal_panes,
     resolved_theme,
     save_document,
+    show_notice,
     select_activity,
     select_bottom_panel_tab,
     select_document,
@@ -1224,6 +1370,7 @@ function useEditorState() {
     toggle_markdown_view,
     toggle_menu,
     toggle_settings,
+    mark_document_paths_deleted,
     update_document,
     update_document_indentation,
     update_document_language,

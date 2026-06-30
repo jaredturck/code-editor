@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
 import type { CodeEditorHandle, EditorCommandState } from './components/CodeEditor'
@@ -13,9 +13,11 @@ import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
 import TerminalPanel from './components/TerminalPanel'
 import TopBar from './components/TopBar'
+import WorkspaceConflictModal from './components/WorkspaceConflictModal'
 import useAIChat from './hooks/useAIChat'
 import useEditorState from './hooks/useEditorState'
 import usePanelSizes from './hooks/usePanelSizes'
+import useWorkspace from './hooks/useWorkspace'
 import type { EditorCommandId, EditorDiagnostic } from './types/editor'
 
 const initial_editor_command_state: EditorCommandState = {
@@ -31,10 +33,24 @@ const initial_editor_command_state: EditorCommandState = {
 
 function App() {
   const editor = useEditorState()
+  const active_file_path =
+    editor.active_document?.kind === 'text' || editor.active_document?.kind === 'media'
+      ? editor.active_document.file_path
+      : null
+  const workspace = useWorkspace({
+    active_file_path,
+    onOpenFile: (file_path) => void editor.open_file_path(file_path),
+    onPathMoved: editor.remap_document_paths,
+    onPathDeleted: editor.mark_document_paths_deleted,
+    onNotice: editor.show_notice,
+  })
   const chat = useAIChat(editor.settings, editor.apply_settings, editor.active_text_document)
   const panels = usePanelSizes(editor.ai_chat_open)
   const editor_ref = useRef<CodeEditorHandle>(null)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
+  useEffect(() => {
+    document.title = workspace.root_name ? `code-editor — ${workspace.root_name}` : 'code-editor'
+  }, [workspace.root_name])
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
@@ -71,23 +87,27 @@ function App() {
         hasActiveTextDocument={editor.active_text_document !== null}
         isMaximized={editor.is_maximized}
         onCreateFile={editor.open_new_file_modal}
-        onCreateTerminal={editor.create_terminal}
+        onCreateTerminal={() => editor.create_terminal(workspace.root_path)}
         onCreateTextFile={() => editor.create_text_file()}
         onHoverMenu={editor.hover_menu}
         onLeaveMenus={editor.leave_menus}
         onOpenFile={() => void editor.open_file_dialog()}
-        onOpenFolder={() => void editor.open_folder_dialog()}
+        onOpenFolder={() => {
+          editor.select_activity('explorer')
+          void workspace.open_folder_dialog()
+        }}
         onOpenRecent={(file_path) => void editor.open_recent_file(file_path)}
         onRunEditorCommand={run_editor_command}
         onSave={() => void editor.save_document()}
         onSaveAs={() => void editor.save_document(true)}
-        onSplitTerminal={editor.split_terminal}
+        onSplitTerminal={() => editor.split_terminal(workspace.root_path)}
         onToggleAiChat={editor.toggle_ai_chat}
         onToggleMenu={editor.toggle_menu}
         onUpdateSettings={editor.apply_settings}
         openMenu={editor.open_menu}
         recentFiles={editor.recent_files}
         settings={editor.settings}
+        workspaceName={workspace.root_name}
       />
 
       <div
@@ -106,12 +126,42 @@ function App() {
           settingsOpen={editor.settings_open}
         />
 
-        <ExplorerPanel activeSection={editor.active_activity} onResize={panels.start_sidebar_resize} />
+        <ExplorerPanel
+          activeFilePath={active_file_path}
+          activeSection={editor.active_activity}
+          clipboard={workspace.clipboard}
+          expandedPaths={workspace.expanded_paths}
+          nodes={workspace.nodes}
+          onCloseWorkspace={workspace.close_workspace}
+          onCollapseAll={workspace.collapse_all}
+          onCopyPath={workspace.copy_path}
+          onCreateEntry={workspace.create_entry}
+          onDeleteEntry={workspace.delete_entry}
+          onDropEntry={(source_path, target_path, operation) =>
+            void workspace.drop_entry(source_path, target_path, operation)
+          }
+          onOpenFile={(file_path) => void editor.open_file_path(file_path)}
+          onOpenFolder={() => {
+            editor.select_activity('explorer')
+            void workspace.open_folder_dialog()
+          }}
+          onPaste={(target_path) => void workspace.paste_into(target_path)}
+          onRefresh={() => void workspace.refresh()}
+          onRenameEntry={workspace.rename_entry}
+          onResize={panels.start_sidebar_resize}
+          onRevealEntry={workspace.reveal_entry}
+          onSelectPath={workspace.select_path}
+          onSetClipboard={workspace.set_file_clipboard}
+          onToggleFolder={(folder_path) => void workspace.toggle_folder(folder_path)}
+          rootName={workspace.root_name}
+          rootPath={workspace.root_path}
+          selectedPath={workspace.selected_path}
+        />
 
         <main className="grid min-h-0" style={editor_grid_style}>
           <EditorPanel
             activeDocumentId={editor.active_document_id}
-            browserVisible={!editor.overlay_open}
+            browserVisible={!editor.overlay_open && workspace.pending_conflict === null}
             diagnostics={editor.diagnostics}
             documents={editor.documents}
             editorRef={editor_ref}
@@ -132,7 +182,7 @@ function App() {
             activeTerminalId={editor.active_terminal_id}
             diagnostics={editor.diagnostics}
             onClosePanel={editor.close_bottom_panel}
-            onCreateTerminal={editor.create_terminal}
+            onCreateTerminal={() => editor.create_terminal(workspace.root_path)}
             onDeleteTerminal={editor.delete_terminal}
             onOpenDiagnostic={open_diagnostic}
             onResizePanel={panels.start_bottom_panel_resize}
@@ -194,6 +244,15 @@ function App() {
           onCancel={editor.cancel_close_document}
           onDiscard={editor.confirm_close_discard}
           onSave={() => void editor.confirm_close_save()}
+        />
+      )}
+
+      {workspace.pending_conflict && (
+        <WorkspaceConflictModal
+          destinationPath={workspace.pending_conflict.destination_path}
+          onCancel={() => void workspace.resolve_conflict('cancel')}
+          onKeepBoth={() => void workspace.resolve_conflict('keep_both')}
+          onReplace={() => void workspace.resolve_conflict('replace')}
         />
       )}
 

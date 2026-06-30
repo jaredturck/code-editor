@@ -6,6 +6,8 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 
 ## Features
 
+- Open folders as workspaces with a lazy, live-updating Explorer tree
+- Create, rename, move, copy, reveal, and trash project files and folders
 - Open, edit, save, and reopen source files with language-aware CodeMirror support
 - Persistent editor settings, recent files, shortcuts, and unsaved-document shutdown handling
 - Persistent shell sessions rendered with xterm.js and backed by `node-pty`

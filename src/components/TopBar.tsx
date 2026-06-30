@@ -18,6 +18,7 @@ interface TopBarProps {
   openMenu: TopMenu
   recentFiles: string[]
   settings: EditorSettings
+  workspaceName: string | null
   onCreateFile: () => void
   onCreateTerminal: () => void
   onCreateTextFile: () => void
@@ -56,6 +57,7 @@ function TopBar({
   openMenu,
   recentFiles,
   settings,
+  workspaceName,
   onCreateFile,
   onCreateTerminal,
   onCreateTextFile,
@@ -351,7 +353,7 @@ function TopBar({
       </div>
 
       <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xs text-[var(--muted)]">
-        code-editor
+        {workspaceName ? `code-editor — ${workspaceName}` : 'code-editor'}
       </div>
 
       <div className="window-no-drag ml-auto flex h-full items-stretch">
