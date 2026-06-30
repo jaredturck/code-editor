@@ -2,31 +2,14 @@ import { useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 interface AIChatPanelProps {
+  width: number
   onClose: () => void
+  onResize: (event: ReactPointerEvent<HTMLElement>) => void
 }
 
-function AIChatPanel({ onClose }: AIChatPanelProps) {
-  const [panel_width, set_panel_width] = useState(320)
+function AIChatPanel({ width, onClose, onResize }: AIChatPanelProps) {
   const [prompt, set_prompt] = useState('')
   const [messages, set_messages] = useState<string[]>([])
-
-  const start_resize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const start_x = event.clientX
-    const start_width = panel_width
-
-    const resize_panel = (move_event: PointerEvent) => {
-      const next_width = Math.min(560, Math.max(240, start_width + start_x - move_event.clientX))
-      set_panel_width(next_width)
-    }
-
-    const stop_resize = () => {
-      window.removeEventListener('pointermove', resize_panel)
-      window.removeEventListener('pointerup', stop_resize)
-    }
-
-    window.addEventListener('pointermove', resize_panel)
-    window.addEventListener('pointerup', stop_resize)
-  }
 
   const submit_prompt = () => {
     const next_prompt = prompt.trim()
@@ -43,12 +26,13 @@ function AIChatPanel({ onClose }: AIChatPanelProps) {
     <aside
       aria-label="AI chat panel"
       className="relative flex min-h-0 shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface-2)]"
-      style={{ width: panel_width }}
+      style={{ width }}
     >
       <div
         aria-label="Resize AI chat panel"
+        aria-orientation="vertical"
         className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize hover:bg-sky-500/70"
-        onPointerDown={start_resize}
+        onPointerDown={onResize}
         role="separator"
       />
 

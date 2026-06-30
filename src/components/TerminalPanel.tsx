@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Icon from './Icon'
 import trash_icon from './images/trash.svg'
 import type { BottomPanelTab, TerminalSession } from '../types/editor'
@@ -6,11 +6,14 @@ import type { BottomPanelTab, TerminalSession } from '../types/editor'
 interface TerminalPanelProps {
   activeTab: BottomPanelTab
   activeTerminalId: number | null
+  terminalListWidth: number
   terminals: TerminalSession[]
   visibleTerminals: TerminalSession[]
   onClosePanel: () => void
   onCreateTerminal: () => void
   onDeleteTerminal: (terminalId: number) => void
+  onResizePanel: (event: ReactPointerEvent<HTMLElement>) => void
+  onResizeTerminalList: (event: ReactPointerEvent<HTMLElement>) => void
   onSelectTab: (tab: BottomPanelTab) => void
   onSelectTerminal: (terminalId: number) => void
   onSubmitTerminalInput: (terminalId: number) => void
@@ -51,12 +54,16 @@ function TerminalPane({
       ))}
 
       <div className="flex min-w-0 items-center">
-        <span className="shrink-0 text-[var(--terminal-prompt)]">{prompt}&nbsp;</span>
+        <span className="shrink-0 text-[var(--terminal-prompt)]">
+          {prompt}&nbsp;
+        </span>
         <input
           aria-label={`${terminal.name} command input`}
           autoFocus={active}
           className="min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-[13px] text-[var(--terminal-text)] caret-sky-400 outline-none"
-          onChange={(event) => onUpdateTerminalInput(terminal.id, event.target.value)}
+          onChange={(event) =>
+            onUpdateTerminalInput(terminal.id, event.target.value)
+          }
           onFocus={() => onSelectTerminal(terminal.id)}
           onKeyDown={handle_terminal_key_down}
           spellCheck={false}
@@ -84,7 +91,9 @@ function TerminalSessionRow({
     <div
       className={`group relative flex h-7 items-center ${isActive ? 'bg-[var(--selected)]' : 'hover:bg-[var(--hover)]'}`}
     >
-      {child && <span className="absolute -left-3 top-1/2 h-px w-3 bg-[var(--muted)]/50" />}
+      {child && (
+        <span className="absolute -left-3 top-1/2 h-px w-3 bg-[var(--muted)]/50" />
+      )}
 
       <button
         className="min-w-0 flex-1 truncate px-3 text-left text-xs text-[var(--text)]"
@@ -112,11 +121,14 @@ function TerminalSessionRow({
 function TerminalPanel({
   activeTab,
   activeTerminalId,
+  terminalListWidth,
   terminals,
   visibleTerminals,
   onClosePanel,
   onCreateTerminal,
   onDeleteTerminal,
+  onResizePanel,
+  onResizeTerminalList,
   onSelectTab,
   onSelectTerminal,
   onSubmitTerminalInput,
@@ -124,13 +136,23 @@ function TerminalPanel({
 }: TerminalPanelProps) {
   const root_terminals = terminals
     .filter((terminal) => terminal.parent_id === null)
-    .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
+    .sort(
+      (first_terminal, second_terminal) =>
+        first_terminal.id - second_terminal.id,
+    )
 
   return (
     <section
       aria-label="Bottom panel"
-      className="flex min-h-0 flex-col border-t border-[var(--border)] bg-[var(--surface-3)]"
+      className="relative flex min-h-0 flex-col border-t border-[var(--border)] bg-[var(--surface-3)]"
     >
+      <div
+        aria-label="Resize bottom panel"
+        aria-orientation="horizontal"
+        className="absolute inset-x-0 top-0 z-20 h-1 -translate-y-1/2 cursor-row-resize hover:bg-sky-500/70"
+        onPointerDown={onResizePanel}
+        role="separator"
+      />
       <div className="flex h-9 shrink-0 items-center border-b border-[var(--border)] px-3 text-xs">
         <div className="flex h-full items-center gap-5">
           <button
@@ -139,7 +161,9 @@ function TerminalPanel({
             type="button"
           >
             PROBLEMS
-            {activeTab === 'problems' && <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />}
+            {activeTab === 'problems' && (
+              <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />
+            )}
           </button>
 
           <button
@@ -148,7 +172,9 @@ function TerminalPanel({
             type="button"
           >
             TERMINAL
-            {activeTab === 'terminal' && <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />}
+            {activeTab === 'terminal' && (
+              <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />
+            )}
           </button>
         </div>
 
@@ -207,11 +233,25 @@ function TerminalPanel({
             )}
           </div>
 
-          <aside aria-label="Terminal sessions" className="w-44 shrink-0 border-l border-[var(--border)] py-2 text-xs">
+          <aside
+            aria-label="Terminal sessions"
+            className="relative shrink-0 border-l border-[var(--border)] py-2 text-xs"
+            style={{ width: terminalListWidth }}
+          >
+            <div
+              aria-label="Resize terminal session list"
+              aria-orientation="vertical"
+              className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-1/2 cursor-col-resize hover:bg-sky-500/70"
+              onPointerDown={onResizeTerminalList}
+              role="separator"
+            />
             {root_terminals.map((terminal) => {
               const child_terminals = terminals
                 .filter((item) => item.parent_id === terminal.id)
-                .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
+                .sort(
+                  (first_terminal, second_terminal) =>
+                    first_terminal.id - second_terminal.id,
+                )
 
               return (
                 <div key={terminal.id}>

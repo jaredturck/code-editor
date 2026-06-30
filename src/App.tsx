@@ -6,13 +6,17 @@ import SettingsModal from './components/SettingsModal'
 import TerminalPanel from './components/TerminalPanel'
 import TopBar from './components/TopBar'
 import useEditorState from './hooks/useEditorState'
+import usePanelSizes from './hooks/usePanelSizes'
 
 function App() {
   const editor = useEditorState()
+  const panels = usePanelSizes(editor.ai_chat_open)
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
-  const editor_grid_class = editor.bottom_panel_open ? 'grid-rows-[minmax(0,1fr)_240px]' : 'grid-rows-[minmax(0,1fr)]'
+  const editor_grid_style = editor.bottom_panel_open
+    ? { gridTemplateRows: `minmax(0, 1fr) ${panels.bottom_panel_height}px` }
+    : { gridTemplateRows: 'minmax(0, 1fr)' }
 
   return (
     <div
@@ -47,7 +51,9 @@ function App() {
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: editor.ai_chat_open ? '48px 260px minmax(0, 1fr) auto' : '48px 260px minmax(0, 1fr)',
+          gridTemplateColumns: editor.ai_chat_open
+            ? `48px ${panels.sidebar_width}px minmax(0, 1fr) ${panels.ai_chat_width}px`
+            : `48px ${panels.sidebar_width}px minmax(0, 1fr)`,
         }}
       >
         <ActivityBar
@@ -57,9 +63,12 @@ function App() {
           settingsOpen={editor.settings_open}
         />
 
-        <ExplorerPanel activeSection={editor.active_activity} />
+        <ExplorerPanel
+          activeSection={editor.active_activity}
+          onResize={panels.start_sidebar_resize}
+        />
 
-        <main className={`grid min-h-0 ${editor_grid_class}`}>
+        <main className="grid min-h-0" style={editor_grid_style}>
           <EditorPanel />
 
           {editor.bottom_panel_open && (
@@ -69,20 +78,31 @@ function App() {
               onClosePanel={editor.close_bottom_panel}
               onCreateTerminal={editor.create_terminal}
               onDeleteTerminal={editor.delete_terminal}
+              onResizePanel={panels.start_bottom_panel_resize}
+              onResizeTerminalList={panels.start_terminal_list_resize}
               onSelectTab={editor.select_bottom_panel_tab}
               onSelectTerminal={editor.select_terminal}
               onSubmitTerminalInput={editor.submit_terminal_input}
               onUpdateTerminalInput={editor.update_terminal_input}
+              terminalListWidth={panels.terminal_list_width}
               terminals={editor.terminals}
               visibleTerminals={editor.visible_terminals}
             />
           )}
         </main>
 
-        {editor.ai_chat_open && <AIChatPanel onClose={editor.toggle_ai_chat} />}
+        {editor.ai_chat_open && (
+          <AIChatPanel
+            onClose={editor.toggle_ai_chat}
+            onResize={panels.start_ai_chat_resize}
+            width={panels.ai_chat_width}
+          />
+        )}
       </div>
 
-      {editor.settings_open && <SettingsModal onClose={editor.close_overlays} />}
+      {editor.settings_open && (
+        <SettingsModal onClose={editor.close_overlays} />
+      )}
     </div>
   )
 }
