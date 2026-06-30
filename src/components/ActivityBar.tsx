@@ -1,4 +1,5 @@
 import Icon from './Icon'
+import browser_icon from './images/browser.svg'
 import explorer_icon from './images/explorer.svg'
 import search_icon from './images/search.svg'
 import settings_icon from './images/settings.svg'
@@ -8,6 +9,7 @@ import type { ActivitySection } from '../types/editor'
 interface ActivityBarProps {
   activeSection: ActivitySection
   settingsOpen: boolean
+  onOpenBrowser: () => void
   onSelectSection: (section: ActivitySection) => void
   onToggleSettings: () => void
 }
@@ -22,7 +24,13 @@ const activity_items: Array<{
   { id: 'source-control', icon: source_control_icon, label: 'Source Control' },
 ]
 
-function ActivityBar({ activeSection, settingsOpen, onSelectSection, onToggleSettings }: ActivityBarProps) {
+function ActivityBar({
+  activeSection,
+  settingsOpen,
+  onOpenBrowser,
+  onSelectSection,
+  onToggleSettings,
+}: ActivityBarProps) {
   return (
     <aside
       aria-label="Activity bar"
@@ -49,6 +57,16 @@ function ActivityBar({ activeSection, settingsOpen, onSelectSection, onToggleSet
             </button>
           )
         })}
+
+        <button
+          aria-label="Browser"
+          className="group relative flex h-12 w-full items-center justify-center transition hover:bg-[var(--hover)]"
+          onClick={onOpenBrowser}
+          title="Browser"
+          type="button"
+        >
+          <Icon className="h-5 w-5 opacity-60 transition-opacity group-hover:opacity-100" src={browser_icon} />
+        </button>
       </div>
 
       <div className="mt-auto">

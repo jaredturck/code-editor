@@ -1,8 +1,8 @@
 import { useRef } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { BottomPanelTab, TerminalSession } from '../types/editor'
 import Icon from './Icon'
 import trash_icon from './images/trash.svg'
-import type { BottomPanelTab, TerminalSession } from '../types/editor'
 
 interface TerminalPanelProps {
   activeTab: BottomPanelTab
@@ -15,6 +15,12 @@ interface TerminalPanelProps {
   onDeleteTerminal: (terminalId: number) => void
   onResizePanel: (event: ReactPointerEvent<HTMLElement>) => void
   onResizeTerminalList: (event: ReactPointerEvent<HTMLElement>) => void
+  onResizeTerminalPanes: (
+    leftTerminalId: number,
+    rightTerminalId: number,
+    leftWeight: number,
+    rightWeight: number,
+  ) => void
   onSelectTab: (tab: BottomPanelTab) => void
   onSelectTerminal: (terminalId: number) => void
   onSubmitTerminalInput: (terminalId: number) => void
@@ -22,6 +28,55 @@ interface TerminalPanelProps {
 }
 
 const prompt = '[code-editor]$'
+const minimum_terminal_pane_width = 140
+
+function start_terminal_split_resize(
+  event: ReactPointerEvent<HTMLElement>,
+  container: HTMLElement,
+  terminals: TerminalSession[],
+  divider_index: number,
+  onResizeTerminalPanes: TerminalPanelProps['onResizeTerminalPanes'],
+) {
+  event.preventDefault()
+
+  const left_terminal = terminals[divider_index]
+  const right_terminal = terminals[divider_index + 1]
+  const container_width = container.getBoundingClientRect().width
+  const total_weight = terminals.reduce((sum, terminal) => sum + terminal.weight, 0)
+  const pair_weight = left_terminal.weight + right_terminal.weight
+  const minimum_weight = Math.min(pair_weight / 2, (minimum_terminal_pane_width / container_width) * total_weight)
+  const start_x = event.clientX
+  const start_left_weight = left_terminal.weight
+  const previous_cursor = document.documentElement.style.cursor
+  const previous_user_select = document.body.style.userSelect
+
+  document.documentElement.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+
+  const resize_split = (move_event: PointerEvent) => {
+    const delta_weight = ((move_event.clientX - start_x) / container_width) * total_weight
+    const next_left_weight = Math.min(
+      pair_weight - minimum_weight,
+      Math.max(minimum_weight, start_left_weight + delta_weight),
+    )
+
+    onResizeTerminalPanes(left_terminal.id, right_terminal.id, next_left_weight, pair_weight - next_left_weight)
+  }
+
+  const stop_resize = () => {
+    document.documentElement.style.cursor = previous_cursor
+    document.body.style.userSelect = previous_user_select
+    window.removeEventListener('pointermove', resize_split)
+    window.removeEventListener('pointerup', stop_resize)
+    window.removeEventListener('pointercancel', stop_resize)
+    window.removeEventListener('blur', stop_resize)
+  }
+
+  window.addEventListener('pointermove', resize_split)
+  window.addEventListener('pointerup', stop_resize)
+  window.addEventListener('pointercancel', stop_resize)
+  window.addEventListener('blur', stop_resize)
+}
 
 function TerminalPane({
   active,
@@ -53,6 +108,7 @@ function TerminalPane({
     <div
       className={`min-w-0 overflow-auto px-4 py-3 font-mono text-[13px] text-[var(--terminal-text)] ${active ? 'bg-[var(--terminal-active)]' : ''}`}
       onClick={focus_terminal}
+      style={{ flexBasis: 0, flexGrow: terminal.weight, minWidth: minimum_terminal_pane_width }}
     >
       {terminal.history.map((command, index) => (
         <div className="whitespace-pre-wrap" key={`${terminal.id}-${index}`}>
@@ -132,11 +188,13 @@ function TerminalPanel({
   onDeleteTerminal,
   onResizePanel,
   onResizeTerminalList,
+  onResizeTerminalPanes,
   onSelectTab,
   onSelectTerminal,
   onSubmitTerminalInput,
   onUpdateTerminalInput,
 }: TerminalPanelProps) {
+  const terminal_panes_ref = useRef<HTMLDivElement>(null)
   const root_terminals = terminals
     .filter((terminal) => terminal.parent_id === null)
     .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
@@ -205,22 +263,42 @@ function TerminalPanel({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <div
-            className="grid min-w-0 flex-1 divide-x divide-[var(--border)]"
-            style={{
-              gridTemplateColumns: `repeat(${Math.max(visibleTerminals.length, 1)}, minmax(0, 1fr))`,
-            }}
-          >
+          <div className="flex min-w-0 flex-1 overflow-x-auto" ref={terminal_panes_ref}>
             {visibleTerminals.length > 0 ? (
-              visibleTerminals.map((terminal) => (
-                <TerminalPane
-                  active={terminal.id === activeTerminalId}
-                  key={terminal.id}
-                  onSelectTerminal={onSelectTerminal}
-                  onSubmitTerminalInput={onSubmitTerminalInput}
-                  onUpdateTerminalInput={onUpdateTerminalInput}
-                  terminal={terminal}
-                />
+              visibleTerminals.map((terminal, index) => (
+                <div className="contents" key={terminal.id}>
+                  <TerminalPane
+                    active={terminal.id === activeTerminalId}
+                    onSelectTerminal={onSelectTerminal}
+                    onSubmitTerminalInput={onSubmitTerminalInput}
+                    onUpdateTerminalInput={onUpdateTerminalInput}
+                    terminal={terminal}
+                  />
+
+                  {index < visibleTerminals.length - 1 && (
+                    <div className="relative w-px shrink-0 bg-[var(--border)]">
+                      <div
+                        aria-label={`Resize ${terminal.name} split`}
+                        aria-orientation="vertical"
+                        className="absolute inset-y-0 -left-1 z-20 w-2 cursor-col-resize hover:bg-sky-500/70"
+                        onPointerDown={(event) => {
+                          if (!terminal_panes_ref.current) {
+                            return
+                          }
+
+                          start_terminal_split_resize(
+                            event,
+                            terminal_panes_ref.current,
+                            visibleTerminals,
+                            index,
+                            onResizeTerminalPanes,
+                          )
+                        }}
+                        role="separator"
+                      />
+                    </div>
+                  )}
+                </div>
               ))
             ) : (
               <div className="px-4 py-3 text-xs text-[var(--muted)]">
@@ -242,9 +320,7 @@ function TerminalPanel({
               role="separator"
             />
             {root_terminals.map((terminal) => {
-              const child_terminals = terminals
-                .filter((item) => item.parent_id === terminal.id)
-                .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
+              const child_terminals = terminals.filter((item) => item.parent_id === terminal.id)
 
               return (
                 <div key={terminal.id}>

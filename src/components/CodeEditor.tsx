@@ -1,14 +1,18 @@
+import { indentWithTab } from '@codemirror/commands'
+import { indentUnit } from '@codemirror/language'
+import { languages } from '@codemirror/language-data'
 import { Compartment, EditorState } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
+import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
-import type { EditorDocument, ThemeMode } from '../types/editor'
+import type { TextEditorDocument, ThemeMode } from '../types/editor'
 
 interface CodeEditorProps {
-  activeDocument: EditorDocument
-  documents: EditorDocument[]
+  activeDocument: TextEditorDocument
+  documents: TextEditorDocument[]
   theme: Exclude<ThemeMode, 'system'>
   onChange: (document_id: number, content: string) => void
+  onFocus: (document_id: number) => void
 }
 
 function create_editor_theme(theme: Exclude<ThemeMode, 'system'>) {
@@ -65,24 +69,37 @@ function create_editor_theme(theme: Exclude<ThemeMode, 'system'>) {
   )
 }
 
-function CodeEditor({ activeDocument, documents, theme, onChange }: CodeEditorProps) {
+function create_indentation_extensions(document: TextEditorDocument) {
+  const indentation = document.indent_style === 'tabs' ? '\t' : ' '.repeat(document.indent_size)
+
+  return [EditorState.tabSize.of(document.indent_size), indentUnit.of(indentation), keymap.of([indentWithTab])]
+}
+
+function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: CodeEditorProps) {
   const container_ref = useRef<HTMLDivElement>(null)
   const editor_view_ref = useRef<EditorView | null>(null)
   const active_document_id_ref = useRef<number | null>(null)
   const state_cache_ref = useRef(new Map<number, EditorState>())
   const theme_compartment_ref = useRef(new Compartment())
+  const language_compartment_ref = useRef(new Compartment())
+  const indentation_compartment_ref = useRef(new Compartment())
+  const language_request_ref = useRef(0)
   const on_change_ref = useRef(onChange)
+  const on_focus_ref = useRef(onFocus)
   const theme_ref = useRef(theme)
 
   on_change_ref.current = onChange
+  on_focus_ref.current = onFocus
   theme_ref.current = theme
 
-  const create_editor_state = (document: EditorDocument) => {
+  const create_editor_state = (document: TextEditorDocument) => {
     return EditorState.create({
       doc: document.content,
       extensions: [
         basicSetup,
         theme_compartment_ref.current.of(create_editor_theme(theme_ref.current)),
+        language_compartment_ref.current.of([]),
+        indentation_compartment_ref.current.of(create_indentation_extensions(document)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged) {
             return
@@ -90,6 +107,12 @@ function CodeEditor({ activeDocument, documents, theme, onChange }: CodeEditorPr
 
           state_cache_ref.current.set(document.id, update.state)
           on_change_ref.current(document.id, update.state.doc.toString())
+        }),
+        EditorView.domEventHandlers({
+          focus: () => {
+            on_focus_ref.current(document.id)
+            return false
+          },
         }),
       ],
     })
@@ -135,11 +158,14 @@ function CodeEditor({ activeDocument, documents, theme, onChange }: CodeEditorPr
     active_document_id_ref.current = activeDocument.id
     editor_view.setState(next_state)
     editor_view.dispatch({
-      effects: theme_compartment_ref.current.reconfigure(create_editor_theme(theme_ref.current)),
+      effects: [
+        theme_compartment_ref.current.reconfigure(create_editor_theme(theme_ref.current)),
+        indentation_compartment_ref.current.reconfigure(create_indentation_extensions(activeDocument)),
+      ],
     })
     state_cache_ref.current.set(activeDocument.id, editor_view.state)
     editor_view.focus()
-  }, [activeDocument])
+  }, [activeDocument.id])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
@@ -156,6 +182,61 @@ function CodeEditor({ activeDocument, documents, theme, onChange }: CodeEditorPr
       state_cache_ref.current.set(active_document_id_ref.current, editor_view.state)
     }
   }, [theme])
+
+  useEffect(() => {
+    const editor_view = editor_view_ref.current
+
+    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+      return
+    }
+
+    editor_view.dispatch({
+      effects: indentation_compartment_ref.current.reconfigure(create_indentation_extensions(activeDocument)),
+    })
+    state_cache_ref.current.set(activeDocument.id, editor_view.state)
+  }, [activeDocument.id, activeDocument.indent_size, activeDocument.indent_style])
+
+  useEffect(() => {
+    const editor_view = editor_view_ref.current
+    const request_id = language_request_ref.current + 1
+
+    language_request_ref.current = request_id
+
+    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+      return
+    }
+
+    if (activeDocument.language === 'Plain Text') {
+      editor_view.dispatch({
+        effects: language_compartment_ref.current.reconfigure([]),
+      })
+      state_cache_ref.current.set(activeDocument.id, editor_view.state)
+      return
+    }
+
+    const language_description = languages.find((language) => language.name === activeDocument.language)
+
+    if (!language_description) {
+      return
+    }
+
+    void language_description.load().then((language_support) => {
+      const current_editor = editor_view_ref.current
+
+      if (
+        request_id !== language_request_ref.current ||
+        !current_editor ||
+        active_document_id_ref.current !== activeDocument.id
+      ) {
+        return
+      }
+
+      current_editor.dispatch({
+        effects: language_compartment_ref.current.reconfigure(language_support),
+      })
+      state_cache_ref.current.set(activeDocument.id, current_editor.state)
+    })
+  }, [activeDocument.id, activeDocument.language])
 
   useEffect(() => {
     const active_ids = new Set(documents.map((document) => document.id))

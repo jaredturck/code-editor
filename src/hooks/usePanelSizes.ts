@@ -5,6 +5,7 @@ const activity_bar_width = 48
 const minimum_editor_width = 320
 const minimum_editor_height = 180
 const top_bar_height = 36
+const status_bar_height = 22
 
 const sidebar_min_width = 180
 const sidebar_max_width = 520
@@ -75,7 +76,7 @@ function usePanelSizes(ai_chat_open: boolean) {
   }
 
   const get_bottom_panel_maximum = () => {
-    const available_height = window.innerHeight - top_bar_height - minimum_editor_height
+    const available_height = window.innerHeight - top_bar_height - status_bar_height - minimum_editor_height
 
     return Math.max(bottom_panel_min_height, Math.min(bottom_panel_max_height, available_height))
   }

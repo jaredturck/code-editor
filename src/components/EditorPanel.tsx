@@ -1,27 +1,56 @@
 import logo from '../assets/logo.png'
-import type { EditorDocument, ThemeMode } from '../types/editor'
+import type { EditorDocument, TextEditorDocument, ThemeMode } from '../types/editor'
+import BrowserPanel from './BrowserPanel'
 import CodeEditor from './CodeEditor'
 import Icon from './Icon'
 import close_icon from './images/close.svg'
 
 interface EditorPanelProps {
   activeDocumentId: number | null
+  browserVisible: boolean
   documents: EditorDocument[]
   theme: Exclude<ThemeMode, 'system'>
   onCloseDocument: (document_id: number) => void
+  onFocusDocument: (document_id: number) => void
   onSelectDocument: (document_id: number) => void
   onUpdateDocument: (document_id: number, content: string) => void
 }
 
+function FileBreadcrumbs({ document }: { document: TextEditorDocument }) {
+  const path_segments = document.file_path ? document.file_path.split('/').filter(Boolean) : []
+
+  return (
+    <div className="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-b border-[var(--border)] bg-[var(--editor-bg)] px-3 text-[11px] text-[var(--muted)]">
+      {document.file_path ? (
+        path_segments.map((segment, index) => (
+          <span className="flex min-w-0 items-center gap-1" key={`${segment}-${index}`}>
+            {index > 0 && <span className="text-[var(--muted)]/60">›</span>}
+            <span className="truncate">{segment}</span>
+          </span>
+        ))
+      ) : (
+        <>
+          <span>Unsaved</span>
+          <span className="text-[var(--muted)]/60">›</span>
+          <span className="truncate">{document.name}</span>
+        </>
+      )}
+    </div>
+  )
+}
+
 function EditorPanel({
   activeDocumentId,
+  browserVisible,
   documents,
   theme,
   onCloseDocument,
+  onFocusDocument,
   onSelectDocument,
   onUpdateDocument,
 }: EditorPanelProps) {
   const active_document = documents.find((document) => document.id === activeDocumentId) ?? null
+  const text_documents = documents.filter((document): document is TextEditorDocument => document.kind === 'text')
 
   if (!active_document) {
     return (
@@ -46,6 +75,8 @@ function EditorPanel({
       >
         {documents.map((document) => {
           const is_active = document.id === active_document.id
+          const deleted = document.kind === 'text' && document.deleted
+          const dirty = document.kind === 'text' && document.dirty
 
           return (
             <div
@@ -61,12 +92,14 @@ function EditorPanel({
                 role="tab"
                 type="button"
               >
-                {document.dirty && (
+                {dirty && (
                   <span aria-label="Unsaved changes" className="text-[10px] text-sky-400">
                     ●
                   </span>
                 )}
-                <span className="truncate">{document.name}</span>
+                <span className={`truncate ${deleted ? 'text-red-400 line-through decoration-2' : ''}`}>
+                  {document.name}
+                </span>
               </button>
 
               <button
@@ -83,7 +116,20 @@ function EditorPanel({
         })}
       </div>
 
-      <CodeEditor activeDocument={active_document} documents={documents} onChange={onUpdateDocument} theme={theme} />
+      {active_document.kind === 'text' ? (
+        <>
+          <FileBreadcrumbs document={active_document} />
+          <CodeEditor
+            activeDocument={active_document}
+            documents={text_documents}
+            onChange={onUpdateDocument}
+            onFocus={onFocusDocument}
+            theme={theme}
+          />
+        </>
+      ) : (
+        <BrowserPanel document={active_document} visible={browserVisible} />
+      )}
     </section>
   )
 }

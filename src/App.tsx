@@ -2,7 +2,11 @@ import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
 import EditorPanel from './components/EditorPanel'
 import ExplorerPanel from './components/ExplorerPanel'
+import IndentationPicker from './components/IndentationPicker'
+import LanguagePicker from './components/LanguagePicker'
+import SaveChangesModal from './components/SaveChangesModal'
 import SettingsModal from './components/SettingsModal'
+import StatusBar from './components/StatusBar'
 import TerminalPanel from './components/TerminalPanel'
 import TopBar from './components/TopBar'
 import useEditorState from './hooks/useEditorState'
@@ -61,6 +65,7 @@ function App() {
       >
         <ActivityBar
           activeSection={editor.active_activity}
+          onOpenBrowser={() => void editor.open_browser()}
           onSelectSection={editor.select_activity}
           onToggleSettings={editor.toggle_settings}
           settingsOpen={editor.settings_open}
@@ -71,8 +76,10 @@ function App() {
         <main className="grid min-h-0" style={editor_grid_style}>
           <EditorPanel
             activeDocumentId={editor.active_document_id}
+            browserVisible={!editor.overlay_open}
             documents={editor.documents}
             onCloseDocument={editor.close_document}
+            onFocusDocument={editor.validate_document_path}
             onSelectDocument={editor.select_document}
             onUpdateDocument={editor.update_document}
             theme={editor.resolved_theme}
@@ -87,6 +94,7 @@ function App() {
               onDeleteTerminal={editor.delete_terminal}
               onResizePanel={panels.start_bottom_panel_resize}
               onResizeTerminalList={panels.start_terminal_list_resize}
+              onResizeTerminalPanes={editor.resize_terminal_panes}
               onSelectTab={editor.select_bottom_panel_tab}
               onSelectTerminal={editor.select_terminal}
               onSubmitTerminalInput={editor.submit_terminal_input}
@@ -107,7 +115,38 @@ function App() {
         )}
       </div>
 
+      <StatusBar
+        activeDocument={editor.active_text_document}
+        onToggleIndentation={editor.toggle_indent_picker}
+        onToggleLanguage={editor.toggle_language_picker}
+      />
+
+      {editor.indent_picker_open && editor.active_text_document && (
+        <IndentationPicker
+          document={editor.active_text_document}
+          onClose={editor.close_overlays}
+          onSelect={editor.update_document_indentation}
+        />
+      )}
+
+      {editor.language_picker_open && editor.active_text_document && (
+        <LanguagePicker
+          document={editor.active_text_document}
+          onClose={editor.close_overlays}
+          onSelect={editor.update_document_language}
+        />
+      )}
+
       {editor.settings_open && <SettingsModal onClose={editor.close_overlays} />}
+
+      {editor.pending_close_document && editor.pending_close_document.kind === 'text' && (
+        <SaveChangesModal
+          document={editor.pending_close_document}
+          onCancel={editor.cancel_close_document}
+          onDiscard={editor.confirm_close_discard}
+          onSave={() => void editor.confirm_close_save()}
+        />
+      )}
     </div>
   )
 }

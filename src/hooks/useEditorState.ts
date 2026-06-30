@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ActivitySection,
   BottomPanelTab,
+  BrowserEditorDocument,
   EditorDocument,
+  IndentStyle,
   TerminalSession,
+  TextEditorDocument,
   ThemeMode,
   TopMenu,
 } from '../types/editor'
+
+const browser_home_page = 'https://duckduckgo.com/'
 
 const initial_terminals: TerminalSession[] = [
   {
@@ -15,6 +20,7 @@ const initial_terminals: TerminalSession[] = [
     history: [],
     input: '',
     parent_id: null,
+    weight: 1,
   },
 ]
 
@@ -43,6 +49,7 @@ function get_next_document_id(documents: EditorDocument[]) {
 function get_next_untitled_number(documents: EditorDocument[]) {
   const untitled_numbers = new Set(
     documents
+      .filter((document): document is TextEditorDocument => document.kind === 'text')
       .map((document) => /^Untitled-(\d+)$/.exec(document.name))
       .filter((match): match is RegExpExecArray => match !== null)
       .map((match) => Number(match[1])),
@@ -60,6 +67,7 @@ function useEditorState() {
   const [active_activity, set_active_activity] = useState<ActivitySection>('explorer')
   const [documents, set_documents] = useState<EditorDocument[]>([])
   const [active_document_id, set_active_document_id] = useState<number | null>(null)
+  const [pending_close_document_id, set_pending_close_document_id] = useState<number | null>(null)
   const [bottom_panel_open, set_bottom_panel_open] = useState(true)
   const [bottom_panel_tab, set_bottom_panel_tab] = useState<BottomPanelTab>('terminal')
   const [terminals, set_terminals] = useState<TerminalSession[]>(initial_terminals)
@@ -67,10 +75,17 @@ function useEditorState() {
   const [open_menu, set_open_menu] = useState<TopMenu>(null)
   const [menu_pinned, set_menu_pinned] = useState(false)
   const [settings_open, set_settings_open] = useState(false)
+  const [indent_picker_open, set_indent_picker_open] = useState(false)
+  const [language_picker_open, set_language_picker_open] = useState(false)
   const [ai_chat_open, set_ai_chat_open] = useState(false)
   const [theme_mode, set_theme_mode] = useState<ThemeMode>('dark')
   const [system_is_dark, set_system_is_dark] = useState(true)
   const [is_maximized, set_is_maximized] = useState(false)
+  const documents_ref = useRef(documents)
+  const active_document_id_ref = useRef(active_document_id)
+
+  documents_ref.current = documents
+  active_document_id_ref.current = active_document_id
 
   useEffect(() => {
     const media_query = window.matchMedia('(prefers-color-scheme: dark)')
@@ -94,13 +109,97 @@ function useEditorState() {
     return window.editor_api.window.on_maximized_change(set_is_maximized)
   }, [])
 
+  const validate_saved_documents = async () => {
+    const saved_documents = documents_ref.current.filter(
+      (document): document is TextEditorDocument & { file_path: string } =>
+        document.kind === 'text' && document.file_path !== null,
+    )
+    const file_paths = saved_documents.map((document) => document.file_path)
+
+    if (file_paths.length === 0) {
+      return
+    }
+
+    const path_status = await window.editor_api.file.check_paths(file_paths)
+
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.kind !== 'text' || !document.file_path || path_status[document.file_path] === undefined) {
+          return document
+        }
+
+        return {
+          ...document,
+          deleted: !path_status[document.file_path],
+        }
+      }),
+    )
+  }
+
+  useEffect(() => {
+    return window.editor_api.window.on_focus(() => {
+      void validate_saved_documents()
+    })
+  }, [])
+
+  const validate_document_path = async (document_id: number) => {
+    const document = documents_ref.current.find(
+      (item): item is TextEditorDocument => item.kind === 'text' && item.id === document_id,
+    )
+
+    if (!document?.file_path) {
+      return
+    }
+
+    const path_status = await window.editor_api.file.check_paths([document.file_path])
+
+    set_documents((current_documents) =>
+      current_documents.map((current_document) => {
+        if (current_document.kind !== 'text' || current_document.id !== document_id) {
+          return current_document
+        }
+
+        return {
+          ...current_document,
+          deleted: !path_status[document.file_path!],
+        }
+      }),
+    )
+  }
+
+  useEffect(() => {
+    return window.editor_api.browser.on_state_change((browser_state) => {
+      set_documents((current_documents) =>
+        current_documents.map((document) => {
+          if (document.kind !== 'browser' || document.id !== browser_state.id) {
+            return document
+          }
+
+          return {
+            ...document,
+            name: browser_state.title || 'Browser',
+            url: browser_state.url,
+            can_go_back: browser_state.can_go_back,
+            can_go_forward: browser_state.can_go_forward,
+            loading: browser_state.loading,
+          }
+        }),
+      )
+    })
+  }, [])
+
   useEffect(() => {
     const close_with_escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        set_open_menu(null)
-        set_menu_pinned(false)
-        set_settings_open(false)
+      if (event.key !== 'Escape') {
+        return
       }
+
+      set_open_menu(null)
+      set_menu_pinned(false)
+      set_settings_open(false)
+      set_indent_picker_open(false)
+      set_language_picker_open(false)
+      set_pending_close_document_id(null)
     }
 
     window.addEventListener('keydown', close_with_escape)
@@ -118,6 +217,13 @@ function useEditorState() {
     return theme_mode
   }, [system_is_dark, theme_mode])
 
+  const active_document = useMemo(() => {
+    return documents.find((document) => document.id === active_document_id) ?? null
+  }, [active_document_id, documents])
+
+  const active_text_document = active_document?.kind === 'text' ? active_document : null
+  const active_browser_document = active_document?.kind === 'browser' ? active_document : null
+
   const active_terminal = useMemo(() => {
     return terminals.find((terminal) => terminal.id === active_terminal_id) ?? null
   }, [active_terminal_id, terminals])
@@ -128,11 +234,8 @@ function useEditorState() {
     }
 
     const root_id = active_terminal.parent_id ?? active_terminal.id
-
     const root_terminal = terminals.find((terminal) => terminal.id === root_id)
-    const child_terminals = terminals
-      .filter((terminal) => terminal.parent_id === root_id)
-      .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
+    const child_terminals = terminals.filter((terminal) => terminal.parent_id === root_id)
 
     return root_terminal ? [root_terminal, ...child_terminals] : child_terminals
   }, [active_terminal, terminals])
@@ -141,11 +244,15 @@ function useEditorState() {
     set_open_menu(null)
     set_menu_pinned(false)
     set_settings_open(false)
+    set_indent_picker_open(false)
+    set_language_picker_open(false)
   }
 
   const hover_menu = (menu: Exclude<TopMenu, null>) => {
     set_open_menu(menu)
     set_settings_open(false)
+    set_indent_picker_open(false)
+    set_language_picker_open(false)
   }
 
   const leave_menus = () => {
@@ -164,10 +271,30 @@ function useEditorState() {
     set_open_menu(menu)
     set_menu_pinned(true)
     set_settings_open(false)
+    set_indent_picker_open(false)
+    set_language_picker_open(false)
   }
 
   const toggle_settings = () => {
     set_settings_open((current_value) => !current_value)
+    set_open_menu(null)
+    set_menu_pinned(false)
+    set_indent_picker_open(false)
+    set_language_picker_open(false)
+  }
+
+  const toggle_indent_picker = () => {
+    set_indent_picker_open((current_value) => !current_value)
+    set_language_picker_open(false)
+    set_settings_open(false)
+    set_open_menu(null)
+    set_menu_pinned(false)
+  }
+
+  const toggle_language_picker = () => {
+    set_language_picker_open((current_value) => !current_value)
+    set_indent_picker_open(false)
+    set_settings_open(false)
     set_open_menu(null)
     set_menu_pinned(false)
   }
@@ -196,32 +323,94 @@ function useEditorState() {
   }
 
   const create_text_file = () => {
-    const document_id = get_next_document_id(documents)
-    const untitled_number = get_next_untitled_number(documents)
-    const new_document: EditorDocument = {
+    const current_documents = documents_ref.current
+    const document_id = get_next_document_id(current_documents)
+    const untitled_number = get_next_untitled_number(current_documents)
+    const new_document: TextEditorDocument = {
+      kind: 'text',
       id: document_id,
       name: `Untitled-${untitled_number}`,
       content: '',
       saved_content: '',
       file_path: null,
-      language: 'text',
+      language: 'Plain Text',
+      indent_style: 'spaces',
+      indent_size: 4,
       dirty: false,
+      deleted: false,
     }
 
-    set_documents([...documents, new_document])
+    set_documents([...current_documents, new_document])
     set_active_document_id(new_document.id)
     close_overlays()
   }
 
-  const select_document = (document_id: number) => {
-    set_active_document_id(document_id)
+  const open_browser = async () => {
+    const existing_browser = documents_ref.current.find(
+      (document): document is BrowserEditorDocument => document.kind === 'browser',
+    )
+
+    close_overlays()
+
+    if (existing_browser) {
+      set_active_document_id(existing_browser.id)
+      return
+    }
+
+    const browser_id = get_next_document_id(documents_ref.current)
+    const browser_document: BrowserEditorDocument = {
+      kind: 'browser',
+      id: browser_id,
+      name: 'Browser',
+      url: browser_home_page,
+      can_go_back: false,
+      can_go_forward: false,
+      loading: true,
+    }
+
+    set_documents([...documents_ref.current, browser_document])
+    set_active_document_id(browser_id)
+
+    const browser_state = await window.editor_api.browser.create(browser_id, browser_home_page)
+
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.kind !== 'browser' || document.id !== browser_id) {
+          return document
+        }
+
+        return {
+          ...document,
+          name: browser_state.title || 'Browser',
+          url: browser_state.url,
+          can_go_back: browser_state.can_go_back,
+          can_go_forward: browser_state.can_go_forward,
+          loading: browser_state.loading,
+        }
+      }),
+    )
   }
 
-  const close_document = (document_id: number) => {
-    const document_index = documents.findIndex((document) => document.id === document_id)
-    const remaining_documents = documents.filter((document) => document.id !== document_id)
+  const select_document = (document_id: number) => {
+    set_active_document_id(document_id)
+    close_overlays()
+  }
 
-    if (active_document_id === document_id) {
+  const close_document_immediately = (document_id: number) => {
+    const current_documents = documents_ref.current
+    const document_index = current_documents.findIndex((document) => document.id === document_id)
+    const closing_document = current_documents[document_index]
+    const remaining_documents = current_documents.filter((document) => document.id !== document_id)
+
+    if (!closing_document) {
+      return
+    }
+
+    if (closing_document.kind === 'browser') {
+      window.editor_api.browser.destroy(closing_document.id)
+    }
+
+    if (active_document_id_ref.current === document_id) {
       const replacement_index = Math.min(document_index, remaining_documents.length - 1)
       set_active_document_id(remaining_documents[replacement_index]?.id ?? null)
     }
@@ -229,10 +418,26 @@ function useEditorState() {
     set_documents(remaining_documents)
   }
 
+  const close_document = (document_id: number) => {
+    const document = documents_ref.current.find((item) => item.id === document_id)
+
+    if (!document) {
+      return
+    }
+
+    if (document.kind === 'text' && document.dirty) {
+      set_pending_close_document_id(document_id)
+      close_overlays()
+      return
+    }
+
+    close_document_immediately(document_id)
+  }
+
   const update_document = (document_id: number, content: string) => {
     set_documents((current_documents) =>
       current_documents.map((document) => {
-        if (document.id !== document_id) {
+        if (document.kind !== 'text' || document.id !== document_id) {
           return document
         }
 
@@ -245,42 +450,144 @@ function useEditorState() {
     )
   }
 
-  const save_document = async (save_as = false) => {
-    const active_document = documents.find((document) => document.id === active_document_id)
-
-    close_overlays()
-
-    if (!active_document) {
-      return
-    }
-
-    const saved_content = active_document.content
-    const saved_file = await window.editor_api.file.save_text({
-      content: saved_content,
-      file_path: active_document.file_path,
-      save_as,
-      suggested_name: active_document.file_path ? active_document.name : `${active_document.name}.txt`,
-    })
-
-    if (!saved_file) {
-      return
-    }
-
+  const update_document_indentation = (document_id: number, indent_style: IndentStyle, indent_size: number) => {
     set_documents((current_documents) =>
       current_documents.map((document) => {
-        if (document.id !== active_document.id) {
+        if (document.kind !== 'text' || document.id !== document_id) {
           return document
         }
 
         return {
           ...document,
-          name: saved_file.name,
-          file_path: saved_file.file_path,
-          saved_content,
-          dirty: document.content !== saved_content,
+          indent_style,
+          indent_size,
         }
       }),
     )
+    set_indent_picker_open(false)
+  }
+
+  const update_document_language = (document_id: number, language: string) => {
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.kind !== 'text' || document.id !== document_id) {
+          return document
+        }
+
+        return {
+          ...document,
+          language,
+        }
+      }),
+    )
+    set_language_picker_open(false)
+  }
+
+  const mark_document_deleted = (document_id: number) => {
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.kind !== 'text' || document.id !== document_id) {
+          return document
+        }
+
+        return {
+          ...document,
+          deleted: true,
+        }
+      }),
+    )
+  }
+
+  const save_document = async (save_as = false, document_id = active_document_id_ref.current) => {
+    const document = documents_ref.current.find((item) => item.id === document_id)
+
+    close_overlays()
+
+    if (!document || document.kind !== 'text') {
+      return false
+    }
+
+    let force_save_as = save_as || document.deleted || !document.file_path
+
+    if (document.file_path && !force_save_as) {
+      const path_status = await window.editor_api.file.check_paths([document.file_path])
+
+      if (!path_status[document.file_path]) {
+        mark_document_deleted(document.id)
+        force_save_as = true
+      }
+    }
+
+    const saved_content = document.content
+    let saved_file = await window.editor_api.file.save_text({
+      content: saved_content,
+      file_path: document.file_path,
+      save_as: force_save_as,
+      suggested_name: document.file_path ? document.name : `${document.name}.txt`,
+    })
+
+    if (saved_file?.status === 'missing') {
+      mark_document_deleted(document.id)
+      saved_file = await window.editor_api.file.save_text({
+        content: saved_content,
+        file_path: document.file_path,
+        save_as: true,
+        suggested_name: document.name,
+      })
+    }
+
+    if (!saved_file || saved_file.status !== 'saved') {
+      return false
+    }
+
+    set_documents((current_documents) =>
+      current_documents.map((current_document) => {
+        if (current_document.kind !== 'text' || current_document.id !== document.id) {
+          return current_document
+        }
+
+        return {
+          ...current_document,
+          name: saved_file.name,
+          file_path: saved_file.file_path,
+          saved_content,
+          dirty: current_document.content !== saved_content,
+          deleted: false,
+        }
+      }),
+    )
+
+    return true
+  }
+
+  const confirm_close_save = async () => {
+    if (pending_close_document_id === null) {
+      return
+    }
+
+    const document_id = pending_close_document_id
+    const saved = await save_document(false, document_id)
+
+    if (!saved) {
+      return
+    }
+
+    set_pending_close_document_id(null)
+    close_document_immediately(document_id)
+  }
+
+  const confirm_close_discard = () => {
+    if (pending_close_document_id === null) {
+      return
+    }
+
+    const document_id = pending_close_document_id
+    set_pending_close_document_id(null)
+    close_document_immediately(document_id)
+  }
+
+  const cancel_close_document = () => {
+    set_pending_close_document_id(null)
   }
 
   useEffect(() => {
@@ -298,19 +605,21 @@ function useEditorState() {
     return () => {
       window.removeEventListener('keydown', save_with_shortcut, true)
     }
-  }, [active_document_id, documents])
+  })
 
   const create_terminal = () => {
-    const terminal_id = get_next_terminal_id(terminals)
+    const current_terminals = terminals
+    const terminal_id = get_next_terminal_id(current_terminals)
     const new_terminal: TerminalSession = {
       id: terminal_id,
       name: `Terminal ${terminal_id}`,
       history: [],
       input: '',
       parent_id: null,
+      weight: 1,
     }
 
-    set_terminals([...terminals, new_terminal])
+    set_terminals([...current_terminals, new_terminal])
     set_active_terminal_id(new_terminal.id)
     set_bottom_panel_tab('terminal')
     set_bottom_panel_open(true)
@@ -325,15 +634,32 @@ function useEditorState() {
 
     const terminal_id = get_next_terminal_id(terminals)
     const root_id = active_terminal.parent_id ?? active_terminal.id
+    const split_weight = active_terminal.weight / 2
     const new_terminal: TerminalSession = {
       id: terminal_id,
       name: `Terminal ${terminal_id}`,
       history: [],
       input: '',
       parent_id: root_id,
+      weight: split_weight,
     }
 
-    set_terminals([...terminals, new_terminal])
+    set_terminals((current_terminals) => {
+      const updated_terminals = current_terminals.map((terminal) => {
+        if (terminal.id !== active_terminal.id) {
+          return terminal
+        }
+
+        return {
+          ...terminal,
+          weight: split_weight,
+        }
+      })
+      const active_index = updated_terminals.findIndex((terminal) => terminal.id === active_terminal.id)
+
+      updated_terminals.splice(active_index + 1, 0, new_terminal)
+      return updated_terminals
+    })
     set_active_terminal_id(new_terminal.id)
     set_bottom_panel_tab('terminal')
     set_bottom_panel_open(true)
@@ -347,10 +673,31 @@ function useEditorState() {
       return
     }
 
+    const root_id = terminal.parent_id ?? terminal.id
+    const group_members = terminals.filter((item) => item.id === root_id || item.parent_id === root_id)
+    const root_terminal = group_members.find((item) => item.id === root_id)
+    const group = root_terminal
+      ? [root_terminal, ...group_members.filter((item) => item.id !== root_id)]
+      : group_members
+    const group_index = group.findIndex((item) => item.id === terminal_id)
+    const nearest_terminal = group[group_index - 1] ?? group[group_index + 1] ?? null
     const terminal_index = terminals.findIndex((item) => item.id === terminal_id)
     const child_terminals = terminals.filter((item) => item.parent_id === terminal_id)
     let remaining_terminals = terminals.filter((item) => item.id !== terminal_id)
     let replacement_id: number | null = active_terminal_id
+
+    if (nearest_terminal) {
+      remaining_terminals = remaining_terminals.map((item) => {
+        if (item.id !== nearest_terminal.id) {
+          return item
+        }
+
+        return {
+          ...item,
+          weight: item.weight + terminal.weight,
+        }
+      })
+    }
 
     if (terminal.parent_id === null && child_terminals.length > 0) {
       const promoted_terminal = child_terminals[0]
@@ -378,7 +725,7 @@ function useEditorState() {
       }
     } else if (active_terminal_id === terminal_id) {
       if (terminal.parent_id !== null) {
-        replacement_id = terminal.parent_id
+        replacement_id = nearest_terminal?.id ?? terminal.parent_id
       } else {
         const replacement_index = Math.min(terminal_index, remaining_terminals.length - 1)
         replacement_id = remaining_terminals[replacement_index]?.id ?? null
@@ -387,6 +734,27 @@ function useEditorState() {
 
     set_terminals(remaining_terminals)
     set_active_terminal_id(replacement_id)
+  }
+
+  const resize_terminal_panes = (
+    left_terminal_id: number,
+    right_terminal_id: number,
+    left_weight: number,
+    right_weight: number,
+  ) => {
+    set_terminals((current_terminals) =>
+      current_terminals.map((terminal) => {
+        if (terminal.id === left_terminal_id) {
+          return { ...terminal, weight: left_weight }
+        }
+
+        if (terminal.id === right_terminal_id) {
+          return { ...terminal, weight: right_weight }
+        }
+
+        return terminal
+      }),
+    )
   }
 
   const update_terminal_input = (terminal_id: number, input: string) => {
@@ -440,26 +808,43 @@ function useEditorState() {
     await window.editor_api.dialog.open_folder()
   }
 
+  const pending_close_document =
+    documents.find((document) => document.id === pending_close_document_id && document.kind === 'text') ?? null
+  const overlay_open =
+    open_menu !== null || settings_open || indent_picker_open || language_picker_open || pending_close_document !== null
+
   return {
     active_activity,
+    active_browser_document,
+    active_document,
     active_document_id,
     active_terminal_id,
+    active_text_document,
     ai_chat_open,
     bottom_panel_open,
     bottom_panel_tab,
+    cancel_close_document,
     close_bottom_panel,
     close_document,
     close_overlays,
+    confirm_close_discard,
+    confirm_close_save,
     create_terminal,
     create_text_file,
     delete_terminal,
     documents,
     hover_menu,
+    indent_picker_open,
     is_maximized,
+    language_picker_open,
     leave_menus,
+    open_browser,
     open_file_dialog,
     open_folder_dialog,
     open_menu,
+    overlay_open,
+    pending_close_document,
+    resize_terminal_panes,
     resolved_theme,
     save_document,
     select_activity,
@@ -473,9 +858,14 @@ function useEditorState() {
     terminals,
     theme_mode,
     toggle_ai_chat,
+    toggle_indent_picker,
+    toggle_language_picker,
     toggle_menu,
     toggle_settings,
     update_document,
+    validate_document_path,
+    update_document_indentation,
+    update_document_language,
     update_terminal_input,
     visible_terminals,
   }
