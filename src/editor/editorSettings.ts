@@ -34,18 +34,52 @@ export const default_editor_settings: EditorSettings = {
     show_type_icons: true,
     delay: 100,
   },
+  diagnostics: {
+    mode: 'typing',
+    delay: 2500,
+    show_squiggles: true,
+    show_gutter: true,
+    show_hover: true,
+    auto_reveal_problems: false,
+    enable_python: true,
+    enable_javascript: true,
+    enable_typescript: true,
+    enable_css: true,
+    enable_html: true,
+    enable_json: true,
+    enable_yaml: true,
+    enable_markdown: true,
+    enable_parser_fallback: true,
+  },
+  ai: {
+    ollama_url: 'http://127.0.0.1:11434',
+    selected_model: '',
+    speech_model: 'gabegoodhart/granite4.1-speech:2b',
+  },
   keybindings: {},
 }
 
 export function clone_editor_settings(settings: EditorSettings): EditorSettings {
   return {
+    ...default_editor_settings,
     ...settings,
-    recent_files: [...settings.recent_files],
-    editor: { ...settings.editor },
-    appearance: { ...settings.appearance },
-    suggestions: { ...settings.suggestions },
+    recent_files: [...(settings.recent_files ?? [])],
+    editor: { ...default_editor_settings.editor, ...settings.editor },
+    appearance: {
+      ...default_editor_settings.appearance,
+      ...settings.appearance,
+    },
+    suggestions: {
+      ...default_editor_settings.suggestions,
+      ...settings.suggestions,
+    },
+    diagnostics: {
+      ...default_editor_settings.diagnostics,
+      ...settings.diagnostics,
+    },
+    ai: { ...default_editor_settings.ai, ...settings.ai },
     keybindings: Object.fromEntries(
-      Object.entries(settings.keybindings).map(([command_id, keybinding]) => [command_id, { ...keybinding }]),
+      Object.entries(settings.keybindings ?? {}).map(([command_id, keybinding]) => [command_id, { ...keybinding }]),
     ),
   }
 }

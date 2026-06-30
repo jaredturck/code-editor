@@ -5,9 +5,11 @@ import type {
   ActivitySection,
   BottomPanelTab,
   BrowserEditorDocument,
+  EditorDiagnostic,
   EditorDocument,
   EditorSettings,
   IndentStyle,
+  MediaEditorDocument,
   TerminalSession,
   TextEditorDocument,
   TopMenu,
@@ -19,10 +21,10 @@ const initial_terminals: TerminalSession[] = [
   {
     id: 1,
     name: 'Terminal 1',
-    history: [],
-    input: '',
     parent_id: null,
     weight: 1,
+    status: 'starting',
+    exit_code: null,
   },
 ]
 
@@ -65,15 +67,57 @@ function get_next_untitled_number(documents: EditorDocument[]) {
   return next_untitled_number
 }
 
+function provider_is_enabled(language: string, settings: EditorSettings) {
+  const normalized = language.toLowerCase()
+  const diagnostics = settings.diagnostics
+
+  if (normalized === 'python') {
+    return diagnostics.enable_python
+  }
+
+  if (normalized === 'javascript' || normalized === 'jsx') {
+    return diagnostics.enable_javascript
+  }
+
+  if (normalized === 'typescript' || normalized === 'tsx') {
+    return diagnostics.enable_typescript
+  }
+
+  if (normalized === 'css' || normalized === 'scss' || normalized === 'less') {
+    return diagnostics.enable_css
+  }
+
+  if (normalized === 'html') {
+    return diagnostics.enable_html
+  }
+
+  if (normalized === 'json' || normalized === 'json5' || normalized === 'jsonc') {
+    return diagnostics.enable_json
+  }
+
+  if (normalized === 'yaml') {
+    return diagnostics.enable_yaml
+  }
+
+  if (normalized === 'markdown') {
+    return diagnostics.enable_markdown
+  }
+
+  return false
+}
+
 function useEditorState() {
   const [active_activity, set_active_activity] = useState<ActivitySection>('explorer')
   const [documents, set_documents] = useState<EditorDocument[]>([])
   const [active_document_id, set_active_document_id] = useState<number | null>(null)
   const [pending_close_document_id, set_pending_close_document_id] = useState<number | null>(null)
+  const [shutdown_queue, set_shutdown_queue] = useState<number[]>([])
+  const [shutdown_in_progress, set_shutdown_in_progress] = useState(false)
   const [bottom_panel_open, set_bottom_panel_open] = useState(true)
   const [bottom_panel_tab, set_bottom_panel_tab] = useState<BottomPanelTab>('terminal')
   const [terminals, set_terminals] = useState<TerminalSession[]>(initial_terminals)
   const [active_terminal_id, set_active_terminal_id] = useState<number | null>(1)
+  const [diagnostics, set_diagnostics] = useState<EditorDiagnostic[]>([])
   const [open_menu, set_open_menu] = useState<TopMenu>(null)
   const [menu_pinned, set_menu_pinned] = useState(false)
   const [settings_open, set_settings_open] = useState(false)
@@ -88,10 +132,15 @@ function useEditorState() {
   const documents_ref = useRef(documents)
   const active_document_id_ref = useRef(active_document_id)
   const settings_ref = useRef(settings)
+  const shutdown_queue_ref = useRef(shutdown_queue)
+  const shutdown_in_progress_ref = useRef(shutdown_in_progress)
+  const diagnostic_versions_ref = useRef(new Map<number, number>())
 
   documents_ref.current = documents
   active_document_id_ref.current = active_document_id
   settings_ref.current = settings
+  shutdown_queue_ref.current = shutdown_queue
+  shutdown_in_progress_ref.current = shutdown_in_progress
 
   useEffect(() => {
     void window.editor_api.settings.get().then((loaded_settings) => {
@@ -118,32 +167,28 @@ function useEditorState() {
 
   useEffect(() => {
     const media_query = window.matchMedia('(prefers-color-scheme: dark)')
+    const update_system_theme = (event: MediaQueryListEvent) => set_system_is_dark(event.matches)
 
     set_system_is_dark(media_query.matches)
-
-    const update_system_theme = (event: MediaQueryListEvent) => {
-      set_system_is_dark(event.matches)
-    }
-
     media_query.addEventListener('change', update_system_theme)
 
-    return () => {
-      media_query.removeEventListener('change', update_system_theme)
-    }
+    return () => media_query.removeEventListener('change', update_system_theme)
   }, [])
 
   useEffect(() => {
     window.editor_api.window.is_maximized().then(set_is_maximized)
-
     return window.editor_api.window.on_maximized_change(set_is_maximized)
   }, [])
 
   const validate_saved_documents = async () => {
-    const saved_documents = documents_ref.current.filter(
-      (document): document is TextEditorDocument & { file_path: string } =>
-        document.kind === 'text' && document.file_path !== null,
+    const file_documents = documents_ref.current.filter(
+      (
+        document,
+      ): document is (TextEditorDocument | MediaEditorDocument) & {
+        file_path: string
+      } => (document.kind === 'text' || document.kind === 'media') && document.file_path !== null,
     )
-    const file_paths = saved_documents.map((document) => document.file_path)
+    const file_paths = file_documents.map((document) => document.file_path)
 
     if (file_paths.length === 0) {
       return
@@ -153,27 +198,23 @@ function useEditorState() {
 
     set_documents((current_documents) =>
       current_documents.map((document) => {
-        if (document.kind !== 'text' || !document.file_path || path_status[document.file_path] === undefined) {
+        if ((document.kind !== 'text' && document.kind !== 'media') || !document.file_path) {
           return document
         }
 
-        return {
-          ...document,
-          deleted: !path_status[document.file_path],
-        }
+        return { ...document, deleted: !path_status[document.file_path!] }
       }),
     )
   }
 
   useEffect(() => {
-    return window.editor_api.window.on_focus(() => {
-      void validate_saved_documents()
-    })
+    return window.editor_api.window.on_focus(() => void validate_saved_documents())
   }, [])
 
   const validate_document_path = async (document_id: number) => {
     const document = documents_ref.current.find(
-      (item): item is TextEditorDocument => item.kind === 'text' && item.id === document_id,
+      (item): item is TextEditorDocument | MediaEditorDocument =>
+        (item.kind === 'text' || item.kind === 'media') && item.id === document_id,
     )
 
     if (!document?.file_path) {
@@ -184,7 +225,10 @@ function useEditorState() {
 
     set_documents((current_documents) =>
       current_documents.map((current_document) => {
-        if (current_document.kind !== 'text' || current_document.id !== document_id) {
+        if (
+          (current_document.kind !== 'text' && current_document.kind !== 'media') ||
+          current_document.id !== document_id
+        ) {
           return current_document
         }
 
@@ -217,6 +261,16 @@ function useEditorState() {
     })
   }, [])
 
+  const cancel_close_document = () => {
+    set_pending_close_document_id(null)
+
+    if (shutdown_in_progress_ref.current) {
+      set_shutdown_queue([])
+      set_shutdown_in_progress(false)
+      window.editor_api.app.confirm_close(false)
+    }
+  }
+
   useEffect(() => {
     const close_with_escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') {
@@ -229,15 +283,15 @@ function useEditorState() {
       set_new_file_modal_open(false)
       set_indent_picker_open(false)
       set_language_picker_open(false)
-      set_pending_close_document_id(null)
+
+      if (pending_close_document_id !== null) {
+        cancel_close_document()
+      }
     }
 
     window.addEventListener('keydown', close_with_escape)
-
-    return () => {
-      window.removeEventListener('keydown', close_with_escape)
-    }
-  }, [])
+    return () => window.removeEventListener('keydown', close_with_escape)
+  }, [pending_close_document_id])
 
   const resolved_theme = useMemo(() => {
     if (settings.theme_mode === 'system') {
@@ -247,17 +301,16 @@ function useEditorState() {
     return settings.theme_mode
   }, [settings.theme_mode, system_is_dark])
 
-  const active_document = useMemo(() => {
-    return documents.find((document) => document.id === active_document_id) ?? null
-  }, [active_document_id, documents])
-
+  const active_document = useMemo(
+    () => documents.find((document) => document.id === active_document_id) ?? null,
+    [active_document_id, documents],
+  )
   const active_text_document = active_document?.kind === 'text' ? active_document : null
   const active_browser_document = active_document?.kind === 'browser' ? active_document : null
-
-  const active_terminal = useMemo(() => {
-    return terminals.find((terminal) => terminal.id === active_terminal_id) ?? null
-  }, [active_terminal_id, terminals])
-
+  const active_terminal = useMemo(
+    () => terminals.find((terminal) => terminal.id === active_terminal_id) ?? null,
+    [active_terminal_id, terminals],
+  )
   const visible_terminals = useMemo(() => {
     if (!active_terminal) {
       return []
@@ -350,17 +403,9 @@ function useEditorState() {
     set_bottom_panel_open(true)
   }
 
-  const select_terminal = (terminal_id: number) => {
-    set_active_terminal_id(terminal_id)
-  }
-
-  const close_bottom_panel = () => {
-    set_bottom_panel_open(false)
-  }
-
-  const dismiss_notice = () => {
-    set_notice(null)
-  }
+  const select_terminal = (terminal_id: number) => set_active_terminal_id(terminal_id)
+  const close_bottom_panel = () => set_bottom_panel_open(false)
+  const dismiss_notice = () => set_notice(null)
 
   const apply_settings = (next_settings: EditorSettings) => {
     const normalized_settings = clone_editor_settings(next_settings)
@@ -432,6 +477,7 @@ function useEditorState() {
       indent_size: settings_ref.current.editor.default_indent_size,
       dirty: false,
       deleted: false,
+      markdown_view: 'source',
     }
 
     set_documents([...current_documents, new_document])
@@ -468,20 +514,18 @@ function useEditorState() {
     const browser_state = await window.editor_api.browser.create(browser_id, browser_home_page)
 
     set_documents((current_documents) =>
-      current_documents.map((document) => {
-        if (document.kind !== 'browser' || document.id !== browser_id) {
-          return document
-        }
-
-        return {
-          ...document,
-          name: browser_state.title || 'Browser',
-          url: browser_state.url,
-          can_go_back: browser_state.can_go_back,
-          can_go_forward: browser_state.can_go_forward,
-          loading: browser_state.loading,
-        }
-      }),
+      current_documents.map((document) =>
+        document.kind === 'browser' && document.id === browser_id
+          ? {
+              ...document,
+              name: browser_state.title || 'Browser',
+              url: browser_state.url,
+              can_go_back: browser_state.can_go_back,
+              can_go_forward: browser_state.can_go_forward,
+              loading: browser_state.loading,
+            }
+          : document,
+      ),
     )
   }
 
@@ -503,6 +547,9 @@ function useEditorState() {
     if (closing_document.kind === 'browser') {
       window.editor_api.browser.destroy(closing_document.id)
     }
+
+    set_diagnostics((current) => current.filter((diagnostic) => diagnostic.document_id !== document_id))
+    diagnostic_versions_ref.current.delete(document_id)
 
     if (active_document_id_ref.current === document_id) {
       const replacement_index = Math.min(document_index, remaining_documents.length - 1)
@@ -530,67 +577,188 @@ function useEditorState() {
 
   const update_document = (document_id: number, content: string) => {
     set_documents((current_documents) =>
-      current_documents.map((document) => {
-        if (document.kind !== 'text' || document.id !== document_id) {
-          return document
-        }
-
-        return {
-          ...document,
-          content,
-          dirty: content !== document.saved_content,
-        }
-      }),
+      current_documents.map((document) =>
+        document.kind === 'text' && document.id === document_id
+          ? { ...document, content, dirty: content !== document.saved_content }
+          : document,
+      ),
     )
   }
 
   const update_document_indentation = (document_id: number, indent_style: IndentStyle, indent_size: number) => {
     set_documents((current_documents) =>
-      current_documents.map((document) => {
-        if (document.kind !== 'text' || document.id !== document_id) {
-          return document
-        }
-
-        return {
-          ...document,
-          indent_style,
-          indent_size,
-        }
-      }),
+      current_documents.map((document) =>
+        document.kind === 'text' && document.id === document_id ? { ...document, indent_style, indent_size } : document,
+      ),
     )
     set_indent_picker_open(false)
   }
 
   const update_document_language = (document_id: number, language: string) => {
     set_documents((current_documents) =>
-      current_documents.map((document) => {
-        if (document.kind !== 'text' || document.id !== document_id) {
-          return document
-        }
-
-        return {
-          ...document,
-          language,
-        }
-      }),
+      current_documents.map((document) =>
+        document.kind === 'text' && document.id === document_id ? { ...document, language } : document,
+      ),
     )
     set_language_picker_open(false)
   }
 
-  const mark_document_deleted = (document_id: number) => {
+  const toggle_markdown_view = (document_id: number, markdown_view: TextEditorDocument['markdown_view']) => {
     set_documents((current_documents) =>
-      current_documents.map((document) => {
-        if (document.kind !== 'text' || document.id !== document_id) {
-          return document
-        }
-
-        return {
-          ...document,
-          deleted: true,
-        }
-      }),
+      current_documents.map((document) =>
+        document.kind === 'text' && document.id === document_id ? { ...document, markdown_view } : document,
+      ),
     )
   }
+
+  const mark_document_deleted = (document_id: number) => {
+    set_documents((current_documents) =>
+      current_documents.map((document) =>
+        (document.kind === 'text' || document.kind === 'media') && document.id === document_id
+          ? { ...document, deleted: true }
+          : document,
+      ),
+    )
+  }
+
+  const replace_provider_diagnostics = (document_id: number, next: EditorDiagnostic[]) => {
+    set_diagnostics((current) => [
+      ...current.filter(
+        (diagnostic) => diagnostic.document_id !== document_id || diagnostic.source === 'CodeMirror Parser',
+      ),
+      ...next,
+    ])
+  }
+
+  const update_parser_diagnostics = (document_id: number, next: EditorDiagnostic[]) => {
+    set_diagnostics((current) => [
+      ...current.filter(
+        (diagnostic) => diagnostic.document_id !== document_id || diagnostic.source !== 'CodeMirror Parser',
+      ),
+      ...next,
+    ])
+  }
+
+  const analyze_document = async (document_id: number) => {
+    const document = documents_ref.current.find(
+      (item): item is TextEditorDocument => item.kind === 'text' && item.id === document_id,
+    )
+    const current_settings = settings_ref.current
+
+    if (
+      !document ||
+      current_settings.diagnostics.mode === 'off' ||
+      !provider_is_enabled(document.language, current_settings)
+    ) {
+      replace_provider_diagnostics(document_id, [])
+      return
+    }
+
+    const version = (diagnostic_versions_ref.current.get(document_id) ?? 0) + 1
+    const content = document.content
+    diagnostic_versions_ref.current.set(document_id, version)
+
+    try {
+      const raw_diagnostics = await window.editor_api.diagnostics.analyze({
+        language: document.language,
+        content,
+        file_path: document.file_path,
+      })
+
+      if (
+        diagnostic_versions_ref.current.get(document_id) !== version ||
+        documents_ref.current.find(
+          (item): item is TextEditorDocument => item.id === document_id && item.kind === 'text',
+        )?.content !== content
+      ) {
+        return
+      }
+
+      const next = raw_diagnostics.map((diagnostic, index) => ({
+        ...diagnostic,
+        id: `${document_id}:${version}:${index}:${diagnostic.source}`,
+        document_id,
+        file_path: document.file_path,
+      }))
+
+      replace_provider_diagnostics(document_id, next)
+
+      if (
+        current_settings.diagnostics.auto_reveal_problems &&
+        next.some((diagnostic) => diagnostic.severity === 'error')
+      ) {
+        set_bottom_panel_tab('problems')
+        set_bottom_panel_open(true)
+      }
+    } catch (error) {
+      replace_provider_diagnostics(document_id, [])
+      const message = error instanceof Error ? error.message : 'Diagnostics failed.'
+      set_notice(`${document.language} diagnostics: ${message}`)
+    }
+  }
+
+  const diagnostic_document_signature = documents
+    .filter((document): document is TextEditorDocument => document.kind === 'text')
+    .map((document) => `${document.id}:${document.language}`)
+    .join('|')
+
+  useEffect(() => {
+    if (settings.diagnostics.mode === 'off') {
+      set_diagnostics([])
+      return
+    }
+
+    const enabled_document_ids = new Set(
+      documents_ref.current
+        .filter((document): document is TextEditorDocument => document.kind === 'text')
+        .filter((document) => provider_is_enabled(document.language, settings_ref.current))
+        .map((document) => document.id),
+    )
+
+    set_diagnostics((current) =>
+      current.filter((diagnostic) =>
+        diagnostic.source === 'CodeMirror Parser'
+          ? settings_ref.current.diagnostics.enable_parser_fallback
+          : enabled_document_ids.has(diagnostic.document_id),
+      ),
+    )
+  }, [
+    diagnostic_document_signature,
+    settings.diagnostics.enable_css,
+    settings.diagnostics.enable_html,
+    settings.diagnostics.enable_javascript,
+    settings.diagnostics.enable_json,
+    settings.diagnostics.enable_markdown,
+    settings.diagnostics.enable_parser_fallback,
+    settings.diagnostics.enable_python,
+    settings.diagnostics.enable_typescript,
+    settings.diagnostics.enable_yaml,
+    settings.diagnostics.mode,
+  ])
+
+  useEffect(() => {
+    if (settings.diagnostics.mode === 'off') {
+      set_diagnostics([])
+      return
+    }
+
+    if (!active_text_document || settings.diagnostics.mode !== 'typing') {
+      return
+    }
+
+    const timeout_id = window.setTimeout(
+      () => void analyze_document(active_text_document.id),
+      Math.max(500, settings.diagnostics.delay),
+    )
+
+    return () => window.clearTimeout(timeout_id)
+  }, [
+    active_text_document?.content,
+    active_text_document?.file_path,
+    active_text_document?.id,
+    active_text_document?.language,
+    settings.diagnostics,
+  ])
 
   const save_document = async (save_as = false, document_id = active_document_id_ref.current) => {
     const document = documents_ref.current.find((item) => item.id === document_id)
@@ -648,24 +816,41 @@ function useEditorState() {
     }
 
     set_documents((current_documents) =>
-      current_documents.map((current_document) => {
-        if (current_document.kind !== 'text' || current_document.id !== document.id) {
-          return current_document
-        }
-
-        return {
-          ...current_document,
-          name: saved_file.name,
-          file_path: saved_file.file_path,
-          saved_content,
-          dirty: current_document.content !== saved_content,
-          deleted: false,
-        }
-      }),
+      current_documents.map((current_document) =>
+        current_document.kind === 'text' && current_document.id === document.id
+          ? {
+              ...current_document,
+              name: saved_file.name,
+              file_path: saved_file.file_path,
+              saved_content,
+              dirty: current_document.content !== saved_content,
+              deleted: false,
+            }
+          : current_document,
+      ),
     )
     add_recent_file(saved_file.file_path)
 
+    if (settings_ref.current.diagnostics.mode !== 'off') {
+      window.setTimeout(() => void analyze_document(document.id), 0)
+    }
+
     return true
+  }
+
+  const advance_shutdown = (resolved_document_id: number) => {
+    const remaining = shutdown_queue_ref.current.filter((id) => id !== resolved_document_id)
+    set_shutdown_queue(remaining)
+
+    if (remaining.length > 0) {
+      set_pending_close_document_id(remaining[0])
+      set_active_document_id(remaining[0])
+      return
+    }
+
+    set_pending_close_document_id(null)
+    set_shutdown_in_progress(false)
+    window.editor_api.app.confirm_close(true)
   }
 
   const confirm_close_save = async () => {
@@ -680,6 +865,11 @@ function useEditorState() {
       return
     }
 
+    if (shutdown_in_progress_ref.current) {
+      advance_shutdown(document_id)
+      return
+    }
+
     set_pending_close_document_id(null)
     close_document_immediately(document_id)
   }
@@ -690,13 +880,39 @@ function useEditorState() {
     }
 
     const document_id = pending_close_document_id
+
+    if (shutdown_in_progress_ref.current) {
+      advance_shutdown(document_id)
+      return
+    }
+
     set_pending_close_document_id(null)
     close_document_immediately(document_id)
   }
 
-  const cancel_close_document = () => {
-    set_pending_close_document_id(null)
-  }
+  useEffect(() => {
+    return window.editor_api.app.on_close_request(() => {
+      if (shutdown_in_progress_ref.current) {
+        return
+      }
+
+      const dirty_documents = documents_ref.current.filter(
+        (document): document is TextEditorDocument => document.kind === 'text' && document.dirty,
+      )
+
+      if (!settings_ref.current.confirm_unsaved_close || dirty_documents.length === 0) {
+        window.editor_api.app.confirm_close(true)
+        return
+      }
+
+      const queue = dirty_documents.map((document) => document.id)
+      set_shutdown_queue(queue)
+      set_shutdown_in_progress(true)
+      set_pending_close_document_id(queue[0])
+      set_active_document_id(queue[0])
+      close_overlays()
+    })
+  }, [])
 
   useEffect(() => {
     const save_with_shortcut = (event: KeyboardEvent) => {
@@ -709,25 +925,21 @@ function useEditorState() {
     }
 
     window.addEventListener('keydown', save_with_shortcut, true)
-
-    return () => {
-      window.removeEventListener('keydown', save_with_shortcut, true)
-    }
+    return () => window.removeEventListener('keydown', save_with_shortcut, true)
   })
 
   const create_terminal = () => {
-    const current_terminals = terminals
-    const terminal_id = get_next_terminal_id(current_terminals)
+    const terminal_id = get_next_terminal_id(terminals)
     const new_terminal: TerminalSession = {
       id: terminal_id,
       name: `Terminal ${terminal_id}`,
-      history: [],
-      input: '',
       parent_id: null,
       weight: 1,
+      status: 'starting',
+      exit_code: null,
     }
 
-    set_terminals([...current_terminals, new_terminal])
+    set_terminals([...terminals, new_terminal])
     set_active_terminal_id(new_terminal.id)
     set_bottom_panel_tab('terminal')
     set_bottom_panel_open(true)
@@ -746,25 +958,17 @@ function useEditorState() {
     const new_terminal: TerminalSession = {
       id: terminal_id,
       name: `Terminal ${terminal_id}`,
-      history: [],
-      input: '',
       parent_id: root_id,
       weight: split_weight,
+      status: 'starting',
+      exit_code: null,
     }
 
     set_terminals((current_terminals) => {
-      const updated_terminals = current_terminals.map((terminal) => {
-        if (terminal.id !== active_terminal.id) {
-          return terminal
-        }
-
-        return {
-          ...terminal,
-          weight: split_weight,
-        }
-      })
+      const updated_terminals = current_terminals.map((terminal) =>
+        terminal.id === active_terminal.id ? { ...terminal, weight: split_weight } : terminal,
+      )
       const active_index = updated_terminals.findIndex((terminal) => terminal.id === active_terminal.id)
-
       updated_terminals.splice(active_index + 1, 0, new_terminal)
       return updated_terminals
     })
@@ -781,6 +985,7 @@ function useEditorState() {
       return
     }
 
+    window.editor_api.terminal.kill(terminal_id)
     const root_id = terminal.parent_id ?? terminal.id
     const group_members = terminals.filter((item) => item.id === root_id || item.parent_id === root_id)
     const root_terminal = group_members.find((item) => item.id === root_id)
@@ -795,37 +1000,19 @@ function useEditorState() {
     let replacement_id: number | null = active_terminal_id
 
     if (nearest_terminal) {
-      remaining_terminals = remaining_terminals.map((item) => {
-        if (item.id !== nearest_terminal.id) {
-          return item
-        }
-
-        return {
-          ...item,
-          weight: item.weight + terminal.weight,
-        }
-      })
+      remaining_terminals = remaining_terminals.map((item) =>
+        item.id === nearest_terminal.id ? { ...item, weight: item.weight + terminal.weight } : item,
+      )
     }
 
     if (terminal.parent_id === null && child_terminals.length > 0) {
       const promoted_terminal = child_terminals[0]
-
       remaining_terminals = remaining_terminals.map((item) => {
         if (item.id === promoted_terminal.id) {
-          return {
-            ...item,
-            parent_id: null,
-          }
+          return { ...item, parent_id: null }
         }
 
-        if (item.parent_id === terminal_id) {
-          return {
-            ...item,
-            parent_id: promoted_terminal.id,
-          }
-        }
-
-        return item
+        return item.parent_id === terminal_id ? { ...item, parent_id: promoted_terminal.id } : item
       })
 
       if (active_terminal_id === terminal_id) {
@@ -844,6 +1031,18 @@ function useEditorState() {
     set_active_terminal_id(replacement_id)
   }
 
+  const update_terminal_status = (
+    terminal_id: number,
+    status: TerminalSession['status'],
+    exit_code: number | null = null,
+  ) => {
+    set_terminals((current_terminals) =>
+      current_terminals.map((terminal) =>
+        terminal.id === terminal_id ? { ...terminal, status, exit_code } : terminal,
+      ),
+    )
+  }
+
   const resize_terminal_panes = (
     left_terminal_id: number,
     right_terminal_id: number,
@@ -856,44 +1055,7 @@ function useEditorState() {
           return { ...terminal, weight: left_weight }
         }
 
-        if (terminal.id === right_terminal_id) {
-          return { ...terminal, weight: right_weight }
-        }
-
-        return terminal
-      }),
-    )
-  }
-
-  const update_terminal_input = (terminal_id: number, input: string) => {
-    set_terminals((current_terminals) =>
-      current_terminals.map((terminal) => {
-        if (terminal.id !== terminal_id) {
-          return terminal
-        }
-
-        return {
-          ...terminal,
-          input,
-        }
-      }),
-    )
-  }
-
-  const submit_terminal_input = (terminal_id: number) => {
-    set_terminals((current_terminals) =>
-      current_terminals.map((terminal) => {
-        if (terminal.id !== terminal_id) {
-          return terminal
-        }
-
-        const history = terminal.input.length > 0 ? [...terminal.history, terminal.input] : terminal.history
-
-        return {
-          ...terminal,
-          history,
-          input: '',
-        }
+        return terminal.id === right_terminal_id ? { ...terminal, weight: right_weight } : terminal
       }),
     )
   }
@@ -902,7 +1064,7 @@ function useEditorState() {
     close_overlays()
 
     const existing_document = documents_ref.current.find(
-      (document): document is TextEditorDocument => document.kind === 'text' && document.file_path === file_path,
+      (document) => (document.kind === 'text' || document.kind === 'media') && document.file_path === file_path,
     )
 
     if (existing_document) {
@@ -911,7 +1073,7 @@ function useEditorState() {
       return
     }
 
-    const opened_file = await window.editor_api.file.read_text(file_path)
+    const opened_file = await window.editor_api.file.open(file_path)
 
     if (opened_file.status !== 'opened') {
       if (opened_file.status === 'missing') {
@@ -924,18 +1086,35 @@ function useEditorState() {
 
     const current_documents = documents_ref.current
     const document_id = get_next_document_id(current_documents)
-    const new_document: TextEditorDocument = {
-      kind: 'text',
-      id: document_id,
-      name: opened_file.name,
-      content: opened_file.content,
-      saved_content: opened_file.content,
-      file_path: opened_file.file_path,
-      language: get_language_for_file(opened_file.file_path),
-      indent_style: settings_ref.current.editor.default_indent_style,
-      indent_size: settings_ref.current.editor.default_indent_size,
-      dirty: false,
-      deleted: false,
+    let new_document: EditorDocument
+
+    if (opened_file.kind === 'text') {
+      new_document = {
+        kind: 'text',
+        id: document_id,
+        name: opened_file.name,
+        content: opened_file.content ?? '',
+        saved_content: opened_file.content ?? '',
+        file_path: opened_file.file_path,
+        language: get_language_for_file(opened_file.file_path),
+        indent_style: settings_ref.current.editor.default_indent_style,
+        indent_size: settings_ref.current.editor.default_indent_size,
+        dirty: false,
+        deleted: false,
+        markdown_view: 'source',
+      }
+    } else {
+      new_document = {
+        kind: 'media',
+        id: document_id,
+        name: opened_file.name,
+        file_path: opened_file.file_path,
+        media_type: opened_file.kind,
+        mime_type: opened_file.mime_type,
+        url: opened_file.resource_url ?? '',
+        size: opened_file.size,
+        deleted: false,
+      }
     }
 
     set_documents([...current_documents, new_document])
@@ -965,6 +1144,17 @@ function useEditorState() {
     await window.editor_api.dialog.open_folder()
   }
 
+  const open_diagnostic = (diagnostic: EditorDiagnostic) => {
+    set_active_document_id(diagnostic.document_id)
+    set_bottom_panel_tab('problems')
+    set_bottom_panel_open(true)
+    const document = documents_ref.current.find((item) => item.id === diagnostic.document_id)
+
+    if (document?.kind === 'text' && document.markdown_view === 'preview') {
+      toggle_markdown_view(document.id, 'source')
+    }
+  }
+
   const pending_close_document =
     documents.find((document) => document.id === pending_close_document_id && document.kind === 'text') ?? null
   const overlay_open =
@@ -977,13 +1167,13 @@ function useEditorState() {
 
   return {
     active_activity,
-    apply_settings,
     active_browser_document,
     active_document,
     active_document_id,
     active_terminal_id,
     active_text_document,
     ai_chat_open,
+    apply_settings,
     bottom_panel_open,
     bottom_panel_tab,
     cancel_close_document,
@@ -995,6 +1185,7 @@ function useEditorState() {
     create_terminal,
     create_text_file,
     delete_terminal,
+    diagnostics,
     dismiss_notice,
     documents,
     hover_menu,
@@ -1005,11 +1196,13 @@ function useEditorState() {
     new_file_modal_open,
     notice,
     open_browser,
+    open_diagnostic,
     open_file_dialog,
+    open_file_path,
     open_folder_dialog,
+    open_menu,
     open_new_file_modal,
     open_recent_file,
-    open_menu,
     overlay_open,
     pending_close_document,
     recent_files: settings.recent_files,
@@ -1017,25 +1210,26 @@ function useEditorState() {
     resolved_theme,
     save_document,
     select_activity,
-    select_document,
     select_bottom_panel_tab,
+    select_document,
     select_terminal,
     settings,
     settings_open,
     split_terminal,
-    submit_terminal_input,
     terminals,
     theme_mode: settings.theme_mode,
     toggle_ai_chat,
     toggle_indent_picker,
     toggle_language_picker,
+    toggle_markdown_view,
     toggle_menu,
     toggle_settings,
     update_document,
-    validate_document_path,
     update_document_indentation,
     update_document_language,
-    update_terminal_input,
+    update_parser_diagnostics,
+    update_terminal_status,
+    validate_document_path,
     visible_terminals,
   }
 }

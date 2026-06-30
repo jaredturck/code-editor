@@ -1,14 +1,24 @@
 import type { RefObject } from 'react'
 import logo from '../assets/logo.png'
-import type { EditorDocument, EditorSettings, TextEditorDocument, ThemeMode } from '../types/editor'
+import type {
+  EditorDiagnostic,
+  EditorDocument,
+  EditorSettings,
+  MediaEditorDocument,
+  TextEditorDocument,
+  ThemeMode,
+} from '../types/editor'
 import BrowserPanel from './BrowserPanel'
 import CodeEditor, { type CodeEditorHandle, type EditorCommandState } from './CodeEditor'
 import Icon from './Icon'
+import MarkdownView from './MarkdownView'
+import MediaViewer from './viewers/MediaViewer'
 import close_icon from './images/close.svg'
 
 interface EditorPanelProps {
   activeDocumentId: number | null
   browserVisible: boolean
+  diagnostics: EditorDiagnostic[]
   documents: EditorDocument[]
   editorRef: RefObject<CodeEditorHandle | null>
   settings: EditorSettings
@@ -16,11 +26,14 @@ interface EditorPanelProps {
   onCloseDocument: (document_id: number) => void
   onEditorCommandStateChange: (state: EditorCommandState) => void
   onFocusDocument: (document_id: number) => void
+  onOpenFilePath: (file_path: string) => void
+  onParserDiagnostics: (document_id: number, diagnostics: EditorDiagnostic[]) => void
   onSelectDocument: (document_id: number) => void
+  onToggleMarkdownView: (document_id: number, view: TextEditorDocument['markdown_view']) => void
   onUpdateDocument: (document_id: number, content: string) => void
 }
 
-function FileBreadcrumbs({ document }: { document: TextEditorDocument }) {
+function FileBreadcrumbs({ document }: { document: TextEditorDocument | MediaEditorDocument }) {
   const path_segments = document.file_path ? document.file_path.split(/[\\/]/).filter(Boolean) : []
 
   return (
@@ -43,9 +56,14 @@ function FileBreadcrumbs({ document }: { document: TextEditorDocument }) {
   )
 }
 
+function is_markdown(document: TextEditorDocument) {
+  return document.language === 'Markdown' || /(?:^readme(?:\.[^.]+)?$|\.(?:md|markdown)$)/i.test(document.name)
+}
+
 function EditorPanel({
   activeDocumentId,
   browserVisible,
+  diagnostics,
   documents,
   editorRef,
   settings,
@@ -53,7 +71,10 @@ function EditorPanel({
   onCloseDocument,
   onEditorCommandStateChange,
   onFocusDocument,
+  onOpenFilePath,
+  onParserDiagnostics,
   onSelectDocument,
+  onToggleMarkdownView,
   onUpdateDocument,
 }: EditorPanelProps) {
   const active_document = documents.find((document) => document.id === activeDocumentId) ?? null
@@ -62,6 +83,7 @@ function EditorPanel({
     active_document?.kind === 'text'
       ? active_document
       : (text_documents.find((document) => document.id === activeDocumentId) ?? text_documents[0] ?? null)
+  const active_markdown = active_document?.kind === 'text' && is_markdown(active_document)
 
   if (!active_document) {
     return (
@@ -86,7 +108,7 @@ function EditorPanel({
       >
         {documents.map((document) => {
           const is_active = document.id === active_document.id
-          const deleted = document.kind === 'text' && document.deleted
+          const deleted = (document.kind === 'text' || document.kind === 'media') && document.deleted
           const dirty = document.kind === 'text' && document.dirty
 
           return (
@@ -112,7 +134,6 @@ function EditorPanel({
                   {document.name}
                 </span>
               </button>
-
               <button
                 aria-label={`Close ${document.name}`}
                 className="group mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-[var(--hover)]"
@@ -128,14 +149,34 @@ function EditorPanel({
       </div>
 
       {editor_document && (
-        <div className={`${active_document.kind === 'text' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}>
-          <FileBreadcrumbs document={editor_document} />
+        <div
+          className={`${active_document.kind === 'text' && (!active_markdown || active_document.markdown_view === 'source') ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}
+        >
+          <div className="relative">
+            <FileBreadcrumbs document={editor_document} />
+            {active_markdown && active_document.kind === 'text' && (
+              <div className="absolute right-2 top-0 flex h-7 items-center gap-1">
+                <button className="markdown-mode-button active" type="button">
+                  Source
+                </button>
+                <button
+                  className="markdown-mode-button"
+                  onClick={() => onToggleMarkdownView(active_document.id, 'preview')}
+                  type="button"
+                >
+                  Preview
+                </button>
+              </div>
+            )}
+          </div>
           <CodeEditor
             activeDocument={editor_document}
+            diagnostics={diagnostics.filter((diagnostic) => diagnostic.document_id === editor_document.id)}
             documents={text_documents}
             onChange={onUpdateDocument}
             onCommandStateChange={onEditorCommandStateChange}
             onFocus={onFocusDocument}
+            onParserDiagnostics={onParserDiagnostics}
             ref={editorRef}
             settings={settings}
             theme={theme}
@@ -143,7 +184,40 @@ function EditorPanel({
         </div>
       )}
 
+      {active_markdown && active_document.kind === 'text' && active_document.markdown_view === 'preview' && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="relative">
+            <FileBreadcrumbs document={active_document} />
+            <div className="absolute right-2 top-0 flex h-7 items-center gap-1">
+              <button
+                className="markdown-mode-button"
+                onClick={() => onToggleMarkdownView(active_document.id, 'source')}
+                type="button"
+              >
+                Source
+              </button>
+              <button className="markdown-mode-button active" type="button">
+                Preview
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto bg-[var(--editor-bg)] px-8 py-6">
+            <MarkdownView
+              baseFilePath={active_document.file_path}
+              content={active_document.content}
+              onOpenLocal={onOpenFilePath}
+            />
+          </div>
+        </div>
+      )}
+
       {active_document.kind === 'browser' && <BrowserPanel document={active_document} visible={browserVisible} />}
+      {active_document.kind === 'media' && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <FileBreadcrumbs document={active_document} />
+          <MediaViewer document={active_document} />
+        </div>
+      )}
     </section>
   )
 }

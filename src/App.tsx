@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
 import type { CodeEditorHandle, EditorCommandState } from './components/CodeEditor'
-import type { EditorCommandId } from './types/editor'
 import EditorPanel from './components/EditorPanel'
 import ExplorerPanel from './components/ExplorerPanel'
 import IndentationPicker from './components/IndentationPicker'
@@ -14,8 +13,10 @@ import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
 import TerminalPanel from './components/TerminalPanel'
 import TopBar from './components/TopBar'
+import useAIChat from './hooks/useAIChat'
 import useEditorState from './hooks/useEditorState'
 import usePanelSizes from './hooks/usePanelSizes'
+import type { EditorCommandId, EditorDiagnostic } from './types/editor'
 
 const initial_editor_command_state: EditorCommandState = {
   can_undo: false,
@@ -30,19 +31,25 @@ const initial_editor_command_state: EditorCommandState = {
 
 function App() {
   const editor = useEditorState()
+  const chat = useAIChat(editor.settings, editor.apply_settings, editor.active_text_document)
   const panels = usePanelSizes(editor.ai_chat_open)
   const editor_ref = useRef<CodeEditorHandle>(null)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
-  const editor_grid_style = editor.bottom_panel_open
-    ? { gridTemplateRows: `minmax(0, 1fr) ${panels.bottom_panel_height}px` }
-    : { gridTemplateRows: 'minmax(0, 1fr)' }
+  const editor_grid_style = {
+    gridTemplateRows: `minmax(0, 1fr) ${editor.bottom_panel_open ? panels.bottom_panel_height : 0}px`,
+  }
 
   const run_editor_command = (command_id: EditorCommandId) => {
     editor.close_overlays()
     requestAnimationFrame(() => editor_ref.current?.run_command(command_id))
+  }
+
+  const open_diagnostic = (diagnostic: EditorDiagnostic) => {
+    editor.open_diagnostic(diagnostic)
+    window.setTimeout(() => editor_ref.current?.reveal_diagnostic(diagnostic), 40)
   }
 
   return (
@@ -77,10 +84,7 @@ function App() {
         onSplitTerminal={editor.split_terminal}
         onToggleAiChat={editor.toggle_ai_chat}
         onToggleMenu={editor.toggle_menu}
-        onUpdateSettings={(settings) => {
-          editor.apply_settings(settings)
-          editor.close_overlays()
-        }}
+        onUpdateSettings={editor.apply_settings}
         openMenu={editor.open_menu}
         recentFiles={editor.recent_files}
         settings={editor.settings}
@@ -108,40 +112,44 @@ function App() {
           <EditorPanel
             activeDocumentId={editor.active_document_id}
             browserVisible={!editor.overlay_open}
+            diagnostics={editor.diagnostics}
             documents={editor.documents}
             editorRef={editor_ref}
-            settings={editor.settings}
             onCloseDocument={editor.close_document}
             onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
+            onOpenFilePath={(file_path) => void editor.open_file_path(file_path)}
+            onParserDiagnostics={editor.update_parser_diagnostics}
             onSelectDocument={editor.select_document}
+            onToggleMarkdownView={editor.toggle_markdown_view}
             onUpdateDocument={editor.update_document}
+            settings={editor.settings}
             theme={editor.resolved_theme}
           />
 
-          {editor.bottom_panel_open && (
-            <TerminalPanel
-              activeTab={editor.bottom_panel_tab}
-              activeTerminalId={editor.active_terminal_id}
-              onClosePanel={editor.close_bottom_panel}
-              onCreateTerminal={editor.create_terminal}
-              onDeleteTerminal={editor.delete_terminal}
-              onResizePanel={panels.start_bottom_panel_resize}
-              onResizeTerminalList={panels.start_terminal_list_resize}
-              onResizeTerminalPanes={editor.resize_terminal_panes}
-              onSelectTab={editor.select_bottom_panel_tab}
-              onSelectTerminal={editor.select_terminal}
-              onSubmitTerminalInput={editor.submit_terminal_input}
-              onUpdateTerminalInput={editor.update_terminal_input}
-              terminalListWidth={panels.terminal_list_width}
-              terminals={editor.terminals}
-              visibleTerminals={editor.visible_terminals}
-            />
-          )}
+          <TerminalPanel
+            activeTab={editor.bottom_panel_tab}
+            activeTerminalId={editor.active_terminal_id}
+            diagnostics={editor.diagnostics}
+            onClosePanel={editor.close_bottom_panel}
+            onCreateTerminal={editor.create_terminal}
+            onDeleteTerminal={editor.delete_terminal}
+            onOpenDiagnostic={open_diagnostic}
+            onResizePanel={panels.start_bottom_panel_resize}
+            onResizeTerminalList={panels.start_terminal_list_resize}
+            onResizeTerminalPanes={editor.resize_terminal_panes}
+            onSelectTab={editor.select_bottom_panel_tab}
+            onSelectTerminal={editor.select_terminal}
+            onTerminalStatusChange={editor.update_terminal_status}
+            terminalListWidth={panels.terminal_list_width}
+            terminals={editor.terminals}
+            visible={editor.bottom_panel_open}
+          />
         </main>
 
         {editor.ai_chat_open && (
           <AIChatPanel
+            chat={chat}
             onClose={editor.toggle_ai_chat}
             onResize={panels.start_ai_chat_resize}
             width={panels.ai_chat_width}
@@ -177,7 +185,7 @@ function App() {
       )}
 
       {editor.settings_open && (
-        <SettingsModal onApply={editor.apply_settings} onClose={editor.close_overlays} settings={editor.settings} />
+        <SettingsModal onChange={editor.apply_settings} onClose={editor.close_overlays} settings={editor.settings} />
       )}
 
       {editor.pending_close_document && editor.pending_close_document.kind === 'text' && (

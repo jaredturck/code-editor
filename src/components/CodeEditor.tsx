@@ -44,11 +44,12 @@ import {
   indentOnInput,
   indentUnit,
   syntaxHighlighting,
+  syntaxTree,
   unfoldAll,
   unfoldCode,
 } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { lintKeymap } from '@codemirror/lint'
+import { lintGutter, lintKeymap, setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import {
   findNext,
   findPrevious,
@@ -82,7 +83,7 @@ import {
   get_managed_shortcut_keys,
 } from '../editor/editorCommands'
 import { editor_search_extension, open_editor_search } from '../editor/editorSearch'
-import type { EditorCommandId, EditorSettings, TextEditorDocument, ThemeMode } from '../types/editor'
+import type { EditorCommandId, EditorDiagnostic, EditorSettings, TextEditorDocument, ThemeMode } from '../types/editor'
 import EditorContextMenu from './EditorContextMenu'
 
 export interface EditorCommandState {
@@ -98,17 +99,20 @@ export interface EditorCommandState {
 
 export interface CodeEditorHandle {
   focus: () => void
+  reveal_diagnostic: (diagnostic: EditorDiagnostic) => void
   run_command: (command_id: EditorCommandId) => boolean
 }
 
 interface CodeEditorProps {
   activeDocument: TextEditorDocument
+  diagnostics: EditorDiagnostic[]
   documents: TextEditorDocument[]
   settings: EditorSettings
   theme: Exclude<ThemeMode, 'system'>
   onChange: (document_id: number, content: string) => void
   onCommandStateChange: (state: EditorCommandState) => void
   onFocus: (document_id: number) => void
+  onParserDiagnostics: (document_id: number, diagnostics: EditorDiagnostic[]) => void
 }
 
 interface ContextMenuState {
@@ -261,7 +265,17 @@ function get_command_state(state: EditorState): EditorCommandState {
 }
 
 const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
-  { activeDocument, documents, settings, theme, onChange, onCommandStateChange, onFocus },
+  {
+    activeDocument,
+    diagnostics,
+    documents,
+    settings,
+    theme,
+    onChange,
+    onCommandStateChange,
+    onFocus,
+    onParserDiagnostics,
+  },
   ref,
 ) {
   const host_ref = useRef<HTMLDivElement>(null)
@@ -273,6 +287,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const language_compartment_ref = useRef(new Compartment())
   const indentation_compartment_ref = useRef(new Compartment())
   const settings_compartment_ref = useRef(new Compartment())
+  const parser_timer_ref = useRef<number | null>(null)
+  const on_parser_diagnostics_ref = useRef(onParserDiagnostics)
   const language_request_ref = useRef(0)
   const on_change_ref = useRef(onChange)
   const on_command_state_change_ref = useRef(onCommandStateChange)
@@ -295,6 +311,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   on_command_state_change_ref.current = onCommandStateChange
   on_focus_ref.current = onFocus
   settings_ref.current = settings
+  on_parser_diagnostics_ref.current = onParserDiagnostics
   theme_ref.current = theme
 
   const notify_command_state = (state: EditorState) => {
@@ -474,6 +491,26 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       extensions.push(EditorView.lineWrapping)
     }
 
+    if (current_settings.diagnostics.show_gutter) {
+      extensions.push(lintGutter())
+    }
+
+    if (!current_settings.diagnostics.show_squiggles) {
+      extensions.push(
+        EditorView.theme({
+          '.cm-lintRange': { backgroundImage: 'none !important' },
+        }),
+      )
+    }
+
+    if (!current_settings.diagnostics.show_hover) {
+      extensions.push(
+        EditorView.theme({
+          '.cm-tooltip-lint': { display: 'none !important' },
+        }),
+      )
+    }
+
     const custom_keybindings: KeyBinding[] = editor_commands.flatMap((command) =>
       get_effective_keybinding_keys(current_settings.keybindings, command.id).map((key) => ({
         key,
@@ -502,6 +539,76 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     return extensions
   }
 
+  const provider_languages = new Set([
+    'python',
+    'javascript',
+    'jsx',
+    'typescript',
+    'tsx',
+    'css',
+    'scss',
+    'less',
+    'html',
+    'json',
+    'json5',
+    'jsonc',
+    'yaml',
+    'markdown',
+  ])
+
+  const collect_parser_diagnostics = (view: EditorView, document: TextEditorDocument) => {
+    if (
+      settings_ref.current.diagnostics.mode === 'off' ||
+      !settings_ref.current.diagnostics.enable_parser_fallback ||
+      provider_languages.has(document.language.toLowerCase())
+    ) {
+      on_parser_diagnostics_ref.current(document.id, [])
+      return
+    }
+
+    const found: EditorDiagnostic[] = []
+    const cursor = syntaxTree(view.state).cursor()
+    let index = 0
+
+    do {
+      if (!cursor.type.isError) {
+        continue
+      }
+
+      const from = Math.max(0, Math.min(view.state.doc.length, cursor.from))
+      const to = Math.max(from, Math.min(view.state.doc.length, cursor.to))
+      const start_line = view.state.doc.lineAt(from)
+      const end_line = view.state.doc.lineAt(to)
+      found.push({
+        id: `${document.id}:parser:${index}`,
+        document_id: document.id,
+        file_path: document.file_path,
+        source: 'CodeMirror Parser',
+        code: null,
+        severity: 'error',
+        message: 'Syntax error',
+        line: start_line.number,
+        column: from - start_line.from + 1,
+        end_line: end_line.number,
+        end_column: to - end_line.from + 1,
+      })
+      index += 1
+    } while (cursor.next())
+
+    on_parser_diagnostics_ref.current(document.id, found)
+  }
+
+  const schedule_parser_diagnostics = (view: EditorView, document: TextEditorDocument) => {
+    if (parser_timer_ref.current !== null) {
+      window.clearTimeout(parser_timer_ref.current)
+    }
+
+    parser_timer_ref.current = window.setTimeout(
+      () => collect_parser_diagnostics(view, document),
+      Math.max(500, settings_ref.current.diagnostics.delay),
+    )
+  }
+
   const create_editor_state = (document: TextEditorDocument) => {
     return EditorState.create({
       doc: document.content,
@@ -521,6 +628,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
 
           if (update.docChanged) {
             on_change_ref.current(document.id, update.state.doc.toString())
+            schedule_parser_diagnostics(update.view, document)
           }
         }),
         EditorView.domEventHandlers({
@@ -572,8 +680,45 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     })
   }
 
+  const apply_diagnostics = (view: EditorView, editor_diagnostics: EditorDiagnostic[]) => {
+    const code_mirror_diagnostics: Diagnostic[] = editor_diagnostics.map((diagnostic) => {
+      const start_line = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, diagnostic.line)))
+      const end_line = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, diagnostic.end_line)))
+      const from = Math.min(start_line.to, start_line.from + Math.max(0, diagnostic.column - 1))
+      const requested_to = end_line.from + Math.max(0, diagnostic.end_column - 1)
+      const maximum_to = Math.min(view.state.doc.length, end_line.to)
+      const to = maximum_to === 0 ? 0 : Math.min(maximum_to, Math.max(from + 1, requested_to))
+
+      return {
+        from,
+        to,
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        source: diagnostic.code ? `${diagnostic.source} · ${diagnostic.code}` : diagnostic.source,
+      }
+    })
+
+    view.dispatch(setDiagnostics(view.state, code_mirror_diagnostics))
+    state_cache_ref.current.set(activeDocument.id, view.state)
+  }
+
   useImperativeHandle(ref, () => ({
     focus: () => editor_view_ref.current?.focus(),
+    reveal_diagnostic: (diagnostic) => {
+      const view = editor_view_ref.current
+
+      if (!view || active_document_id_ref.current !== diagnostic.document_id) {
+        return
+      }
+
+      const line = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, diagnostic.line)))
+      const position = Math.min(line.to, line.from + Math.max(0, diagnostic.column - 1))
+      view.dispatch({
+        selection: EditorSelection.cursor(position),
+        effects: EditorView.scrollIntoView(position, { y: 'center' }),
+      })
+      view.focus()
+    },
     run_command: (command_id) => run_editor_command(command_id),
   }))
 
@@ -595,6 +740,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     editor_view.focus()
 
     return () => {
+      if (parser_timer_ref.current !== null) {
+        window.clearTimeout(parser_timer_ref.current)
+      }
       editor_view.destroy()
       editor_view_ref.current = null
       active_document_id_ref.current = null
@@ -680,7 +828,24 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     }
 
     notify_command_state(editor_view.state)
-  }, [settings])
+    schedule_parser_diagnostics(editor_view, activeDocument)
+  }, [activeDocument.id, activeDocument.language, settings])
+
+  useEffect(() => {
+    const editor_view = editor_view_ref.current
+
+    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+      return
+    }
+
+    apply_diagnostics(editor_view, diagnostics)
+  }, [
+    activeDocument.id,
+    diagnostics,
+    settings.diagnostics.show_gutter,
+    settings.diagnostics.show_hover,
+    settings.diagnostics.show_squiggles,
+  ])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
@@ -710,6 +875,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
         effects: language_compartment_ref.current.reconfigure([]),
       })
       state_cache_ref.current.set(activeDocument.id, editor_view.state)
+      on_parser_diagnostics_ref.current(activeDocument.id, [])
       return
     }
 
@@ -735,6 +901,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       })
       state_cache_ref.current.set(activeDocument.id, current_editor.state)
       notify_command_state(current_editor.state)
+      schedule_parser_diagnostics(current_editor, activeDocument)
     })
   }, [activeDocument.id, activeDocument.language])
 

@@ -299,3 +299,259 @@ button {
 .code-editor-host .cm-dialog-close {
   color: var(--muted);
 }
+
+.viewer-button {
+  min-width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.viewer-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.viewer-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.image-viewer-background {
+  background-color: #19191c;
+  background-image:
+    linear-gradient(45deg, #242428 25%, transparent 25%), linear-gradient(-45deg, #242428 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #242428 75%), linear-gradient(-45deg, transparent 75%, #242428 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+}
+
+.markdown-mode-button {
+  height: 22px;
+  border-radius: 5px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.markdown-mode-button:hover,
+.markdown-mode-button.active {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.markdown-mode-button.active {
+  box-shadow: inset 0 -1px 0 #38bdf8;
+}
+
+.artifact-md {
+  max-width: 920px;
+  margin: 0 auto;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.artifact-md > :first-child {
+  margin-top: 0;
+}
+
+.artifact-md > :last-child {
+  margin-bottom: 0;
+}
+
+.artifact-md h1,
+.artifact-md h2,
+.artifact-md h3,
+.artifact-md h4,
+.artifact-md h5,
+.artifact-md h6 {
+  margin: 1.5em 0 0.6em;
+  color: var(--text);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.artifact-md h1 {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35em;
+  font-size: 2em;
+}
+
+.artifact-md h2 {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+  font-size: 1.5em;
+}
+
+.artifact-md h3 {
+  font-size: 1.25em;
+}
+.artifact-md h4 {
+  font-size: 1.08em;
+}
+
+.artifact-md p,
+.artifact-md ul,
+.artifact-md ol,
+.artifact-md blockquote,
+.artifact-md pre,
+.artifact-md table {
+  margin: 0.85em 0;
+}
+
+.artifact-md ul,
+.artifact-md ol {
+  padding-left: 1.7em;
+}
+
+.artifact-md ul {
+  list-style: disc;
+}
+.artifact-md ol {
+  list-style: decimal;
+}
+.artifact-md li + li {
+  margin-top: 0.25em;
+}
+
+.artifact-md a {
+  color: #38bdf8;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #38bdf8 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.artifact-md blockquote {
+  border-left: 3px solid #38bdf8;
+  background: color-mix(in srgb, #38bdf8 7%, transparent);
+  padding: 0.45em 1em;
+  color: var(--muted);
+}
+
+.artifact-md code {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-3) 82%, transparent);
+  padding: 0.12em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.artifact-md pre {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #111318;
+  padding: 13px 15px;
+}
+
+.artifact-md pre code {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #d7dae0;
+  white-space: pre;
+}
+
+.artifact-md table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+}
+
+.artifact-md th,
+.artifact-md td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.artifact-md th {
+  background: var(--surface-3);
+}
+
+.artifact-md hr {
+  margin: 1.5em 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.artifact-md input[type='checkbox'] {
+  margin-right: 0.45em;
+}
+
+.artifact-md .hljs-keyword,
+.artifact-md .hljs-selector-tag,
+.artifact-md .hljs-literal {
+  color: #c792ea;
+}
+.artifact-md .hljs-string,
+.artifact-md .hljs-attr {
+  color: #c3e88d;
+}
+.artifact-md .hljs-number,
+.artifact-md .hljs-symbol {
+  color: #f78c6c;
+}
+.artifact-md .hljs-title,
+.artifact-md .hljs-function {
+  color: #82aaff;
+}
+.artifact-md .hljs-comment {
+  color: #697098;
+  font-style: italic;
+}
+.artifact-md .hljs-built_in,
+.artifact-md .hljs-type {
+  color: #ffcb6b;
+}
+
+.settings-row:focus-within {
+  border-color: color-mix(in srgb, #38bdf8 55%, transparent);
+}
+
+.xterm {
+  height: 100%;
+}
+
+.xterm .xterm-viewport {
+  scrollbar-color: var(--muted) transparent;
+}
+
+.viewer-button-active {
+  border-color: rgb(56 189 248 / 0.7);
+  background: rgb(14 165 233 / 0.18);
+  color: var(--text);
+}
+
+.pdf-text-layer {
+  line-height: 1;
+  opacity: 1;
+  transform-origin: 0 0;
+  forced-color-adjust: none;
+}
+
+.pdf-text-layer span,
+.pdf-text-layer br {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+
+.pdf-text-layer ::selection {
+  background: rgb(56 189 248 / 0.38);
+}

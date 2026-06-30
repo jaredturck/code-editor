@@ -6,6 +6,9 @@ export type IndentStyle = 'spaces' | 'tabs'
 export type EditorFeaturePreset = 'minimal' | 'balanced' | 'full' | 'custom'
 export type SuggestionMode = 'off' | 'manual' | 'typing'
 export type RenderWhitespaceMode = 'off' | 'all'
+export type DiagnosticsMode = 'off' | 'save' | 'typing'
+export type DiagnosticSeverity = 'error' | 'warning' | 'info'
+export type MediaType = 'image' | 'video' | 'audio' | 'pdf' | 'unsupported'
 
 export type EditorCommandId =
   | 'undo'
@@ -78,6 +81,30 @@ export interface EditorSuggestionSettings {
   delay: number
 }
 
+export interface DiagnosticsSettings {
+  mode: DiagnosticsMode
+  delay: number
+  show_squiggles: boolean
+  show_gutter: boolean
+  show_hover: boolean
+  auto_reveal_problems: boolean
+  enable_python: boolean
+  enable_javascript: boolean
+  enable_typescript: boolean
+  enable_css: boolean
+  enable_html: boolean
+  enable_json: boolean
+  enable_yaml: boolean
+  enable_markdown: boolean
+  enable_parser_fallback: boolean
+}
+
+export interface AISettings {
+  ollama_url: string
+  selected_model: string
+  speech_model: string
+}
+
 export interface EditorSettings {
   theme_mode: ThemeMode
   recent_files: string[]
@@ -88,7 +115,23 @@ export interface EditorSettings {
   editor: EditorBehaviorSettings
   appearance: EditorAppearanceSettings
   suggestions: EditorSuggestionSettings
+  diagnostics: DiagnosticsSettings
+  ai: AISettings
   keybindings: EditorKeybindingOverrides
+}
+
+export interface EditorDiagnostic {
+  id: string
+  document_id: number
+  file_path: string | null
+  source: string
+  code: string | null
+  severity: DiagnosticSeverity
+  message: string
+  line: number
+  column: number
+  end_line: number
+  end_column: number
 }
 
 export interface TextEditorDocument {
@@ -103,6 +146,7 @@ export interface TextEditorDocument {
   indent_size: number
   dirty: boolean
   deleted: boolean
+  markdown_view: 'source' | 'preview'
 }
 
 export interface BrowserEditorDocument {
@@ -115,13 +159,49 @@ export interface BrowserEditorDocument {
   loading: boolean
 }
 
-export type EditorDocument = TextEditorDocument | BrowserEditorDocument
+export interface MediaEditorDocument {
+  kind: 'media'
+  id: number
+  name: string
+  file_path: string
+  media_type: MediaType
+  mime_type: string
+  url: string
+  size: number
+  deleted: boolean
+}
+
+export type EditorDocument = TextEditorDocument | BrowserEditorDocument | MediaEditorDocument
 
 export interface TerminalSession {
   id: number
   name: string
-  history: string[]
-  input: string
   parent_id: number | null
   weight: number
+  status: 'starting' | 'running' | 'exited' | 'error'
+  exit_code: number | null
+}
+
+export interface AIModel {
+  name: string
+  size: number
+  modified_at: string
+}
+
+export interface AIAttachment {
+  id: string
+  name: string
+  type: 'text' | 'image'
+  content: string
+  mime_type: string
+  preview: string | null
+}
+
+export interface AIChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  attachments: AIAttachment[]
+  streaming?: boolean
+  error?: boolean
 }

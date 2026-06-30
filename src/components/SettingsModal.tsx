@@ -1,888 +1,1049 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { language_options } from '../data/languages'
-import {
-  editor_commands,
-  format_shortcut,
-  get_effective_keybinding,
-  keyboard_event_to_shortcut,
-  normalize_shortcut_for_platform,
-} from '../editor/editorCommands'
+import { editor_commands, format_shortcut, get_effective_keybinding } from '../editor/editorCommands'
 import { apply_editor_preset, clone_editor_settings, default_editor_settings } from '../editor/editorSettings'
-import type {
-  EditorCommandId,
-  EditorFeaturePreset,
-  EditorSettings,
-  RenderWhitespaceMode,
-  SuggestionMode,
-  ThemeMode,
-} from '../types/editor'
+import type { DiagnosticsSettings, EditorCommandId, EditorSettings } from '../types/editor'
 
 interface SettingsModalProps {
   settings: EditorSettings
-  onApply: (settings: EditorSettings) => void
+  onChange: (settings: EditorSettings) => void
   onClose: () => void
 }
 
-type SettingsTab = 'general' | 'editor' | 'appearance' | 'suggestions' | 'shortcuts'
+type SettingsTab = 'general' | 'editor' | 'appearance' | 'suggestions' | 'diagnostics' | 'ai' | 'shortcuts'
 
-const settings_tabs: { id: SettingsTab; label: string; icon: string }[] = [
+interface SearchItem {
+  id: string
+  tab: SettingsTab
+  label: string
+  description: string
+}
+
+const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'general', label: 'General', icon: '⚙' },
   { id: 'editor', label: 'Editor', icon: '⌨' },
   { id: 'appearance', label: 'Appearance', icon: '◐' },
   { id: 'suggestions', label: 'Suggestions', icon: '✦' },
-  { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: '⌘' },
+  { id: 'diagnostics', label: 'Diagnostics', icon: '!' },
+  { id: 'ai', label: 'AI & Ollama', icon: '◇' },
+  { id: 'shortcuts', label: 'Shortcuts', icon: '⌘' },
 ]
 
-const search_items: { tab: SettingsTab; label: string; description: string }[] = [
+const search_items: SearchItem[] = [
   {
+    id: 'theme',
     tab: 'general',
     label: 'Theme',
-    description: 'Choose the light, dark, or system appearance.',
+    description: 'Choose light, dark, or system appearance.',
   },
   {
-    tab: 'general',
-    label: 'Default language',
-    description: 'Choose the language used by New Text File.',
-  },
-  {
-    tab: 'general',
-    label: 'Recent files',
-    description: 'Remember recently opened files between launches.',
-  },
-  {
-    tab: 'general',
-    label: 'Unsaved documents',
-    description: 'Confirm before closing documents with changes.',
-  },
-  {
+    id: 'preset',
     tab: 'general',
     label: 'Editor feature preset',
     description: 'Apply a minimal, balanced, or full editor setup.',
   },
   {
+    id: 'default-language',
+    tab: 'general',
+    label: 'Default language',
+    description: 'Language used by New Text File.',
+  },
+  {
+    id: 'recent-files',
+    tab: 'general',
+    label: 'Remember recent files',
+    description: 'Keep up to five recent file paths.',
+  },
+  {
+    id: 'confirm-close',
+    tab: 'general',
+    label: 'Confirm unsaved documents',
+    description: 'Prompt before closing dirty files or the application.',
+  },
+  {
+    id: 'indentation',
     tab: 'editor',
     label: 'Indentation',
-    description: 'Choose tabs or spaces and the default indentation size.',
+    description: 'Choose tabs or spaces and indentation size.',
   },
   {
+    id: 'auto-indent',
     tab: 'editor',
-    label: 'Auto indent',
-    description: 'Re-indent code while typing language-specific structures.',
+    label: 'Automatic indentation',
+    description: 'Indent code according to language syntax.',
   },
   {
+    id: 'close-brackets',
     tab: 'editor',
-    label: 'Bracket closing',
-    description: 'Automatically insert closing brackets and quotes.',
+    label: 'Close brackets and quotes',
+    description: 'Insert matching brackets and quotes.',
   },
   {
+    id: 'bracket-matching',
     tab: 'editor',
     label: 'Bracket matching',
-    description: 'Highlight the matching bracket near the cursor.',
+    description: 'Highlight matching bracket pairs.',
   },
   {
+    id: 'multiple-selections',
     tab: 'editor',
     label: 'Multiple selections',
-    description: 'Allow multiple cursors and rectangular selections.',
+    description: 'Allow multiple cursors and rectangular selection.',
   },
   {
+    id: 'code-folding',
     tab: 'editor',
     label: 'Code folding',
-    description: 'Enable folding commands and folded ranges.',
+    description: 'Collapse syntax-aware code regions.',
   },
   {
+    id: 'fold-gutter',
     tab: 'editor',
     label: 'Folding controls',
-    description: 'Show folding arrows in the editor gutter.',
+    description: 'Show folding arrows in the gutter.',
   },
   {
+    id: 'word-wrap',
     tab: 'editor',
     label: 'Word wrap',
-    description: 'Wrap long lines to the width of the editor.',
+    description: 'Wrap long lines to the editor width.',
   },
   {
+    id: 'line-numbers',
     tab: 'appearance',
     label: 'Line numbers',
     description: 'Show line numbers in the editor gutter.',
   },
   {
+    id: 'active-line',
     tab: 'appearance',
-    label: 'Active line',
+    label: 'Highlight active line',
     description: 'Highlight the line containing the cursor.',
   },
   {
+    id: 'selection-matches',
     tab: 'appearance',
-    label: 'Matching selections',
+    label: 'Highlight matching selections',
     description: 'Highlight text matching the current selection.',
   },
   {
+    id: 'whitespace',
     tab: 'appearance',
-    label: 'Whitespace',
-    description: 'Render spaces and tabs with visible markers.',
+    label: 'Render whitespace',
+    description: 'Display spaces and tabs.',
   },
   {
+    id: 'trailing-whitespace',
     tab: 'appearance',
-    label: 'Trailing whitespace',
-    description: 'Highlight whitespace at the end of lines.',
+    label: 'Highlight trailing whitespace',
+    description: 'Mark whitespace at line endings.',
   },
   {
+    id: 'special-characters',
     tab: 'appearance',
     label: 'Special characters',
-    description: 'Mark control and otherwise confusing characters.',
+    description: 'Reveal confusing or control characters.',
   },
   {
+    id: 'scroll-past-end',
     tab: 'appearance',
     label: 'Scroll past end',
-    description: 'Allow the final line to scroll above the bottom edge.',
+    description: 'Allow the final line to scroll upward.',
   },
   {
+    id: 'suggestion-mode',
     tab: 'suggestions',
     label: 'Suggestion mode',
-    description: 'Show completions while typing, manually, or not at all.',
+    description: 'Disable suggestions, show manually, or show while typing.',
   },
   {
+    id: 'suggestion-enter',
     tab: 'suggestions',
     label: 'Accept with Enter',
-    description: 'Use Enter to accept the selected suggestion.',
+    description: 'Use Enter to accept the selected completion.',
   },
   {
+    id: 'suggestion-details',
     tab: 'suggestions',
     label: 'Completion details',
-    description: 'Show secondary detail text in suggestion rows.',
+    description: 'Show extra information in completion rows.',
   },
   {
+    id: 'suggestion-icons',
     tab: 'suggestions',
     label: 'Completion type badges',
-    description: 'Show type icons beside suggestions.',
+    description: 'Show completion type icons.',
   },
   {
+    id: 'suggestion-delay',
     tab: 'suggestions',
     label: 'Suggestion delay',
-    description: 'Choose how long typing waits before opening suggestions.',
+    description: 'Delay automatic completion popups.',
   },
   {
+    id: 'diagnostic-mode',
+    tab: 'diagnostics',
+    label: 'Diagnostics mode',
+    description: 'Run diagnostics while typing, on save, or not at all.',
+  },
+  {
+    id: 'diagnostic-delay',
+    tab: 'diagnostics',
+    label: 'Diagnostics delay',
+    description: 'Wait after editing before analyzing the document.',
+  },
+  {
+    id: 'diagnostic-display',
+    tab: 'diagnostics',
+    label: 'Diagnostic display',
+    description: 'Control squiggles, gutter markers, and hover messages.',
+  },
+  {
+    id: 'enable_python',
+    tab: 'diagnostics',
+    label: 'Language providers',
+    description: 'Enable Ruff, ESLint, TypeScript, and other analyzers.',
+  },
+  {
+    id: 'ollama-url',
+    tab: 'ai',
+    label: 'Ollama address',
+    description: 'Address of the local Ollama server.',
+  },
+  {
+    id: 'ollama-model',
+    tab: 'ai',
+    label: 'Selected model',
+    description: 'Remember the selected local model.',
+  },
+  {
+    id: 'speech-model',
+    tab: 'ai',
+    label: 'Speech model',
+    description: 'Ollama model used for voice transcription.',
+  },
+  {
+    id: 'keyboard-shortcuts',
     tab: 'shortcuts',
     label: 'Keyboard shortcuts',
-    description: 'Change, remove, reset, or disable editor commands.',
+    description: 'Change, remove, disable, or reset editor commands.',
   },
 ]
 
-const section_class = 'rounded-xl border border-[var(--border)] bg-black/[0.06] p-4'
 const input_class =
-  'h-9 rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-xs text-[var(--text)] outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/20'
+  'h-9 rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-xs text-[var(--text)] outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/25'
 
-function SettingsSection({
-  title,
-  description,
-  children,
+function Toggle({
+  checked,
+  disabled = false,
+  onChange,
 }: {
-  title: string
-  description?: string
-  children: React.ReactNode
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
 }) {
   return (
-    <section className={section_class}>
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-        {description && <p className="mt-1 text-[11px] leading-5 text-[var(--muted)]">{description}</p>}
-      </div>
-      <div className="divide-y divide-[var(--border)]">{children}</div>
-    </section>
+    <button
+      aria-checked={checked}
+      className={`relative h-6 w-11 shrink-0 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-sky-500/35 ${
+        checked ? 'border-sky-400/60 bg-sky-500' : 'border-[var(--input-border)] bg-[var(--surface-3)]'
+      } ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:brightness-110'}`}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      role="switch"
+      type="button"
+    >
+      <span
+        className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}
+      />
+    </button>
   )
 }
 
 function SettingRow({
-  title,
-  description,
   children,
+  description,
+  highlighted,
+  id,
+  label,
 }: {
-  title: string
-  description: string
   children: React.ReactNode
+  description: string
+  highlighted: boolean
+  id: string
+  label: string
 }) {
   return (
-    <div className="flex min-h-16 items-center justify-between gap-6 py-3 first:pt-0 last:pb-0">
+    <div
+      className={`settings-row flex min-h-16 items-center gap-5 rounded-xl border px-4 py-3 transition ${
+        highlighted
+          ? 'border-sky-400 bg-sky-500/10 shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_32px_rgba(56,189,248,0.15)]'
+          : 'border-transparent hover:border-[var(--border)] hover:bg-black/[0.035]'
+      }`}
+      data-setting-id={id}
+    >
       <div className="min-w-0 flex-1">
-        <div className="text-xs font-medium text-[var(--text)]">{title}</div>
-        <div className="mt-1 text-[11px] leading-4 text-[var(--muted)]">{description}</div>
+        <div className="text-xs font-medium text-[var(--text)]">{label}</div>
+        <div className="mt-1 text-[10px] leading-4 text-[var(--muted)]">{description}</div>
       </div>
       <div className="shrink-0">{children}</div>
     </div>
   )
 }
 
-function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean
-  onChange: (checked: boolean) => void
-  label: string
-}) {
+function Section({ children, title }: { children: React.ReactNode; title: string }) {
   return (
-    <button
-      aria-label={label}
-      aria-pressed={checked}
-      className={`relative h-6 w-11 rounded-full border transition ${
-        checked ? 'border-sky-500 bg-sky-500/80' : 'border-[var(--input-border)] bg-[var(--input-bg)]'
-      }`}
-      onClick={() => onChange(!checked)}
-      type="button"
-    >
-      <span
-        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-5.5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
+    <section className="mb-6">
+      <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">{title}</h3>
+      <div className="rounded-2xl border border-[var(--border)] bg-black/[0.04] p-1">{children}</div>
+    </section>
   )
 }
 
-function SelectControl({
-  value,
-  onChange,
-  children,
-  label,
-}: {
-  value: string | number
-  onChange: (value: string) => void
-  children: React.ReactNode
-  label: string
-}) {
-  return (
-    <select
-      aria-label={label}
-      className={`${input_class} min-w-36`}
-      onChange={(event) => onChange(event.target.value)}
-      value={value}
-    >
-      {children}
-    </select>
-  )
+function keyboard_event_to_shortcut(event: React.KeyboardEvent) {
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) {
+    return null
+  }
+
+  const parts: string[] = []
+  if (event.ctrlKey || event.metaKey) parts.push('Mod')
+  if (event.altKey) parts.push('Alt')
+  if (event.shiftKey) parts.push('Shift')
+
+  const key = event.key === ' ' ? 'Space' : event.key.length === 1 ? event.key.toLowerCase() : event.key
+  parts.push(key)
+  return parts.join('-')
 }
 
-function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
+function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
   const [active_tab, set_active_tab] = useState<SettingsTab>('general')
-  const [draft, set_draft] = useState(() => clone_editor_settings(settings))
   const [search_query, set_search_query] = useState('')
+  const [highlighted_setting, set_highlighted_setting] = useState<string | null>(null)
   const [shortcut_filter, set_shortcut_filter] = useState('')
-  const [shortcut_view, set_shortcut_view] = useState<'all' | 'modified' | 'conflicts' | 'unassigned'>('all')
   const [recording_command, set_recording_command] = useState<EditorCommandId | null>(null)
+  const highlight_timer_ref = useRef<number | null>(null)
+
+  const update = (next: EditorSettings) => onChange(clone_editor_settings(next))
+  const custom = (next: EditorSettings) => update({ ...next, editor_preset: 'custom' })
 
   const search_results = useMemo(() => {
-    const query = search_query.trim().toLowerCase()
+    const normalized = search_query.trim().toLowerCase()
+    if (!normalized) return []
+    return search_items.filter((item) =>
+      `${item.label} ${item.description} ${item.tab}`.toLowerCase().includes(normalized),
+    )
+  }, [search_query])
 
-    if (!query) {
-      return []
+  const open_search_result = (result: SearchItem) => {
+    set_active_tab(result.tab)
+    set_search_query('')
+    set_highlighted_setting(result.id)
+
+    if (highlight_timer_ref.current !== null) {
+      window.clearTimeout(highlight_timer_ref.current)
     }
 
-    const setting_results = search_items.filter((item) =>
-      `${item.label} ${item.description} ${item.tab}`.toLowerCase().includes(query),
-    )
-    const command_results = editor_commands
-      .filter((command) => `${command.label} ${command.category}`.toLowerCase().includes(query))
-      .map((command) => ({
-        tab: 'shortcuts' as const,
-        label: command.label,
-        description: `${command.category} command · ${format_shortcut(get_effective_keybinding(draft.keybindings, command.id).key)}`,
-      }))
+    requestAnimationFrame(() => {
+      const row = document.querySelector<HTMLElement>(`[data-setting-id="${result.id}"]`)
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      row?.querySelector<HTMLElement>('input, select, button')?.focus({ preventScroll: true })
+    })
+    highlight_timer_ref.current = window.setTimeout(() => set_highlighted_setting(null), 2200)
+  }
 
-    return [...setting_results, ...command_results].slice(0, 30)
-  }, [draft.keybindings, search_query])
-
-  const shortcut_conflicts = useMemo(() => {
-    const grouped = new Map<string, EditorCommandId[]>()
-
-    for (const command of editor_commands) {
-      const binding = get_effective_keybinding(draft.keybindings, command.id)
-      const normalized_key = binding.enabled ? normalize_shortcut_for_platform(binding.key) : null
-
-      if (!normalized_key) {
-        continue
-      }
-
-      grouped.set(normalized_key, [...(grouped.get(normalized_key) ?? []), command.id])
+  useEffect(() => {
+    return () => {
+      if (highlight_timer_ref.current !== null) window.clearTimeout(highlight_timer_ref.current)
     }
-
-    return new Set(
-      [...grouped.values()].filter((command_ids) => command_ids.length > 1).flatMap((command_ids) => command_ids),
-    )
-  }, [draft.keybindings])
-
-  const filtered_commands = useMemo(() => {
-    const query = shortcut_filter.trim().toLowerCase()
-
-    return editor_commands.filter((command) => {
-      const binding = get_effective_keybinding(draft.keybindings, command.id)
-      const modified = draft.keybindings[command.id] !== undefined
-      const conflict = shortcut_conflicts.has(command.id)
-      const matches_view =
-        shortcut_view === 'all' ||
-        (shortcut_view === 'modified' && modified) ||
-        (shortcut_view === 'conflicts' && conflict) ||
-        (shortcut_view === 'unassigned' && !binding.key)
-
-      return matches_view && `${command.label} ${command.category}`.toLowerCase().includes(query)
-    })
-  }, [draft.keybindings, shortcut_conflicts, shortcut_filter, shortcut_view])
-
-  const update_general = <K extends keyof EditorSettings>(key: K, value: EditorSettings[K]) => {
-    set_draft((current) => ({ ...current, [key]: value }))
-  }
-
-  const update_editor = (key: keyof EditorSettings['editor'], value: boolean | number | string) => {
-    set_draft((current) => ({
-      ...current,
-      editor_preset: 'custom',
-      editor: { ...current.editor, [key]: value },
-    }))
-  }
-
-  const update_appearance = (key: keyof EditorSettings['appearance'], value: boolean | string) => {
-    set_draft((current) => ({
-      ...current,
-      editor_preset: 'custom',
-      appearance: { ...current.appearance, [key]: value },
-    }))
-  }
-
-  const update_suggestions = (key: keyof EditorSettings['suggestions'], value: boolean | number | string) => {
-    set_draft((current) => ({
-      ...current,
-      editor_preset: 'custom',
-      suggestions: { ...current.suggestions, [key]: value },
-    }))
-  }
-
-  const update_keybinding = (command_id: EditorCommandId, enabled: boolean, key: string | null) => {
-    set_draft((current) => ({
-      ...current,
-      keybindings: {
-        ...current.keybindings,
-        [command_id]: { enabled, key },
-      },
-    }))
-  }
-
-  const reset_keybinding = (command_id: EditorCommandId) => {
-    set_draft((current) => {
-      const keybindings = { ...current.keybindings }
-
-      delete keybindings[command_id]
-
-      return { ...current, keybindings }
-    })
-  }
+  }, [])
 
   const reset_active_tab = () => {
-    set_draft((current) => {
-      if (active_tab === 'general') {
-        const reset_settings = apply_editor_preset(current, 'balanced')
+    const next = clone_editor_settings(settings)
 
-        return {
-          ...reset_settings,
-          theme_mode: default_editor_settings.theme_mode,
-          restore_recent_files: default_editor_settings.restore_recent_files,
-          confirm_unsaved_close: default_editor_settings.confirm_unsaved_close,
-          default_language: default_editor_settings.default_language,
-        }
-      }
+    if (active_tab === 'general') {
+      next.theme_mode = default_editor_settings.theme_mode
+      next.default_language = default_editor_settings.default_language
+      next.restore_recent_files = default_editor_settings.restore_recent_files
+      next.confirm_unsaved_close = default_editor_settings.confirm_unsaved_close
+      next.editor_preset = default_editor_settings.editor_preset
+    } else if (active_tab === 'editor') {
+      next.editor = { ...default_editor_settings.editor }
+      next.editor_preset = 'custom'
+    } else if (active_tab === 'appearance') {
+      next.appearance = { ...default_editor_settings.appearance }
+      next.editor_preset = 'custom'
+    } else if (active_tab === 'suggestions') {
+      next.suggestions = { ...default_editor_settings.suggestions }
+      next.editor_preset = 'custom'
+    } else if (active_tab === 'diagnostics') {
+      next.diagnostics = { ...default_editor_settings.diagnostics }
+    } else if (active_tab === 'ai') {
+      next.ai = { ...default_editor_settings.ai }
+    } else {
+      next.keybindings = {}
+    }
 
-      if (active_tab === 'editor') {
-        return {
-          ...current,
-          editor_preset: 'custom',
-          editor: { ...default_editor_settings.editor },
-        }
-      }
+    update(next)
+  }
 
-      if (active_tab === 'appearance') {
-        return {
-          ...current,
-          editor_preset: 'custom',
-          appearance: { ...default_editor_settings.appearance },
-        }
-      }
+  const row = (id: string, label: string, description: string, control: React.ReactNode) => (
+    <SettingRow description={description} highlighted={highlighted_setting === id} id={id} label={label}>
+      {control}
+    </SettingRow>
+  )
 
-      if (active_tab === 'suggestions') {
-        return {
-          ...current,
-          editor_preset: 'custom',
-          suggestions: { ...default_editor_settings.suggestions },
-        }
-      }
+  const toggle_editor = (key: keyof EditorSettings['editor']) => {
+    custom({
+      ...settings,
+      editor: { ...settings.editor, [key]: !settings.editor[key] },
+    })
+  }
 
-      return { ...current, keybindings: {} }
+  const toggle_appearance = (key: keyof EditorSettings['appearance']) => {
+    custom({
+      ...settings,
+      appearance: { ...settings.appearance, [key]: !settings.appearance[key] },
+    })
+  }
+
+  const toggle_diagnostic = (key: keyof DiagnosticsSettings) => {
+    update({
+      ...settings,
+      diagnostics: {
+        ...settings.diagnostics,
+        [key]: !settings.diagnostics[key],
+      },
     })
   }
 
   const render_general = () => (
-    <div className="space-y-4">
-      <SettingsSection title="Application" description="Preferences that apply across the whole editor.">
-        <SettingRow title="Theme" description="Follow the system appearance or choose a fixed light or dark theme.">
-          <SelectControl
-            label="Theme"
-            onChange={(value) => update_general('theme_mode', value as ThemeMode)}
-            value={draft.theme_mode}
+    <>
+      <Section title="Application">
+        {row(
+          'theme',
+          'Theme',
+          'Choose the application color theme.',
+          <select
+            className={input_class}
+            onChange={(event) =>
+              update({
+                ...settings,
+                theme_mode: event.target.value as EditorSettings['theme_mode'],
+              })
+            }
+            value={settings.theme_mode}
           >
             <option value="system">System</option>
             <option value="dark">Dark</option>
             <option value="light">Light</option>
-          </SelectControl>
-        </SettingRow>
-        <SettingRow
-          title="Default language"
-          description="Language used when creating a new text file from the File menu."
-        >
-          <SelectControl
-            label="Default language"
-            onChange={(value) => update_general('default_language', value)}
-            value={draft.default_language}
+          </select>,
+        )}
+        {row(
+          'preset',
+          'Editor feature preset',
+          'Apply a useful collection of editor behaviors.',
+          <select
+            className={input_class}
+            onChange={(event) => {
+              const preset = event.target.value as EditorSettings['editor_preset']
+              update(
+                preset === 'custom' ? { ...settings, editor_preset: 'custom' } : apply_editor_preset(settings, preset),
+              )
+            }}
+            value={settings.editor_preset}
+          >
+            <option value="minimal">Minimal</option>
+            <option value="balanced">Balanced</option>
+            <option value="full">Full</option>
+            <option value="custom">Custom</option>
+          </select>,
+        )}
+        {row(
+          'default-language',
+          'Default language',
+          'Language used by New Text File.',
+          <select
+            className={`${input_class} max-w-56`}
+            onChange={(event) => update({ ...settings, default_language: event.target.value })}
+            value={settings.default_language}
           >
             {language_options.map((language) => (
               <option key={language.name} value={language.name}>
                 {language.name}
               </option>
             ))}
-          </SelectControl>
-        </SettingRow>
-        <SettingRow
-          title="Remember recent files"
-          description="Keep the five most recent files available after restarting the app."
-        >
+          </select>,
+        )}
+      </Section>
+      <Section title="Files">
+        {row(
+          'recent-files',
+          'Remember recent files',
+          'Persist the five most recently used files.',
           <Toggle
-            checked={draft.restore_recent_files}
-            label="Remember recent files"
-            onChange={(checked) => update_general('restore_recent_files', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Confirm unsaved documents"
-          description="Ask before closing a text document that contains unsaved changes."
-        >
+            checked={settings.restore_recent_files}
+            onChange={(value) =>
+              update({
+                ...settings,
+                restore_recent_files: value,
+                recent_files: value ? settings.recent_files : [],
+              })
+            }
+          />,
+        )}
+        {row(
+          'confirm-close',
+          'Confirm unsaved documents',
+          'Ask before closing dirty files or exiting.',
           <Toggle
-            checked={draft.confirm_unsaved_close}
-            label="Confirm unsaved documents"
-            onChange={(checked) => update_general('confirm_unsaved_close', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection
-        title="Editor feature preset"
-        description="Presets adjust the editor, appearance, and suggestions tabs together. Changing an individual option switches to Custom."
-      >
-        <SettingRow
-          title="Preset"
-          description="Balanced preserves the editor's current defaults and is recommended for most users."
-        >
-          <SelectControl
-            label="Editor feature preset"
-            onChange={(value) => {
-              if (value === 'custom') {
-                update_general('editor_preset', 'custom')
-              } else {
-                set_draft((current) => apply_editor_preset(current, value as Exclude<EditorFeaturePreset, 'custom'>))
-              }
-            }}
-            value={draft.editor_preset}
-          >
-            <option value="minimal">Minimal</option>
-            <option value="balanced">Balanced</option>
-            <option value="full">Full</option>
-            <option value="custom">Custom</option>
-          </SelectControl>
-        </SettingRow>
-      </SettingsSection>
-    </div>
+            checked={settings.confirm_unsaved_close}
+            onChange={(value) => update({ ...settings, confirm_unsaved_close: value })}
+          />,
+        )}
+      </Section>
+    </>
   )
 
   const render_editor = () => (
-    <div className="space-y-4">
-      <SettingsSection title="Indentation" description="Defaults used by newly created and newly opened files.">
-        <SettingRow title="Indent using" description="Choose whether indentation inserts spaces or tab characters.">
-          <SelectControl
-            label="Indent using"
-            onChange={(value) => update_editor('default_indent_style', value)}
-            value={draft.editor.default_indent_style}
-          >
-            <option value="spaces">Spaces</option>
-            <option value="tabs">Tabs</option>
-          </SelectControl>
-        </SettingRow>
-        <SettingRow title="Indentation size" description="Number of columns represented by one indentation level.">
-          <SelectControl
-            label="Indentation size"
-            onChange={(value) => update_editor('default_indent_size', Number(value))}
-            value={draft.editor.default_indent_size}
-          >
-            {[2, 4, 8].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </SelectControl>
-        </SettingRow>
-        <SettingRow
-          title="Automatic indentation"
-          description="Use the active language rules to re-indent code while typing."
-        >
+    <>
+      <Section title="Indentation">
+        {row(
+          'indentation',
+          'Default indentation',
+          'Used when creating or opening a new document.',
+          <div className="flex gap-2">
+            <select
+              className={input_class}
+              onChange={(event) =>
+                custom({
+                  ...settings,
+                  editor: {
+                    ...settings.editor,
+                    default_indent_style: event.target.value as 'spaces' | 'tabs',
+                  },
+                })
+              }
+              value={settings.editor.default_indent_style}
+            >
+              <option value="spaces">Spaces</option>
+              <option value="tabs">Tabs</option>
+            </select>
+            <select
+              className={input_class}
+              onChange={(event) =>
+                custom({
+                  ...settings,
+                  editor: {
+                    ...settings.editor,
+                    default_indent_size: Number(event.target.value),
+                  },
+                })
+              }
+              value={settings.editor.default_indent_size}
+            >
+              {[2, 4, 8].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>,
+        )}
+        {row(
+          'auto-indent',
+          'Automatic indentation',
+          'Use language-aware indentation while editing.',
+          <Toggle checked={settings.editor.auto_indent} onChange={() => toggle_editor('auto_indent')} />,
+        )}
+      </Section>
+      <Section title="Editing">
+        {row(
+          'close-brackets',
+          'Close brackets and quotes',
+          'Automatically insert matching closing characters.',
+          <Toggle checked={settings.editor.close_brackets} onChange={() => toggle_editor('close_brackets')} />,
+        )}
+        {row(
+          'bracket-matching',
+          'Bracket matching',
+          'Highlight the bracket matching the cursor position.',
+          <Toggle checked={settings.editor.bracket_matching} onChange={() => toggle_editor('bracket_matching')} />,
+        )}
+        {row(
+          'multiple-selections',
+          'Multiple selections',
+          'Enable multiple cursors and rectangular selections.',
           <Toggle
-            checked={draft.editor.auto_indent}
-            label="Automatic indentation"
-            onChange={(checked) => update_editor('auto_indent', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection title="Editing" description="Control automatic editing assistance supplied by CodeMirror.">
-        <SettingRow
-          title="Auto-close brackets and quotes"
-          description="Insert matching closing characters while typing."
-        >
+            checked={settings.editor.multiple_selections}
+            onChange={() => toggle_editor('multiple_selections')}
+          />,
+        )}
+        {row(
+          'word-wrap',
+          'Word wrap',
+          'Wrap long lines to the available editor width.',
+          <Toggle checked={settings.editor.word_wrap} onChange={() => toggle_editor('word_wrap')} />,
+        )}
+      </Section>
+      <Section title="Folding">
+        {row(
+          'code-folding',
+          'Code folding',
+          'Allow syntax-aware regions to collapse.',
+          <Toggle checked={settings.editor.code_folding} onChange={() => toggle_editor('code_folding')} />,
+        )}
+        {row(
+          'fold-gutter',
+          'Show folding controls',
+          'Display folding arrows beside line numbers.',
           <Toggle
-            checked={draft.editor.close_brackets}
-            label="Auto-close brackets and quotes"
-            onChange={(checked) => update_editor('close_brackets', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Highlight matching brackets"
-          description="Highlight the matching bracket when the cursor is beside one."
-        >
-          <Toggle
-            checked={draft.editor.bracket_matching}
-            label="Highlight matching brackets"
-            onChange={(checked) => update_editor('bracket_matching', checked)}
-          />
-        </SettingRow>
-        <SettingRow title="Multiple selections" description="Allow multiple cursors and rectangular selections.">
-          <Toggle
-            checked={draft.editor.multiple_selections}
-            label="Multiple selections"
-            onChange={(checked) => update_editor('multiple_selections', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection title="Layout" description="Control folding and long-line behaviour.">
-        <SettingRow title="Code folding" description="Enable syntax-aware folding commands and folded ranges.">
-          <Toggle
-            checked={draft.editor.code_folding}
-            label="Code folding"
-            onChange={(checked) => update_editor('code_folding', checked)}
-          />
-        </SettingRow>
-        <SettingRow title="Show folding controls" description="Display fold and unfold arrows beside foldable lines.">
-          <Toggle
-            checked={draft.editor.fold_gutter}
-            label="Show folding controls"
-            onChange={(checked) => update_editor('fold_gutter', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Word wrap"
-          description="Wrap long lines to the width of the editor instead of scrolling horizontally."
-        >
-          <Toggle
-            checked={draft.editor.word_wrap}
-            label="Word wrap"
-            onChange={(checked) => update_editor('word_wrap', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-    </div>
+            checked={settings.editor.fold_gutter}
+            disabled={!settings.editor.code_folding}
+            onChange={() => toggle_editor('fold_gutter')}
+          />,
+        )}
+      </Section>
+    </>
   )
 
   const render_appearance = () => (
-    <div className="space-y-4">
-      <SettingsSection title="Editor chrome" description="Choose which visual indicators appear around the code.">
-        <SettingRow title="Line numbers" description="Show line numbers in the editor gutter.">
-          <Toggle
-            checked={draft.appearance.line_numbers}
-            label="Line numbers"
-            onChange={(checked) => update_appearance('line_numbers', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Highlight active line"
-          description="Use a subtle background on the line containing the cursor."
+    <Section title="Editor chrome">
+      {row(
+        'line-numbers',
+        'Line numbers',
+        'Show line numbers in the gutter.',
+        <Toggle checked={settings.appearance.line_numbers} onChange={() => toggle_appearance('line_numbers')} />,
+      )}
+      {row(
+        'active-line',
+        'Highlight active line',
+        'Subtly highlight the line containing the cursor.',
+        <Toggle
+          checked={settings.appearance.highlight_active_line}
+          onChange={() => toggle_appearance('highlight_active_line')}
+        />,
+      )}
+      {row(
+        'selection-matches',
+        'Highlight matching selections',
+        'Highlight text matching the selected text.',
+        <Toggle
+          checked={settings.appearance.highlight_selection_matches}
+          onChange={() => toggle_appearance('highlight_selection_matches')}
+        />,
+      )}
+      {row(
+        'whitespace',
+        'Render whitespace',
+        'Display spaces and tab characters.',
+        <select
+          className={input_class}
+          onChange={(event) =>
+            custom({
+              ...settings,
+              appearance: {
+                ...settings.appearance,
+                render_whitespace: event.target.value as 'off' | 'all',
+              },
+            })
+          }
+          value={settings.appearance.render_whitespace}
         >
-          <Toggle
-            checked={draft.appearance.highlight_active_line}
-            label="Highlight active line"
-            onChange={(checked) => update_appearance('highlight_active_line', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Highlight matching selections"
-          description="Highlight occurrences that match the selected text."
-        >
-          <Toggle
-            checked={draft.appearance.highlight_selection_matches}
-            label="Highlight matching selections"
-            onChange={(checked) => update_appearance('highlight_selection_matches', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection
-        title="Whitespace"
-        description="Whitespace indicators are useful while cleaning up indentation and pasted code."
-      >
-        <SettingRow title="Render whitespace" description="Show spaces as dots and tabs as arrows.">
-          <SelectControl
-            label="Render whitespace"
-            onChange={(value) => update_appearance('render_whitespace', value as RenderWhitespaceMode)}
-            value={draft.appearance.render_whitespace}
-          >
-            <option value="off">Off</option>
-            <option value="all">All</option>
-          </SelectControl>
-        </SettingRow>
-        <SettingRow title="Highlight trailing whitespace" description="Mark spaces and tabs at the end of lines.">
-          <Toggle
-            checked={draft.appearance.highlight_trailing_whitespace}
-            label="Highlight trailing whitespace"
-            onChange={(checked) => update_appearance('highlight_trailing_whitespace', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Show special characters"
-          description="Mark control characters and other easily confused characters."
-        >
-          <Toggle
-            checked={draft.appearance.show_special_characters}
-            label="Show special characters"
-            onChange={(checked) => update_appearance('show_special_characters', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-
-      <SettingsSection title="Scrolling">
-        <SettingRow title="Scroll past end" description="Allow the last line to scroll above the bottom of the editor.">
-          <Toggle
-            checked={draft.appearance.scroll_past_end}
-            label="Scroll past end"
-            onChange={(checked) => update_appearance('scroll_past_end', checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-    </div>
+          <option value="off">Off</option>
+          <option value="all">All</option>
+        </select>,
+      )}
+      {row(
+        'trailing-whitespace',
+        'Highlight trailing whitespace',
+        'Mark whitespace at the end of lines.',
+        <Toggle
+          checked={settings.appearance.highlight_trailing_whitespace}
+          onChange={() => toggle_appearance('highlight_trailing_whitespace')}
+        />,
+      )}
+      {row(
+        'special-characters',
+        'Show special characters',
+        'Reveal confusing control and special characters.',
+        <Toggle
+          checked={settings.appearance.show_special_characters}
+          onChange={() => toggle_appearance('show_special_characters')}
+        />,
+      )}
+      {row(
+        'scroll-past-end',
+        'Scroll past end',
+        'Allow the final line to scroll toward the top.',
+        <Toggle checked={settings.appearance.scroll_past_end} onChange={() => toggle_appearance('scroll_past_end')} />,
+      )}
+    </Section>
   )
 
   const render_suggestions = () => (
-    <div className="space-y-4">
-      <SettingsSection
-        title="Autocomplete"
-        description="These controls configure CodeMirror's existing completion popup. They do not add project indexing or language-server suggestions."
-      >
-        <SettingRow
-          title="Suggestions"
-          description="Open automatically while typing, only when requested, or disable completions."
+    <Section title="Autocomplete">
+      {row(
+        'suggestion-mode',
+        'Suggestions',
+        'Choose when CodeMirror shows completion suggestions.',
+        <select
+          className={input_class}
+          onChange={(event) =>
+            custom({
+              ...settings,
+              suggestions: {
+                ...settings.suggestions,
+                mode: event.target.value as EditorSettings['suggestions']['mode'],
+              },
+            })
+          }
+          value={settings.suggestions.mode}
         >
-          <SelectControl
-            label="Suggestions"
-            onChange={(value) => update_suggestions('mode', value as SuggestionMode)}
-            value={draft.suggestions.mode}
+          <option value="off">Off</option>
+          <option value="manual">Manual</option>
+          <option value="typing">While typing</option>
+        </select>,
+      )}
+      {row(
+        'suggestion-enter',
+        'Accept with Enter',
+        'Allow Enter to accept the selected suggestion.',
+        <Toggle
+          checked={settings.suggestions.accept_on_enter}
+          onChange={(value) =>
+            custom({
+              ...settings,
+              suggestions: { ...settings.suggestions, accept_on_enter: value },
+            })
+          }
+        />,
+      )}
+      {row(
+        'suggestion-details',
+        'Show completion details',
+        'Display descriptive information beside suggestions.',
+        <Toggle
+          checked={settings.suggestions.show_details}
+          onChange={(value) =>
+            custom({
+              ...settings,
+              suggestions: { ...settings.suggestions, show_details: value },
+            })
+          }
+        />,
+      )}
+      {row(
+        'suggestion-icons',
+        'Show type badges',
+        'Display completion type icons in the popup.',
+        <Toggle
+          checked={settings.suggestions.show_type_icons}
+          onChange={(value) =>
+            custom({
+              ...settings,
+              suggestions: { ...settings.suggestions, show_type_icons: value },
+            })
+          }
+        />,
+      )}
+      {row(
+        'suggestion-delay',
+        'Automatic suggestion delay',
+        'Wait before opening suggestions while typing.',
+        <input
+          className={`${input_class} w-24`}
+          max={2000}
+          min={0}
+          onChange={(event) =>
+            custom({
+              ...settings,
+              suggestions: {
+                ...settings.suggestions,
+                delay: Number(event.target.value),
+              },
+            })
+          }
+          step={50}
+          type="number"
+          value={settings.suggestions.delay}
+        />,
+      )}
+    </Section>
+  )
+
+  const render_diagnostics = () => (
+    <>
+      <Section title="Behavior">
+        {row(
+          'diagnostic-mode',
+          'Diagnostics mode',
+          'Analyze on save, after a pause while typing, or not at all.',
+          <select
+            className={input_class}
+            onChange={(event) =>
+              update({
+                ...settings,
+                diagnostics: {
+                  ...settings.diagnostics,
+                  mode: event.target.value as EditorSettings['diagnostics']['mode'],
+                },
+              })
+            }
+            value={settings.diagnostics.mode}
           >
             <option value="off">Off</option>
-            <option value="manual">Manual</option>
+            <option value="save">On save</option>
             <option value="typing">While typing</option>
-          </SelectControl>
-        </SettingRow>
-        <SettingRow title="Accept with Enter" description="Use Enter to accept the currently selected suggestion.">
+          </select>,
+        )}
+        {row(
+          'diagnostic-delay',
+          'Analysis delay',
+          'Milliseconds to wait after the latest edit.',
+          <input
+            className={`${input_class} w-28`}
+            disabled={settings.diagnostics.mode !== 'typing'}
+            max={10000}
+            min={500}
+            onChange={(event) =>
+              update({
+                ...settings,
+                diagnostics: {
+                  ...settings.diagnostics,
+                  delay: Number(event.target.value),
+                },
+              })
+            }
+            step={250}
+            type="number"
+            value={settings.diagnostics.delay}
+          />,
+        )}
+      </Section>
+      <Section title="Display">
+        {row(
+          'diagnostic-display',
+          'Squiggly underlines',
+          'Draw error and warning ranges inside the editor.',
+          <Toggle checked={settings.diagnostics.show_squiggles} onChange={() => toggle_diagnostic('show_squiggles')} />,
+        )}
+        {row(
+          'diagnostic-gutter',
+          'Gutter markers',
+          'Show problem markers beside line numbers.',
+          <Toggle checked={settings.diagnostics.show_gutter} onChange={() => toggle_diagnostic('show_gutter')} />,
+        )}
+        {row(
+          'diagnostic-hover',
+          'Hover messages',
+          'Show diagnostic details when hovering a marked range.',
+          <Toggle checked={settings.diagnostics.show_hover} onChange={() => toggle_diagnostic('show_hover')} />,
+        )}
+        {row(
+          'diagnostic-auto-reveal',
+          'Reveal Problems on errors',
+          'Open the Problems panel when a new error appears.',
           <Toggle
-            checked={draft.suggestions.accept_on_enter}
-            label="Accept suggestions with Enter"
-            onChange={(checked) => update_suggestions('accept_on_enter', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Show completion details"
-          description="Display secondary detail text supplied by completion sources."
-        >
-          <Toggle
-            checked={draft.suggestions.show_details}
-            label="Show completion details"
-            onChange={(checked) => update_suggestions('show_details', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Show type badges"
-          description="Display CodeMirror's completion type icons beside suggestions."
-        >
-          <Toggle
-            checked={draft.suggestions.show_type_icons}
-            label="Show completion type badges"
-            onChange={(checked) => update_suggestions('show_type_icons', checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Suggestion delay"
-          description="Delay after typing before CodeMirror asks completion sources for results."
-        >
-          <SelectControl
-            label="Suggestion delay"
-            onChange={(value) => update_suggestions('delay', Number(value))}
-            value={draft.suggestions.delay}
-          >
-            <option value="0">Immediate</option>
-            <option value="100">100 ms</option>
-            <option value="200">200 ms</option>
-            <option value="350">350 ms</option>
-            <option value="500">500 ms</option>
-          </SelectControl>
-        </SettingRow>
-      </SettingsSection>
-    </div>
+            checked={settings.diagnostics.auto_reveal_problems}
+            onChange={() => toggle_diagnostic('auto_reveal_problems')}
+          />,
+        )}
+      </Section>
+      <Section title="Language providers">
+        {(
+          [
+            ['enable_python', 'Python · Ruff WASM'],
+            ['enable_javascript', 'JavaScript / JSX · ESLint'],
+            ['enable_typescript', 'TypeScript / TSX · compiler API'],
+            ['enable_css', 'CSS / SCSS / Less · Stylelint'],
+            ['enable_html', 'HTML · HTML Validate'],
+            ['enable_json', 'JSON / JSONC'],
+            ['enable_yaml', 'YAML'],
+            ['enable_markdown', 'Markdownlint'],
+            ['enable_parser_fallback', 'Other languages · CodeMirror parser'],
+          ] as Array<[keyof DiagnosticsSettings, string]>
+        ).map(([key, label]) =>
+          row(
+            key,
+            label,
+            key === 'enable_parser_fallback'
+              ? 'Basic syntax diagnostics for other CodeMirror languages.'
+              : 'Analyze unsaved in-memory source without an external executable.',
+            <Toggle checked={Boolean(settings.diagnostics[key])} onChange={() => toggle_diagnostic(key)} />,
+          ),
+        )}
+      </Section>
+    </>
+  )
+
+  const render_ai = () => (
+    <Section title="Local Ollama">
+      {row(
+        'ollama-url',
+        'Ollama address',
+        'Usually the local Ollama service address.',
+        <input
+          className={`${input_class} w-64`}
+          onBlur={(event) =>
+            update({
+              ...settings,
+              ai: {
+                ...settings.ai,
+                ollama_url: event.target.value.trim() || default_editor_settings.ai.ollama_url,
+              },
+            })
+          }
+          onChange={(event) =>
+            update({
+              ...settings,
+              ai: { ...settings.ai, ollama_url: event.target.value },
+            })
+          }
+          value={settings.ai.ollama_url}
+        />,
+      )}
+      {row(
+        'ollama-model',
+        'Selected model',
+        'The AI panel fills this from models installed in Ollama.',
+        <input
+          className={`${input_class} w-64`}
+          onChange={(event) =>
+            update({
+              ...settings,
+              ai: { ...settings.ai, selected_model: event.target.value },
+            })
+          }
+          placeholder="Select in AI Chat"
+          value={settings.ai.selected_model}
+        />,
+      )}
+      {row(
+        'speech-model',
+        'Speech transcription model',
+        'Model installed through Ollama when voice input is enabled.',
+        <input
+          className={`${input_class} w-72`}
+          onChange={(event) =>
+            update({
+              ...settings,
+              ai: { ...settings.ai, speech_model: event.target.value },
+            })
+          }
+          value={settings.ai.speech_model}
+        />,
+      )}
+    </Section>
+  )
+
+  const shortcut_conflicts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const command of editor_commands) {
+      const binding = get_effective_keybinding(settings.keybindings, command.id)
+      if (binding.enabled && binding.key) map.set(binding.key, (map.get(binding.key) ?? 0) + 1)
+    }
+    return map
+  }, [settings.keybindings])
+
+  const update_keybinding = (command_id: EditorCommandId, enabled: boolean, key: string | null) => {
+    update({
+      ...settings,
+      keybindings: { ...settings.keybindings, [command_id]: { enabled, key } },
+    })
+  }
+
+  const filtered_commands = editor_commands.filter((command) =>
+    `${command.label} ${command.category}`.toLowerCase().includes(shortcut_filter.toLowerCase()),
   )
 
   const render_shortcuts = () => (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-3 flex gap-2">
-        <input
-          className={`${input_class} min-w-0 flex-1`}
-          onChange={(event) => set_shortcut_filter(event.target.value)}
-          placeholder="Filter commands…"
-          value={shortcut_filter}
-        />
-        <select
-          aria-label="Shortcut filter"
-          className={`${input_class} w-32`}
-          onChange={(event) => set_shortcut_view(event.target.value as typeof shortcut_view)}
-          value={shortcut_view}
-        >
-          <option value="all">All</option>
-          <option value="modified">Modified</option>
-          <option value="conflicts">Conflicts</option>
-          <option value="unassigned">Unassigned</option>
-        </select>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-black/[0.06]">
-        <div className="grid grid-cols-[32px_minmax(190px,1fr)_120px_48px] gap-3 border-b border-[var(--border)] px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-          <span />
-          <span>Command</span>
-          <span>Shortcut</span>
-          <span />
-        </div>
-        <div className="max-h-[430px] overflow-y-auto">
-          {filtered_commands.map((command) => {
-            const binding = get_effective_keybinding(draft.keybindings, command.id)
-            const conflict = shortcut_conflicts.has(command.id)
-            const modified = draft.keybindings[command.id] !== undefined
-            const recording = recording_command === command.id
-
-            return (
-              <div
-                className="grid min-h-14 grid-cols-[32px_minmax(190px,1fr)_120px_48px] items-center gap-3 border-b border-[var(--border)] px-3 py-2 last:border-b-0"
-                key={command.id}
-              >
-                <input
-                  aria-label={`Enable ${command.label}`}
-                  checked={binding.enabled}
-                  className="h-3.5 w-3.5 accent-sky-500"
-                  disabled={!command.disableable}
-                  onChange={(event) => update_keybinding(command.id, event.target.checked, binding.key)}
-                  type="checkbox"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-[var(--text)]">
-                    <span className="truncate">{command.label}</span>
-                    {modified && (
-                      <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[9px] text-sky-400">Modified</span>
-                    )}
-                    {conflict && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-400">Conflict</span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-[var(--muted)]">{command.category}</div>
+    <div
+      data-setting-id="keyboard-shortcuts"
+      className={highlighted_setting === 'keyboard-shortcuts' ? 'rounded-xl ring-2 ring-sky-500/50' : ''}
+    >
+      <input
+        className={`${input_class} mb-3 w-full`}
+        onChange={(event) => set_shortcut_filter(event.target.value)}
+        placeholder="Filter commands…"
+        value={shortcut_filter}
+      />
+      <div className="overflow-hidden rounded-xl border border-[var(--border)]">
+        {filtered_commands.map((command) => {
+          const binding = get_effective_keybinding(settings.keybindings, command.id)
+          const conflict = Boolean(binding.key && (shortcut_conflicts.get(binding.key) ?? 0) > 1)
+          const recording = recording_command === command.id
+          return (
+            <div
+              className="grid grid-cols-[36px_minmax(0,1fr)_150px_36px] items-center gap-2 border-b border-[var(--border)] px-3 py-2 last:border-b-0"
+              key={command.id}
+            >
+              <Toggle
+                checked={binding.enabled}
+                disabled={!command.disableable}
+                onChange={(enabled) => update_keybinding(command.id, enabled, binding.key)}
+              />
+              <div className="min-w-0">
+                <div className="truncate text-xs text-[var(--text)]">{command.label}</div>
+                <div className="text-[9px] text-[var(--muted)]">
+                  {command.category}
+                  {conflict ? ' · Conflict' : ''}
                 </div>
-                <button
-                  autoFocus={recording}
-                  className={`h-8 rounded-md border px-2 text-[10px] outline-none ${
-                    recording
-                      ? 'border-sky-500 bg-sky-500/10 text-sky-300 ring-1 ring-sky-500/25'
-                      : conflict
-                        ? 'border-amber-500/60 bg-amber-500/5 text-amber-300'
-                        : 'border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--text)] hover:bg-[var(--hover)]'
-                  }`}
-                  onBlur={() => set_recording_command((current) => (current === command.id ? null : current))}
-                  onClick={() => set_recording_command(command.id)}
-                  onKeyDown={(event) => {
-                    if (!recording) {
-                      return
-                    }
-
-                    event.preventDefault()
-                    event.stopPropagation()
-
-                    if (event.key === 'Escape') {
-                      set_recording_command(null)
-                      return
-                    }
-
-                    if (event.key === 'Backspace' || event.key === 'Delete') {
-                      update_keybinding(command.id, binding.enabled, null)
-                      set_recording_command(null)
-                      return
-                    }
-
-                    const shortcut = keyboard_event_to_shortcut(event)
-
-                    if (shortcut) {
-                      update_keybinding(command.id, binding.enabled, shortcut)
-                      set_recording_command(null)
-                    }
-                  }}
-                  title="Click, then press a shortcut. Backspace removes the binding."
-                  type="button"
-                >
-                  {recording ? 'Press keys…' : format_shortcut(binding.key)}
-                </button>
-                <button
-                  aria-label={`Reset ${command.label}`}
-                  className="h-8 rounded-md text-sm text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-25"
-                  disabled={!modified}
-                  onClick={() => reset_keybinding(command.id)}
-                  title="Reset shortcut"
-                  type="button"
-                >
-                  ↺
-                </button>
               </div>
-            )
-          })}
-          {filtered_commands.length === 0 && (
-            <div className="px-4 py-10 text-center text-xs text-[var(--muted)]">No commands match this filter.</div>
-          )}
-        </div>
+              <button
+                autoFocus={recording}
+                className={`${input_class} truncate ${conflict ? 'border-amber-500 text-amber-300' : ''}`}
+                onBlur={() => set_recording_command((current) => (current === command.id ? null : current))}
+                onClick={() => set_recording_command(command.id)}
+                onKeyDown={(event) => {
+                  if (!recording) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  if (event.key === 'Escape') {
+                    set_recording_command(null)
+                    return
+                  }
+                  if (event.key === 'Backspace' || event.key === 'Delete') {
+                    update_keybinding(command.id, binding.enabled, null)
+                    set_recording_command(null)
+                    return
+                  }
+                  const shortcut = keyboard_event_to_shortcut(event)
+                  if (shortcut) {
+                    update_keybinding(command.id, binding.enabled, shortcut)
+                    set_recording_command(null)
+                  }
+                }}
+                type="button"
+              >
+                {recording ? 'Press keys…' : format_shortcut(binding.key)}
+              </button>
+              <button
+                aria-label={`Reset ${command.label}`}
+                className="h-8 rounded text-sm text-[var(--muted)] hover:bg-[var(--hover)]"
+                onClick={() => {
+                  const next = { ...settings.keybindings }
+                  delete next[command.id]
+                  update({ ...settings, keybindings: next })
+                }}
+                title="Reset"
+                type="button"
+              >
+                ↺
+              </button>
+            </div>
+          )
+        })}
       </div>
-      <p className="mt-3 text-[10px] leading-4 text-[var(--muted)]">
-        Click a shortcut and press a new key combination. Backspace removes the binding. An unassigned command remains
-        available from menus; disabling an optional command removes it from menus and shortcuts.
-      </p>
     </div>
   )
 
   const render_tab = () => {
-    if (active_tab === 'general') {
-      return render_general()
-    }
-
-    if (active_tab === 'editor') {
-      return render_editor()
-    }
-
-    if (active_tab === 'appearance') {
-      return render_appearance()
-    }
-
-    if (active_tab === 'suggestions') {
-      return render_suggestions()
-    }
-
+    if (active_tab === 'general') return render_general()
+    if (active_tab === 'editor') return render_editor()
+    if (active_tab === 'appearance') return render_appearance()
+    if (active_tab === 'suggestions') return render_suggestions()
+    if (active_tab === 'diagnostics') return render_diagnostics()
+    if (active_tab === 'ai') return render_ai()
     return render_shortcuts()
   }
 
@@ -896,7 +1057,7 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
       <section
         aria-labelledby="settings-title"
         aria-modal="true"
-        className="flex h-[min(760px,calc(100vh-48px))] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--modal-start)] to-[var(--modal-end)] shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
+        className="flex h-[min(780px,calc(100vh-48px))] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[var(--modal-start)] to-[var(--modal-end)] shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
@@ -905,7 +1066,7 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
             <h2 className="text-lg font-semibold text-[var(--text)]" id="settings-title">
               Settings
             </h2>
-            <p className="mt-0.5 text-[10px] text-[var(--muted)]">Configure the editor without losing open state</p>
+            <p className="mt-0.5 text-[10px] text-[var(--muted)]">Changes apply immediately</p>
           </div>
           <div className="relative min-w-0 flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]">⌕</span>
@@ -918,8 +1079,8 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
             />
             {search_query && (
               <button
-                aria-label="Clear settings search"
-                className="absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 rounded text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 rounded text-[var(--muted)] hover:bg-[var(--hover)]"
                 onClick={() => set_search_query('')}
                 type="button"
               >
@@ -931,26 +1092,20 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
             aria-label="Close settings"
             className="flex h-9 w-9 items-center justify-center rounded-lg text-lg text-[var(--muted)] hover:bg-white/10 hover:text-[var(--text)]"
             onClick={onClose}
-            title="Close settings"
             type="button"
           >
             ×
           </button>
         </header>
-
         <div className="flex min-h-0 flex-1">
           <nav
-            className="w-52 shrink-0 border-r border-[var(--border)] bg-black/[0.05] p-3"
             aria-label="Settings sections"
+            className="w-52 shrink-0 border-r border-[var(--border)] bg-black/[0.05] p-3"
           >
-            {settings_tabs.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 aria-current={active_tab === tab.id ? 'page' : undefined}
-                className={`mb-1 flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-xs transition ${
-                  active_tab === tab.id
-                    ? 'bg-sky-500/12 text-sky-300 shadow-[inset_3px_0_0_#38bdf8]'
-                    : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
-                }`}
+                className={`mb-1 flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-xs transition ${active_tab === tab.id ? 'bg-sky-500/12 text-sky-300 shadow-[inset_3px_0_0_#38bdf8]' : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'}`}
                 key={tab.id}
                 onClick={() => {
                   set_active_tab(tab.id)
@@ -963,30 +1118,23 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
               </button>
             ))}
           </nav>
-
           <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-5">
             {search_query ? (
               <div>
                 <div className="mb-4 text-xs text-[var(--muted)]">
-                  {search_results.length} {search_results.length === 1 ? 'result' : 'results'} for “{search_query}”
+                  {search_results.length} results for “{search_query}”
                 </div>
                 <div className="space-y-2">
-                  {search_results.map((result, index) => (
+                  {search_results.map((result) => (
                     <button
                       className="block w-full rounded-xl border border-[var(--border)] bg-black/[0.06] p-4 text-left hover:border-sky-500/50 hover:bg-sky-500/5"
-                      key={`${result.tab}-${result.label}-${index}`}
-                      onClick={() => {
-                        set_active_tab(result.tab)
-                        set_search_query('')
-                        if (result.tab === 'shortcuts') {
-                          set_shortcut_filter(result.label)
-                        }
-                      }}
+                      key={result.id}
+                      onClick={() => open_search_result(result)}
                       type="button"
                     >
-                      <div className="flex items-center justify-between gap-4">
+                      <div className="flex justify-between gap-4">
                         <span className="text-xs font-medium text-[var(--text)]">{result.label}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-sky-400">{result.tab}</span>
+                        <span className="text-[9px] uppercase tracking-wider text-sky-400">{result.tab}</span>
                       </div>
                       <p className="mt-1 text-[11px] text-[var(--muted)]">{result.description}</p>
                     </button>
@@ -1003,8 +1151,7 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
             )}
           </main>
         </div>
-
-        <footer className="flex h-16 shrink-0 items-center justify-between border-t border-[var(--border)] px-6">
+        <footer className="flex h-14 shrink-0 items-center justify-between border-t border-[var(--border)] px-6">
           <button
             className="rounded-md px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
             onClick={reset_active_tab}
@@ -1012,29 +1159,12 @@ function SettingsModal({ settings, onApply, onClose }: SettingsModalProps) {
           >
             Reset current tab
           </button>
-          <div className="flex gap-2">
-            <button
-              className="rounded-md border border-[var(--input-border)] px-4 py-2 text-xs text-[var(--text)] hover:bg-[var(--hover)]"
-              onClick={onClose}
-              type="button"
-            >
-              Cancel
-            </button>
-            <button
-              className="rounded-md bg-sky-500 px-4 py-2 text-xs font-medium text-white shadow-lg shadow-sky-500/15 hover:bg-sky-400"
-              onClick={() => {
-                onApply(draft)
-                onClose()
-              }}
-              type="button"
-            >
-              Apply
-            </button>
-          </div>
+          <span className="text-[10px] text-[var(--muted)]">Settings are saved automatically</span>
         </footer>
       </section>
     </div>
   )
 }
 
+export { Toggle }
 export default SettingsModal
