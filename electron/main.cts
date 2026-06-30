@@ -1,5 +1,47 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { join } from 'node:path'
+
+function get_event_window(sender: Electron.WebContents) {
+  return BrowserWindow.fromWebContents(sender)
+}
+
+function send_maximized_state(main_window: BrowserWindow) {
+  const is_maximized = main_window.isMaximized() || main_window.isFullScreen()
+  main_window.webContents.send('window:maximized-change', is_maximized)
+}
+
+ipcMain.on('window:minimize', (event) => {
+  get_event_window(event.sender)?.minimize()
+})
+
+ipcMain.on('window:toggle-maximize', (event) => {
+  const main_window = get_event_window(event.sender)
+
+  if (!main_window) {
+    return
+  }
+
+  if (main_window.isMaximized()) {
+    main_window.unmaximize()
+  } else {
+    main_window.maximize()
+  }
+})
+
+ipcMain.on('window:close', (event) => {
+  get_event_window(event.sender)?.close()
+})
+
+
+ipcMain.on('app:exit', () => {
+  app.quit()
+})
+
+ipcMain.handle('window:is-maximized', (event) => {
+  const main_window = get_event_window(event.sender)
+
+  return main_window?.isMaximized() || main_window?.isFullScreen() || false
+})
 
 function create_window() {
   const main_window = new BrowserWindow({
@@ -7,7 +49,9 @@ function create_window() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#09090b',
+    frame: false,
+    resizable: true,
+    backgroundColor: '#020617',
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -15,6 +59,11 @@ function create_window() {
       sandbox: true,
     },
   })
+
+  main_window.on('maximize', () => send_maximized_state(main_window))
+  main_window.on('unmaximize', () => send_maximized_state(main_window))
+  main_window.on('enter-full-screen', () => send_maximized_state(main_window))
+  main_window.on('leave-full-screen', () => send_maximized_state(main_window))
 
   if (app.isPackaged) {
     main_window.loadFile(join(__dirname, '../dist/index.html'))

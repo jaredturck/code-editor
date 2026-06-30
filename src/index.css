@@ -7,7 +7,66 @@ body,
   height: 100%;
 }
 
+html {
+  background: #020617;
+}
+
 body {
   margin: 0;
   overflow: hidden;
+  background: transparent;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: default;
+}
+
+.theme-dark {
+  color-scheme: dark;
+  --app-bg: #111113;
+  --editor-bg: #0d0d0f;
+  --surface-1: #1b1b1e;
+  --surface-2: #18181b;
+  --surface-3: #141416;
+  --menu-bg: #252529;
+  --border: #2d2d32;
+  --window-border: #3f3f46;
+  --text: #d4d4d8;
+  --muted: #8b8b93;
+  --hover: #2d2d33;
+  --selected: #34343a;
+  --terminal-text: #d4d4d8;
+  --terminal-prompt: #a1a1aa;
+}
+
+.theme-light {
+  color-scheme: light;
+  --app-bg: #f4f4f5;
+  --editor-bg: #ffffff;
+  --surface-1: #e4e4e7;
+  --surface-2: #ededee;
+  --surface-3: #f7f7f8;
+  --menu-bg: #ffffff;
+  --border: #d4d4d8;
+  --window-border: #a1a1aa;
+  --text: #27272a;
+  --muted: #71717a;
+  --hover: #d8d8dc;
+  --selected: #ceced3;
+  --terminal-text: #27272a;
+  --terminal-prompt: #52525b;
+}
+
+.window-drag-region {
+  app-region: drag;
+  user-select: none;
+}
+
+.window-no-drag {
+  app-region: no-drag;
 }
