@@ -74,7 +74,10 @@ function AIChatPanel({ onClose }: AIChatPanelProps) {
         ) : (
           <div className="space-y-3">
             {messages.map((message, index) => (
-              <div className="ml-auto max-w-[88%] rounded-lg bg-[var(--selected)] px-3 py-2 text-xs text-[var(--text)]" key={`${message}-${index}`}>
+              <div
+                className="ml-auto max-w-[88%] rounded-lg bg-[var(--selected)] px-3 py-2 text-xs text-[var(--text)]"
+                key={`${message}-${index}`}
+              >
                 {message}
               </div>
             ))}

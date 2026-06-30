@@ -6,7 +6,7 @@ function EditorPanel() {
       <div className="flex h-full items-center justify-center">
         <img
           alt="Code editor"
-          className="app-logo h-52 w-52 select-none object-contain opacity-[0.08]"
+          className="app-logo h-auto w-[clamp(280px,34vw,520px)] max-h-[62%] max-w-[72%] select-none object-contain opacity-[0.08]"
           draggable={false}
           src={logo}
         />

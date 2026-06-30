@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type {
-  ActivitySection,
-  BottomPanelTab,
-  TerminalSession,
-  ThemeMode,
-  TopMenu,
-} from '../types/editor'
+import type { ActivitySection, BottomPanelTab, TerminalSession, ThemeMode, TopMenu } from '../types/editor'
 
 const initial_terminals: TerminalSession[] = [
   {
@@ -35,6 +29,7 @@ function useEditorState() {
   const [terminals, set_terminals] = useState<TerminalSession[]>(initial_terminals)
   const [active_terminal_id, set_active_terminal_id] = useState<number | null>(1)
   const [open_menu, set_open_menu] = useState<TopMenu>(null)
+  const [menu_pinned, set_menu_pinned] = useState(false)
   const [settings_open, set_settings_open] = useState(false)
   const [ai_chat_open, set_ai_chat_open] = useState(false)
   const [theme_mode, set_theme_mode] = useState<ThemeMode>('dark')
@@ -67,6 +62,7 @@ function useEditorState() {
     const close_with_escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         set_open_menu(null)
+        set_menu_pinned(false)
         set_settings_open(false)
       }
     }
@@ -107,17 +103,37 @@ function useEditorState() {
 
   const close_overlays = () => {
     set_open_menu(null)
+    set_menu_pinned(false)
     set_settings_open(false)
   }
 
+  const hover_menu = (menu: Exclude<TopMenu, null>) => {
+    set_open_menu(menu)
+    set_settings_open(false)
+  }
+
+  const leave_menus = () => {
+    if (!menu_pinned) {
+      set_open_menu(null)
+    }
+  }
+
   const toggle_menu = (menu: Exclude<TopMenu, null>) => {
-    set_open_menu((current_menu) => current_menu === menu ? null : menu)
+    if (menu_pinned && open_menu === menu) {
+      set_open_menu(null)
+      set_menu_pinned(false)
+      return
+    }
+
+    set_open_menu(menu)
+    set_menu_pinned(true)
     set_settings_open(false)
   }
 
   const toggle_settings = () => {
     set_settings_open((current_value) => !current_value)
     set_open_menu(null)
+    set_menu_pinned(false)
   }
 
   const toggle_ai_chat = () => {
@@ -233,48 +249,53 @@ function useEditorState() {
   }
 
   const update_terminal_input = (terminal_id: number, input: string) => {
-    set_terminals((current_terminals) => current_terminals.map((terminal) => {
-      if (terminal.id !== terminal_id) {
-        return terminal
-      }
+    set_terminals((current_terminals) =>
+      current_terminals.map((terminal) => {
+        if (terminal.id !== terminal_id) {
+          return terminal
+        }
 
-      return {
-        ...terminal,
-        input,
-      }
-    }))
+        return {
+          ...terminal,
+          input,
+        }
+      }),
+    )
   }
 
   const submit_terminal_input = (terminal_id: number) => {
-    set_terminals((current_terminals) => current_terminals.map((terminal) => {
-      if (terminal.id !== terminal_id) {
-        return terminal
-      }
+    set_terminals((current_terminals) =>
+      current_terminals.map((terminal) => {
+        if (terminal.id !== terminal_id) {
+          return terminal
+        }
 
-      const history = terminal.input.length > 0
-        ? [...terminal.history, terminal.input]
-        : terminal.history
+        const history = terminal.input.length > 0 ? [...terminal.history, terminal.input] : terminal.history
 
-      return {
-        ...terminal,
-        history,
-        input: '',
-      }
-    }))
+        return {
+          ...terminal,
+          history,
+          input: '',
+        }
+      }),
+    )
   }
 
   const select_theme = (theme: ThemeMode) => {
     set_theme_mode(theme)
     set_open_menu(null)
+    set_menu_pinned(false)
   }
 
   const open_file_dialog = async () => {
     set_open_menu(null)
+    set_menu_pinned(false)
     await window.editor_api.dialog.open_file()
   }
 
   const open_folder_dialog = async () => {
     set_open_menu(null)
+    set_menu_pinned(false)
     await window.editor_api.dialog.open_folder()
   }
 
@@ -288,7 +309,9 @@ function useEditorState() {
     close_overlays,
     create_terminal,
     delete_terminal,
+    hover_menu,
     is_maximized,
+    leave_menus,
     open_file_dialog,
     open_folder_dialog,
     open_menu,

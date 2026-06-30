@@ -5,13 +5,12 @@ interface IconProps {
 
 function Icon({ className = '', src }: IconProps) {
   return (
-    <span
+    <img
+      alt=""
       aria-hidden="true"
-      className={`inline-block shrink-0 bg-current ${className}`}
-      style={{
-        WebkitMask: `url(${src}) center / contain no-repeat`,
-        mask: `url(${src}) center / contain no-repeat`,
-      }}
+      className={`app-icon inline-block shrink-0 ${className}`}
+      draggable={false}
+      src={src}
     />
   )
 }

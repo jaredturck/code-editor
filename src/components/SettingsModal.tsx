@@ -27,7 +27,9 @@ function SettingsModal({ onClose }: SettingsModalProps) {
           ×
         </button>
 
-        <h2 className="pr-10 text-xl font-semibold text-[var(--text)]" id="settings-title">Settings</h2>
+        <h2 className="pr-10 text-xl font-semibold text-[var(--text)]" id="settings-title">
+          Settings
+        </h2>
         <p className="mt-2 text-sm text-[var(--muted)]">Application Settings</p>
 
         <div className="mt-8 h-32 rounded-lg border border-dashed border-[var(--border)] bg-black/5" />

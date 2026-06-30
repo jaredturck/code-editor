@@ -45,21 +45,17 @@ ipcMain.handle('window:is-maximized', (event) => {
 ipcMain.handle('dialog:open-file', async (event) => {
   const main_window = get_event_window(event.sender)
   const options: Electron.OpenDialogOptions = { properties: ['openFile'] }
-  const result = main_window
-    ? await dialog.showOpenDialog(main_window, options)
-    : await dialog.showOpenDialog(options)
+  const result = main_window ? await dialog.showOpenDialog(main_window, options) : await dialog.showOpenDialog(options)
 
-  return result.canceled ? null : result.filePaths[0] ?? null
+  return result.canceled ? null : (result.filePaths[0] ?? null)
 })
 
 ipcMain.handle('dialog:open-folder', async (event) => {
   const main_window = get_event_window(event.sender)
   const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] }
-  const result = main_window
-    ? await dialog.showOpenDialog(main_window, options)
-    : await dialog.showOpenDialog(options)
+  const result = main_window ? await dialog.showOpenDialog(main_window, options) : await dialog.showOpenDialog(options)
 
-  return result.canceled ? null : result.filePaths[0] ?? null
+  return result.canceled ? null : (result.filePaths[0] ?? null)
 })
 
 function create_window() {

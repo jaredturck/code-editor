@@ -19,7 +19,13 @@ interface TerminalPanelProps {
 
 const prompt = '[code-editor]$'
 
-function TerminalPane({ active, terminal, onSelectTerminal, onSubmitTerminalInput, onUpdateTerminalInput }: {
+function TerminalPane({
+  active,
+  terminal,
+  onSelectTerminal,
+  onSubmitTerminalInput,
+  onUpdateTerminalInput,
+}: {
   active: boolean
   terminal: TerminalSession
   onSelectTerminal: (terminalId: number) => void
@@ -61,7 +67,13 @@ function TerminalPane({ active, terminal, onSelectTerminal, onSubmitTerminalInpu
   )
 }
 
-function TerminalSessionRow({ child, isActive, terminal, onDeleteTerminal, onSelectTerminal }: {
+function TerminalSessionRow({
+  child,
+  isActive,
+  terminal,
+  onDeleteTerminal,
+  onSelectTerminal,
+}: {
   child: boolean
   isActive: boolean
   terminal: TerminalSession
@@ -69,7 +81,9 @@ function TerminalSessionRow({ child, isActive, terminal, onDeleteTerminal, onSel
   onSelectTerminal: (terminalId: number) => void
 }) {
   return (
-    <div className={`group relative flex h-7 items-center ${isActive ? 'bg-[var(--selected)]' : 'hover:bg-[var(--hover)]'}`}>
+    <div
+      className={`group relative flex h-7 items-center ${isActive ? 'bg-[var(--selected)]' : 'hover:bg-[var(--hover)]'}`}
+    >
       {child && <span className="absolute -left-3 top-1/2 h-px w-3 bg-[var(--muted)]/50" />}
 
       <button
@@ -95,13 +109,28 @@ function TerminalSessionRow({ child, isActive, terminal, onDeleteTerminal, onSel
   )
 }
 
-function TerminalPanel({ activeTab, activeTerminalId, terminals, visibleTerminals, onClosePanel, onCreateTerminal, onDeleteTerminal, onSelectTab, onSelectTerminal, onSubmitTerminalInput, onUpdateTerminalInput }: TerminalPanelProps) {
+function TerminalPanel({
+  activeTab,
+  activeTerminalId,
+  terminals,
+  visibleTerminals,
+  onClosePanel,
+  onCreateTerminal,
+  onDeleteTerminal,
+  onSelectTab,
+  onSelectTerminal,
+  onSubmitTerminalInput,
+  onUpdateTerminalInput,
+}: TerminalPanelProps) {
   const root_terminals = terminals
     .filter((terminal) => terminal.parent_id === null)
     .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
 
   return (
-    <section aria-label="Bottom panel" className="flex min-h-0 flex-col border-t border-[var(--border)] bg-[var(--surface-3)]">
+    <section
+      aria-label="Bottom panel"
+      className="flex min-h-0 flex-col border-t border-[var(--border)] bg-[var(--surface-3)]"
+    >
       <div className="flex h-9 shrink-0 items-center border-b border-[var(--border)] px-3 text-xs">
         <div className="flex h-full items-center gap-5">
           <button
@@ -156,7 +185,9 @@ function TerminalPanel({ activeTab, activeTerminalId, terminals, visibleTerminal
         <div className="flex min-h-0 flex-1">
           <div
             className="grid min-w-0 flex-1 divide-x divide-[var(--border)]"
-            style={{ gridTemplateColumns: `repeat(${Math.max(visibleTerminals.length, 1)}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(visibleTerminals.length, 1)}, minmax(0, 1fr))`,
+            }}
           >
             {visibleTerminals.length > 0 ? (
               visibleTerminals.map((terminal) => (

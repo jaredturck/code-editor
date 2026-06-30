@@ -1,6 +1,16 @@
 import { useState } from 'react'
 
-function SearchToggle({ active, label, onClick, children }: { active: boolean, label: string, onClick: () => void, children: string }) {
+function SearchToggle({
+  active,
+  label,
+  onClick,
+  children,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+  children: string
+}) {
   return (
     <button
       aria-label={label}
@@ -46,9 +56,27 @@ function SearchPanel() {
             />
 
             <div className="ml-1 flex items-center gap-0.5">
-              <SearchToggle active={match_case} label="Match case" onClick={() => set_match_case((current_value) => !current_value)}>Aa</SearchToggle>
-              <SearchToggle active={match_word} label="Match whole word" onClick={() => set_match_word((current_value) => !current_value)}>ab</SearchToggle>
-              <SearchToggle active={use_regex} label="Use regular expression" onClick={() => set_use_regex((current_value) => !current_value)}>.*</SearchToggle>
+              <SearchToggle
+                active={match_case}
+                label="Match case"
+                onClick={() => set_match_case((current_value) => !current_value)}
+              >
+                Aa
+              </SearchToggle>
+              <SearchToggle
+                active={match_word}
+                label="Match whole word"
+                onClick={() => set_match_word((current_value) => !current_value)}
+              >
+                ab
+              </SearchToggle>
+              <SearchToggle
+                active={use_regex}
+                label="Use regular expression"
+                onClick={() => set_use_regex((current_value) => !current_value)}
+              >
+                .*
+              </SearchToggle>
             </div>
           </div>
 
@@ -61,7 +89,13 @@ function SearchPanel() {
                 type="text"
               />
 
-              <SearchToggle active={preserve_case} label="Preserve case" onClick={() => set_preserve_case((current_value) => !current_value)}>AB</SearchToggle>
+              <SearchToggle
+                active={preserve_case}
+                label="Preserve case"
+                onClick={() => set_preserve_case((current_value) => !current_value)}
+              >
+                AB
+              </SearchToggle>
             </div>
           )}
         </div>

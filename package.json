@@ -11,6 +11,8 @@
     "build:electron": "tsc -p electron/tsconfig.json",
     "typecheck": "tsc -b && tsc -p electron/tsconfig.json --noEmit",
     "build": "npm run build:electron && tsc -b && vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "lint": "oxlint src electron vite.config.ts",
     "preview": "vite preview"
   },
@@ -30,7 +32,8 @@
     "oxlint": "^1.69.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.0",
-    "wait-on": "^9.0.10"
+    "wait-on": "^9.0.10",
+    "prettier": "3.9.4"
   },
   "main": "dist-electron/main.cjs"
 }
