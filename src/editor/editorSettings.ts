@@ -19,6 +19,7 @@ export const default_editor_settings: EditorSettings = {
     word_wrap: false,
   },
   appearance: {
+    syntax_color_scheme: 'modern',
     line_numbers: true,
     highlight_active_line: true,
     highlight_selection_matches: true,

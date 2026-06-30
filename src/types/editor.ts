@@ -1,6 +1,7 @@
 export type ActivitySection = 'explorer' | 'search' | 'source-control'
 export type BottomPanelTab = 'problems' | 'terminal'
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type SyntaxColorScheme = 'default' | 'high-contrast' | 'modern' | 'soft' | 'classic'
 export type TopMenu = 'file' | 'edit' | 'go' | 'view' | 'terminal' | null
 export type IndentStyle = 'spaces' | 'tabs'
 export type EditorFeaturePreset = 'minimal' | 'balanced' | 'full' | 'custom'
@@ -64,6 +65,7 @@ export interface EditorBehaviorSettings {
 }
 
 export interface EditorAppearanceSettings {
+  syntax_color_scheme: SyntaxColorScheme
   line_numbers: boolean
   highlight_active_line: boolean
   highlight_selection_matches: boolean

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { language_options } from '../data/languages'
 import { editor_commands, format_shortcut, get_effective_keybinding } from '../editor/editorCommands'
 import { apply_editor_preset, clone_editor_settings, default_editor_settings } from '../editor/editorSettings'
+import { syntax_color_scheme_options } from '../editor/syntaxThemes'
 import type { DiagnosticsSettings, EditorCommandId, EditorSettings } from '../types/editor'
 
 interface SettingsModalProps {
@@ -107,6 +108,12 @@ const search_items: SearchItem[] = [
     tab: 'editor',
     label: 'Word wrap',
     description: 'Wrap long lines to the editor width.',
+  },
+  {
+    id: 'syntax-color-scheme',
+    tab: 'appearance',
+    label: 'Syntax color scheme',
+    description: 'Choose a semantic color palette for every supported language.',
   },
   {
     id: 'line-numbers',
@@ -607,77 +614,108 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
   )
 
   const render_appearance = () => (
-    <Section title="Editor chrome">
-      {row(
-        'line-numbers',
-        'Line numbers',
-        'Show line numbers in the gutter.',
-        <Toggle checked={settings.appearance.line_numbers} onChange={() => toggle_appearance('line_numbers')} />,
-      )}
-      {row(
-        'active-line',
-        'Highlight active line',
-        'Subtly highlight the line containing the cursor.',
-        <Toggle
-          checked={settings.appearance.highlight_active_line}
-          onChange={() => toggle_appearance('highlight_active_line')}
-        />,
-      )}
-      {row(
-        'selection-matches',
-        'Highlight matching selections',
-        'Highlight text matching the selected text.',
-        <Toggle
-          checked={settings.appearance.highlight_selection_matches}
-          onChange={() => toggle_appearance('highlight_selection_matches')}
-        />,
-      )}
-      {row(
-        'whitespace',
-        'Render whitespace',
-        'Display spaces and tab characters.',
-        <select
-          className={input_class}
-          onChange={(event) =>
-            custom({
-              ...settings,
-              appearance: {
-                ...settings.appearance,
-                render_whitespace: event.target.value as 'off' | 'all',
-              },
-            })
-          }
-          value={settings.appearance.render_whitespace}
-        >
-          <option value="off">Off</option>
-          <option value="all">All</option>
-        </select>,
-      )}
-      {row(
-        'trailing-whitespace',
-        'Highlight trailing whitespace',
-        'Mark whitespace at the end of lines.',
-        <Toggle
-          checked={settings.appearance.highlight_trailing_whitespace}
-          onChange={() => toggle_appearance('highlight_trailing_whitespace')}
-        />,
-      )}
-      {row(
-        'special-characters',
-        'Show special characters',
-        'Reveal confusing control and special characters.',
-        <Toggle
-          checked={settings.appearance.show_special_characters}
-          onChange={() => toggle_appearance('show_special_characters')}
-        />,
-      )}
-      {row(
-        'scroll-past-end',
-        'Scroll past end',
-        'Allow the final line to scroll toward the top.',
-        <Toggle checked={settings.appearance.scroll_past_end} onChange={() => toggle_appearance('scroll_past_end')} />,
-      )}
-    </Section>
+    <>
+      <Section title="Syntax colors">
+        {row(
+          'syntax-color-scheme',
+          'Syntax color scheme',
+          'Apply one semantic color palette across every supported language.',
+          <select
+            className={input_class}
+            onChange={(event) =>
+              update({
+                ...settings,
+                appearance: {
+                  ...settings.appearance,
+                  syntax_color_scheme: event.target.value as EditorSettings['appearance']['syntax_color_scheme'],
+                },
+              })
+            }
+            value={settings.appearance.syntax_color_scheme}
+          >
+            {syntax_color_scheme_options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>,
+        )}
+      </Section>
+      <Section title="Editor chrome">
+        {row(
+          'line-numbers',
+          'Line numbers',
+          'Show line numbers in the gutter.',
+          <Toggle checked={settings.appearance.line_numbers} onChange={() => toggle_appearance('line_numbers')} />,
+        )}
+        {row(
+          'active-line',
+          'Highlight active line',
+          'Subtly highlight the line containing the cursor.',
+          <Toggle
+            checked={settings.appearance.highlight_active_line}
+            onChange={() => toggle_appearance('highlight_active_line')}
+          />,
+        )}
+        {row(
+          'selection-matches',
+          'Highlight matching selections',
+          'Highlight text matching the selected text.',
+          <Toggle
+            checked={settings.appearance.highlight_selection_matches}
+            onChange={() => toggle_appearance('highlight_selection_matches')}
+          />,
+        )}
+        {row(
+          'whitespace',
+          'Render whitespace',
+          'Display spaces and tab characters.',
+          <select
+            className={input_class}
+            onChange={(event) =>
+              custom({
+                ...settings,
+                appearance: {
+                  ...settings.appearance,
+                  render_whitespace: event.target.value as 'off' | 'all',
+                },
+              })
+            }
+            value={settings.appearance.render_whitespace}
+          >
+            <option value="off">Off</option>
+            <option value="all">All</option>
+          </select>,
+        )}
+        {row(
+          'trailing-whitespace',
+          'Highlight trailing whitespace',
+          'Mark whitespace at the end of lines.',
+          <Toggle
+            checked={settings.appearance.highlight_trailing_whitespace}
+            onChange={() => toggle_appearance('highlight_trailing_whitespace')}
+          />,
+        )}
+        {row(
+          'special-characters',
+          'Show special characters',
+          'Reveal confusing control and special characters.',
+          <Toggle
+            checked={settings.appearance.show_special_characters}
+            onChange={() => toggle_appearance('show_special_characters')}
+          />,
+        )}
+        {row(
+          'scroll-past-end',
+          'Scroll past end',
+          'Allow the final line to scroll toward the top.',
+          <Toggle
+            checked={settings.appearance.scroll_past_end}
+            onChange={() => toggle_appearance('scroll_past_end')}
+          />,
+        )}
+      </Section>
+    </>
   )
 
   const render_suggestions = () => (

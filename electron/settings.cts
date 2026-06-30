@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 type ThemeMode = 'light' | 'dark' | 'system'
+type SyntaxColorScheme = 'default' | 'high-contrast' | 'modern' | 'soft' | 'classic'
 type EditorFeaturePreset = 'minimal' | 'balanced' | 'full' | 'custom'
 type SuggestionMode = 'off' | 'manual' | 'typing'
 type RenderWhitespaceMode = 'off' | 'all'
@@ -28,6 +29,7 @@ export interface AppSettings {
     word_wrap: boolean
   }
   appearance: {
+    syntax_color_scheme: SyntaxColorScheme
     line_numbers: boolean
     highlight_active_line: boolean
     highlight_selection_matches: boolean
@@ -87,6 +89,7 @@ export const default_settings: AppSettings = {
     word_wrap: false,
   },
   appearance: {
+    syntax_color_scheme: 'modern',
     line_numbers: true,
     highlight_active_line: true,
     highlight_selection_matches: true,
@@ -196,6 +199,14 @@ export function sanitize_settings(value: unknown): AppSettings {
     typeof editor.default_indent_size === 'number' && [2, 4, 8].includes(editor.default_indent_size)
       ? editor.default_indent_size
       : default_settings.editor.default_indent_size
+  const syntax_color_scheme =
+    appearance.syntax_color_scheme === 'default' ||
+    appearance.syntax_color_scheme === 'high-contrast' ||
+    appearance.syntax_color_scheme === 'modern' ||
+    appearance.syntax_color_scheme === 'soft' ||
+    appearance.syntax_color_scheme === 'classic'
+      ? appearance.syntax_color_scheme
+      : default_settings.appearance.syntax_color_scheme
   const render_whitespace =
     appearance.render_whitespace === 'all' || appearance.render_whitespace === 'off'
       ? appearance.render_whitespace
@@ -236,6 +247,7 @@ export function sanitize_settings(value: unknown): AppSettings {
       word_wrap: boolean_setting(editor.word_wrap, default_settings.editor.word_wrap),
     },
     appearance: {
+      syntax_color_scheme,
       line_numbers: boolean_setting(appearance.line_numbers, default_settings.appearance.line_numbers),
       highlight_active_line: boolean_setting(
         appearance.highlight_active_line,

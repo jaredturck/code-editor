@@ -34,7 +34,6 @@ import {
 import {
   bracketMatching,
   codeFolding,
-  defaultHighlightStyle,
   foldAll,
   foldCode,
   foldGutter,
@@ -43,7 +42,6 @@ import {
   foldedRanges,
   indentOnInput,
   indentUnit,
-  syntaxHighlighting,
   syntaxTree,
   unfoldAll,
   unfoldCode,
@@ -83,6 +81,7 @@ import {
   get_managed_shortcut_keys,
 } from '../editor/editorCommands'
 import { editor_search_extension, open_editor_search } from '../editor/editorSearch'
+import { create_syntax_highlighting } from '../editor/syntaxThemes'
 import {
   editor_command_states_equal,
   get_diagnostics_signature,
@@ -280,6 +279,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const active_document_id_ref = useRef<number | null>(null)
   const state_cache_ref = useRef(new Map<number, EditorState>())
   const theme_compartment_ref = useRef(new Compartment())
+  const syntax_compartment_ref = useRef(new Compartment())
   const language_compartment_ref = useRef(new Compartment())
   const indentation_compartment_ref = useRef(new Compartment())
   const settings_compartment_ref = useRef(new Compartment())
@@ -619,7 +619,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
         history(),
         drawSelection(),
         dropCursor(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntax_compartment_ref.current.of(
+          create_syntax_highlighting(settings_ref.current.appearance.syntax_color_scheme, theme_ref.current),
+        ),
         editor_search_extension,
         theme_compartment_ref.current.of(create_editor_theme(theme_ref.current)),
         language_compartment_ref.current.of([]),
@@ -801,6 +803,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     editor_view.dispatch({
       effects: [
         theme_compartment_ref.current.reconfigure(create_editor_theme(theme_ref.current)),
+        syntax_compartment_ref.current.reconfigure(
+          create_syntax_highlighting(settings_ref.current.appearance.syntax_color_scheme, theme_ref.current),
+        ),
         indentation_compartment_ref.current.reconfigure(create_indentation_extensions(activeDocument)),
         settings_compartment_ref.current.reconfigure(create_settings_extensions(settings_ref.current)),
       ],
@@ -819,7 +824,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     }
 
     editor_view.dispatch({
-      effects: theme_compartment_ref.current.reconfigure(create_editor_theme(theme)),
+      effects: [
+        theme_compartment_ref.current.reconfigure(create_editor_theme(theme)),
+        syntax_compartment_ref.current.reconfigure(
+          create_syntax_highlighting(settings_ref.current.appearance.syntax_color_scheme, theme),
+        ),
+      ],
     })
 
     if (active_document_id_ref.current !== null) {
@@ -835,7 +845,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     }
 
     editor_view.dispatch({
-      effects: settings_compartment_ref.current.reconfigure(create_settings_extensions(settings)),
+      effects: [
+        settings_compartment_ref.current.reconfigure(create_settings_extensions(settings)),
+        syntax_compartment_ref.current.reconfigure(
+          create_syntax_highlighting(settings.appearance.syntax_color_scheme, theme_ref.current),
+        ),
+      ],
     })
 
     if (active_document_id_ref.current !== null) {

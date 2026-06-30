@@ -9,7 +9,7 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Open folders as workspaces with a lazy, live-updating Explorer tree
 - Create, rename, move, copy, reveal, and trash project files and folders
 - Open, edit, save, and reopen source files with language-aware CodeMirror support
-- Persistent editor settings, recent files, shortcuts, and unsaved-document shutdown handling
+- Persistent editor settings, recent files, shortcuts, syntax color schemes, and unsaved-document shutdown handling
 - Persistent shell sessions rendered with xterm.js and backed by `node-pty`
 - Ruff, ESLint, TypeScript, Stylelint, HTML, JSON, YAML, Markdown, and parser-based diagnostics
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
@@ -33,7 +33,7 @@ Ollama is optional. When it is installed and running locally, the AI panel disco
 ## Verification
 
 ```bash
-npm run format:check
+npm run format
 npm run lint
 npm run typecheck
 npm test
