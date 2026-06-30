@@ -10,9 +10,15 @@ interface AppControlsApi {
   exit: () => void
 }
 
+interface DialogApi {
+  open_file: () => Promise<string | null>
+  open_folder: () => Promise<string | null>
+}
+
 interface EditorApi {
   platform: string
   app: AppControlsApi
+  dialog: DialogApi
   window: WindowControlsApi
 }
 

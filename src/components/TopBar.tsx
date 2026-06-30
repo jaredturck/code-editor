@@ -1,25 +1,41 @@
+import Icon from './Icon'
 import { MenuDropdown, MenuItem, MenuSeparator } from './MenuDropdown'
+import ai_chat_icon from './images/ai-chat.svg'
+import close_icon from './images/close.svg'
+import maximize_icon from './images/maximize.svg'
+import minimize_icon from './images/minimize.svg'
+import restore_icon from './images/restore.svg'
+import logo from '../assets/logo.png'
 import type { ThemeMode, TopMenu } from '../types/editor'
 
 interface TopBarProps {
+  aiChatOpen: boolean
   isMaximized: boolean
   openMenu: TopMenu
   themeMode: ThemeMode
   onCloseMenu: () => void
   onCreateTerminal: () => void
+  onOpenFile: () => void
+  onOpenFolder: () => void
   onSelectTheme: (theme: ThemeMode) => void
+  onSplitTerminal: () => void
+  onToggleAiChat: () => void
   onToggleMenu: (menu: Exclude<TopMenu, null>) => void
 }
 
-const menu_button_class = 'window-no-drag h-full px-2 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+const menu_button_class = 'window-no-drag h-full px-2 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+const submenu_class = 'invisible absolute left-full top-0 z-[230] min-w-44 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-1 opacity-0 shadow-2xl transition group-hover:visible group-hover:opacity-100'
 
-function TopBar({ isMaximized, openMenu, themeMode, onCloseMenu, onCreateTerminal, onSelectTheme, onToggleMenu }: TopBarProps) {
+function TopBar({ aiChatOpen, isMaximized, openMenu, themeMode, onCloseMenu, onCreateTerminal, onOpenFile, onOpenFolder, onSelectTheme, onSplitTerminal, onToggleAiChat, onToggleMenu }: TopBarProps) {
   return (
-    <header className="window-drag-region relative z-40 flex h-9 shrink-0 items-center border-b border-[var(--border)] bg-[var(--surface-1)] text-xs">
+    <header className="window-drag-region relative z-[200] flex h-9 shrink-0 items-center border-b border-[var(--border)] bg-[var(--surface-1)] text-xs">
       <div className="window-no-drag flex h-full items-center pl-2">
-        <span aria-label="Code editor logo" className="mr-2" role="img">
-          💻
-        </span>
+        <img
+          alt="Code editor logo"
+          className="app-logo mr-2 h-4 w-4 object-contain"
+          draggable={false}
+          src={logo}
+        />
 
         <div className="relative h-full">
           <button className={menu_button_class} onClick={() => onToggleMenu('file')} type="button">
@@ -31,16 +47,16 @@ function TopBar({ isMaximized, openMenu, themeMode, onCloseMenu, onCreateTermina
               <MenuItem onClick={onCloseMenu}>New Text File</MenuItem>
               <MenuItem onClick={onCloseMenu}>New File</MenuItem>
               <MenuSeparator />
-              <MenuItem onClick={onCloseMenu}>Open File</MenuItem>
-              <MenuItem onClick={onCloseMenu}>Open Folder</MenuItem>
+              <MenuItem onClick={onOpenFile}>Open File</MenuItem>
+              <MenuItem onClick={onOpenFolder}>Open Folder</MenuItem>
               <div className="group relative">
                 <button className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)]" type="button">
                   <span>Open Recent</span>
                   <span className="text-[var(--muted)]">›</span>
                 </button>
 
-                <div className="invisible absolute left-full top-0 min-w-44 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-2 opacity-0 shadow-2xl transition group-hover:visible group-hover:opacity-100">
-                  <div className="px-3 text-xs text-[var(--muted)]">No recent items</div>
+                <div className={submenu_class}>
+                  <div className="px-3 py-1 text-xs text-[var(--muted)]">No recent items</div>
                 </div>
               </div>
               <MenuSeparator />
@@ -86,7 +102,7 @@ function TopBar({ isMaximized, openMenu, themeMode, onCloseMenu, onCreateTermina
                   <span className="text-[var(--muted)]">›</span>
                 </button>
 
-                <div className="invisible absolute left-full top-0 min-w-36 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-1 opacity-0 shadow-2xl transition group-hover:visible group-hover:opacity-100">
+                <div className={submenu_class}>
                   <MenuItem onClick={() => onSelectTheme('light')} trailing={themeMode === 'light' ? '✓' : undefined}>Light</MenuItem>
                   <MenuItem onClick={() => onSelectTheme('dark')} trailing={themeMode === 'dark' ? '✓' : undefined}>Dark</MenuItem>
                   <MenuItem onClick={() => onSelectTheme('system')} trailing={themeMode === 'system' ? '✓' : undefined}>System</MenuItem>
@@ -104,45 +120,56 @@ function TopBar({ isMaximized, openMenu, themeMode, onCloseMenu, onCreateTermina
           {openMenu === 'terminal' && (
             <MenuDropdown className="left-0">
               <MenuItem onClick={onCreateTerminal}>New Terminal</MenuItem>
-              <MenuItem onClick={onCloseMenu}>Split Terminal</MenuItem>
+              <MenuItem onClick={onSplitTerminal}>Split Terminal</MenuItem>
             </MenuDropdown>
           )}
         </div>
       </div>
 
-      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[var(--muted)]">
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-xs text-[var(--muted)]">
         code-editor
       </div>
 
       <div className="window-no-drag ml-auto flex h-full items-stretch">
         <button
+          aria-label={aiChatOpen ? 'Hide AI chat' : 'Show AI chat'}
+          aria-pressed={aiChatOpen}
+          className={`flex w-10 items-center justify-center text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] ${aiChatOpen ? 'bg-[var(--selected)] text-[var(--text)]' : ''}`}
+          onClick={onToggleAiChat}
+          title={aiChatOpen ? 'Hide AI chat' : 'Show AI chat'}
+          type="button"
+        >
+          <Icon className="h-4 w-4" src={ai_chat_icon} />
+        </button>
+
+        <button
           aria-label="Minimize window"
-          className="flex w-11 items-center justify-center text-base text-[var(--text)] hover:bg-[var(--hover)]"
+          className="flex w-11 items-center justify-center text-[var(--text)] hover:bg-[var(--hover)]"
           onClick={() => window.editor_api.window.minimize()}
           title="Minimize"
           type="button"
         >
-          −
+          <Icon className="h-3.5 w-3.5" src={minimize_icon} />
         </button>
 
         <button
           aria-label={isMaximized ? 'Restore window' : 'Maximize window'}
-          className="flex w-11 items-center justify-center text-sm text-[var(--text)] hover:bg-[var(--hover)]"
+          className="flex w-11 items-center justify-center text-[var(--text)] hover:bg-[var(--hover)]"
           onClick={() => window.editor_api.window.toggle_maximize()}
           title={isMaximized ? 'Restore' : 'Maximize'}
           type="button"
         >
-          {isMaximized ? '❐' : '□'}
+          <Icon className="h-3.5 w-3.5" src={isMaximized ? restore_icon : maximize_icon} />
         </button>
 
         <button
           aria-label="Close window"
-          className="flex w-11 items-center justify-center text-lg text-[var(--text)] hover:bg-red-600 hover:text-white"
+          className="flex w-11 items-center justify-center text-[var(--text)] hover:bg-red-600 hover:text-white"
           onClick={() => window.editor_api.window.close()}
           title="Close"
           type="button"
         >
-          ×
+          <Icon className="h-3.5 w-3.5" src={close_icon} />
         </button>
       </div>
     </header>

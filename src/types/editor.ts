@@ -8,4 +8,5 @@ export interface TerminalSession {
   name: string
   history: string[]
   input: string
+  parent_id: number | null
 }

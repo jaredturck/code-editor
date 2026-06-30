@@ -13,8 +13,20 @@ const initial_terminals: TerminalSession[] = [
     name: 'Terminal 1',
     history: [],
     input: '',
+    parent_id: null,
   },
 ]
+
+function get_next_terminal_id(terminals: TerminalSession[]) {
+  const terminal_ids = new Set(terminals.map((terminal) => terminal.id))
+  let next_terminal_id = 1
+
+  while (terminal_ids.has(next_terminal_id)) {
+    next_terminal_id += 1
+  }
+
+  return next_terminal_id
+}
 
 function useEditorState() {
   const [active_activity, set_active_activity] = useState<ActivitySection>('explorer')
@@ -22,9 +34,9 @@ function useEditorState() {
   const [bottom_panel_tab, set_bottom_panel_tab] = useState<BottomPanelTab>('terminal')
   const [terminals, set_terminals] = useState<TerminalSession[]>(initial_terminals)
   const [active_terminal_id, set_active_terminal_id] = useState<number | null>(1)
-  const [next_terminal_id, set_next_terminal_id] = useState(2)
   const [open_menu, set_open_menu] = useState<TopMenu>(null)
   const [settings_open, set_settings_open] = useState(false)
+  const [ai_chat_open, set_ai_chat_open] = useState(false)
   const [theme_mode, set_theme_mode] = useState<ThemeMode>('dark')
   const [system_is_dark, set_system_is_dark] = useState(true)
   const [is_maximized, set_is_maximized] = useState(false)
@@ -78,6 +90,21 @@ function useEditorState() {
     return terminals.find((terminal) => terminal.id === active_terminal_id) ?? null
   }, [active_terminal_id, terminals])
 
+  const visible_terminals = useMemo(() => {
+    if (!active_terminal) {
+      return []
+    }
+
+    const root_id = active_terminal.parent_id ?? active_terminal.id
+
+    const root_terminal = terminals.find((terminal) => terminal.id === root_id)
+    const child_terminals = terminals
+      .filter((terminal) => terminal.parent_id === root_id)
+      .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
+
+    return root_terminal ? [root_terminal, ...child_terminals] : child_terminals
+  }, [active_terminal, terminals])
+
   const close_overlays = () => {
     set_open_menu(null)
     set_settings_open(false)
@@ -91,6 +118,11 @@ function useEditorState() {
   const toggle_settings = () => {
     set_settings_open((current_value) => !current_value)
     set_open_menu(null)
+  }
+
+  const toggle_ai_chat = () => {
+    set_ai_chat_open((current_value) => !current_value)
+    close_overlays()
   }
 
   const select_activity = (section: ActivitySection) => {
@@ -112,33 +144,92 @@ function useEditorState() {
   }
 
   const create_terminal = () => {
+    const terminal_id = get_next_terminal_id(terminals)
     const new_terminal: TerminalSession = {
-      id: next_terminal_id,
-      name: `Terminal ${next_terminal_id}`,
+      id: terminal_id,
+      name: `Terminal ${terminal_id}`,
       history: [],
       input: '',
+      parent_id: null,
     }
 
-    set_terminals((current_terminals) => [...current_terminals, new_terminal])
+    set_terminals([...terminals, new_terminal])
     set_active_terminal_id(new_terminal.id)
-    set_next_terminal_id((current_id) => current_id + 1)
+    set_bottom_panel_tab('terminal')
+    set_bottom_panel_open(true)
+    close_overlays()
+  }
+
+  const split_terminal = () => {
+    if (!active_terminal) {
+      create_terminal()
+      return
+    }
+
+    const terminal_id = get_next_terminal_id(terminals)
+    const root_id = active_terminal.parent_id ?? active_terminal.id
+    const new_terminal: TerminalSession = {
+      id: terminal_id,
+      name: `Terminal ${terminal_id}`,
+      history: [],
+      input: '',
+      parent_id: root_id,
+    }
+
+    set_terminals([...terminals, new_terminal])
+    set_active_terminal_id(new_terminal.id)
     set_bottom_panel_tab('terminal')
     set_bottom_panel_open(true)
     close_overlays()
   }
 
   const delete_terminal = (terminal_id: number) => {
-    set_terminals((current_terminals) => {
-      const terminal_index = current_terminals.findIndex((terminal) => terminal.id === terminal_id)
-      const remaining_terminals = current_terminals.filter((terminal) => terminal.id !== terminal_id)
+    const terminal = terminals.find((item) => item.id === terminal_id)
+
+    if (!terminal) {
+      return
+    }
+
+    const terminal_index = terminals.findIndex((item) => item.id === terminal_id)
+    const child_terminals = terminals.filter((item) => item.parent_id === terminal_id)
+    let remaining_terminals = terminals.filter((item) => item.id !== terminal_id)
+    let replacement_id: number | null = active_terminal_id
+
+    if (terminal.parent_id === null && child_terminals.length > 0) {
+      const promoted_terminal = child_terminals[0]
+
+      remaining_terminals = remaining_terminals.map((item) => {
+        if (item.id === promoted_terminal.id) {
+          return {
+            ...item,
+            parent_id: null,
+          }
+        }
+
+        if (item.parent_id === terminal_id) {
+          return {
+            ...item,
+            parent_id: promoted_terminal.id,
+          }
+        }
+
+        return item
+      })
 
       if (active_terminal_id === terminal_id) {
-        const replacement_index = Math.min(terminal_index, remaining_terminals.length - 1)
-        set_active_terminal_id(remaining_terminals[replacement_index]?.id ?? null)
+        replacement_id = promoted_terminal.id
       }
+    } else if (active_terminal_id === terminal_id) {
+      if (terminal.parent_id !== null) {
+        replacement_id = terminal.parent_id
+      } else {
+        const replacement_index = Math.min(terminal_index, remaining_terminals.length - 1)
+        replacement_id = remaining_terminals[replacement_index]?.id ?? null
+      }
+    }
 
-      return remaining_terminals
-    })
+    set_terminals(remaining_terminals)
+    set_active_terminal_id(replacement_id)
   }
 
   const update_terminal_input = (terminal_id: number, input: string) => {
@@ -177,10 +268,20 @@ function useEditorState() {
     set_open_menu(null)
   }
 
+  const open_file_dialog = async () => {
+    set_open_menu(null)
+    await window.editor_api.dialog.open_file()
+  }
+
+  const open_folder_dialog = async () => {
+    set_open_menu(null)
+    await window.editor_api.dialog.open_folder()
+  }
+
   return {
     active_activity,
-    active_terminal,
     active_terminal_id,
+    ai_chat_open,
     bottom_panel_open,
     bottom_panel_tab,
     close_bottom_panel,
@@ -188,6 +289,8 @@ function useEditorState() {
     create_terminal,
     delete_terminal,
     is_maximized,
+    open_file_dialog,
+    open_folder_dialog,
     open_menu,
     resolved_theme,
     select_activity,
@@ -195,12 +298,15 @@ function useEditorState() {
     select_terminal,
     select_theme,
     settings_open,
+    split_terminal,
     submit_terminal_input,
     terminals,
     theme_mode,
+    toggle_ai_chat,
     toggle_menu,
     toggle_settings,
     update_terminal_input,
+    visible_terminals,
   }
 }
 

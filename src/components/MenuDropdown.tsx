@@ -13,7 +13,7 @@ interface MenuItemProps {
 
 function MenuDropdown({ children, className = '' }: MenuDropdownProps) {
   return (
-    <div className={`absolute top-full z-50 min-w-52 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-1 shadow-2xl ${className}`}>
+    <div className={`absolute top-full z-[220] min-w-52 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-1 shadow-2xl ${className}`}>
       {children}
     </div>
   )

@@ -1,6 +1,17 @@
+import logo from '../assets/logo.png'
+
 function EditorPanel() {
   return (
-    <section aria-label="Editor panel" className="min-h-0 bg-[var(--editor-bg)]" />
+    <section aria-label="Editor panel" className="relative min-h-0 overflow-hidden bg-[var(--editor-bg)]">
+      <div className="flex h-full items-center justify-center">
+        <img
+          alt="Code editor"
+          className="app-logo h-52 w-52 select-none object-contain opacity-[0.08]"
+          draggable={false}
+          src={logo}
+        />
+      </div>
+    </section>
   )
 }
 

@@ -1,3 +1,5 @@
+import Icon from './Icon'
+import source_control_icon from './images/source-control.svg'
 import type { ActivitySection } from '../types/editor'
 
 interface ActivityBarProps {
@@ -7,15 +9,15 @@ interface ActivityBarProps {
   onToggleSettings: () => void
 }
 
-const activity_items: Array<{ id: ActivitySection, icon: string, label: string }> = [
+const activity_items: Array<{ id: ActivitySection, icon: string, label: string, svg?: string }> = [
   { id: 'explorer', icon: '📁', label: 'Explorer' },
-  { id: 'search', icon: '🔍', label: 'Search' },
-  { id: 'source-control', icon: '⑂', label: 'Source Control' },
+  { id: 'search', icon: '⌕', label: 'Search' },
+  { id: 'source-control', icon: '', label: 'Source Control', svg: source_control_icon },
 ]
 
 function ActivityBar({ activeSection, settingsOpen, onSelectSection, onToggleSettings }: ActivityBarProps) {
   return (
-    <aside aria-label="Activity bar" className="relative z-40 flex min-h-0 flex-col border-r border-[var(--border)] bg-[var(--surface-1)]">
+    <aside aria-label="Activity bar" className="relative z-20 flex min-h-0 flex-col border-r border-[var(--border)] bg-[var(--surface-1)]">
       <div>
         {activity_items.map((activity_item) => {
           const is_active = activity_item.id === activeSection
@@ -30,31 +32,27 @@ function ActivityBar({ activeSection, settingsOpen, onSelectSection, onToggleSet
               type="button"
             >
               {is_active && <span className="absolute left-0 h-8 w-0.5 bg-sky-500" />}
-              <span aria-hidden="true">{activity_item.icon}</span>
+              {activity_item.svg ? (
+                <Icon className="h-5 w-5" src={activity_item.svg} />
+              ) : (
+                <span aria-hidden="true">{activity_item.icon}</span>
+              )}
             </button>
           )
         })}
       </div>
 
-      <div className="relative mt-auto">
+      <div className="mt-auto">
         <button
           aria-expanded={settingsOpen}
           aria-label="Settings"
-          className="flex h-12 w-full items-center justify-center text-lg text-[var(--muted)] transition hover:bg-[var(--hover)] hover:text-[var(--text)]"
+          className={`flex h-12 w-full items-center justify-center text-lg transition hover:bg-[var(--hover)] hover:text-[var(--text)] ${settingsOpen ? 'bg-[var(--hover)] text-[var(--text)]' : 'text-[var(--muted)]'}`}
           onClick={onToggleSettings}
           title="Settings"
           type="button"
         >
           <span aria-hidden="true">⚙</span>
         </button>
-
-        {settingsOpen && (
-          <div
-            aria-label="Settings menu"
-            className="absolute bottom-2 left-[calc(100%+8px)] h-28 w-48 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] shadow-2xl"
-            role="menu"
-          />
-        )}
       </div>
     </aside>
   )

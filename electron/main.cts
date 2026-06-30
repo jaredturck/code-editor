@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { join } from 'node:path'
 
 function get_event_window(sender: Electron.WebContents) {
@@ -32,7 +32,6 @@ ipcMain.on('window:close', (event) => {
   get_event_window(event.sender)?.close()
 })
 
-
 ipcMain.on('app:exit', () => {
   app.quit()
 })
@@ -43,6 +42,26 @@ ipcMain.handle('window:is-maximized', (event) => {
   return main_window?.isMaximized() || main_window?.isFullScreen() || false
 })
 
+ipcMain.handle('dialog:open-file', async (event) => {
+  const main_window = get_event_window(event.sender)
+  const options: Electron.OpenDialogOptions = { properties: ['openFile'] }
+  const result = main_window
+    ? await dialog.showOpenDialog(main_window, options)
+    : await dialog.showOpenDialog(options)
+
+  return result.canceled ? null : result.filePaths[0] ?? null
+})
+
+ipcMain.handle('dialog:open-folder', async (event) => {
+  const main_window = get_event_window(event.sender)
+  const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] }
+  const result = main_window
+    ? await dialog.showOpenDialog(main_window, options)
+    : await dialog.showOpenDialog(options)
+
+  return result.canceled ? null : result.filePaths[0] ?? null
+})
+
 function create_window() {
   const main_window = new BrowserWindow({
     width: 1400,
@@ -51,6 +70,7 @@ function create_window() {
     minHeight: 600,
     frame: false,
     resizable: true,
+    autoHideMenuBar: true,
     backgroundColor: '#020617',
     webPreferences: {
       preload: join(__dirname, 'preload.cjs'),

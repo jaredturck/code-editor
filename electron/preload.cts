@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld('editor_api', {
   app: {
     exit: () => ipcRenderer.send('app:exit'),
   },
+  dialog: {
+    open_file: () => ipcRenderer.invoke('dialog:open-file'),
+    open_folder: () => ipcRenderer.invoke('dialog:open-folder'),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggle_maximize: () => ipcRenderer.send('window:toggle-maximize'),
