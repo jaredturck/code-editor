@@ -21,6 +21,8 @@ interface SaveTextFileOptions {
   file_path: string | null
   save_as: boolean
   suggested_name: string
+  file_type_name: string
+  file_extensions: string[]
 }
 
 interface SavedTextFile {
@@ -33,11 +35,41 @@ interface MissingTextFile {
   status: 'missing'
 }
 
+interface OpenedTextFile {
+  status: 'opened'
+  file_path: string
+  name: string
+  content: string
+}
+
+interface FailedTextFile {
+  status: 'missing' | 'unsupported' | 'error'
+  message: string
+}
+
 type SaveTextFileResult = SavedTextFile | MissingTextFile | null
+type ReadTextFileResult = OpenedTextFile | FailedTextFile
 
 interface FileApi {
   save_text: (options: SaveTextFileOptions) => Promise<SaveTextFileResult>
+  read_text: (file_path: string) => Promise<ReadTextFileResult>
   check_paths: (file_paths: string[]) => Promise<Record<string, boolean>>
+}
+
+interface EditApi {
+  copy: () => void
+  cut: () => void
+  paste: () => void
+}
+
+interface EditorSettings {
+  theme_mode: 'light' | 'dark' | 'system'
+  recent_files: string[]
+}
+
+interface SettingsApi {
+  get: () => Promise<EditorSettings>
+  update: (settings: Partial<EditorSettings>) => Promise<EditorSettings>
 }
 
 interface BrowserBounds {
@@ -73,7 +105,9 @@ interface EditorApi {
   app: AppControlsApi
   browser: BrowserApi
   dialog: DialogApi
+  edit: EditApi
   file: FileApi
+  settings: SettingsApi
   window: WindowControlsApi
 }
 

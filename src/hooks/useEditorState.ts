@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { get_language_for_file, get_language_option } from '../data/languages'
 import type {
   ActivitySection,
   BottomPanelTab,
@@ -50,7 +51,7 @@ function get_next_untitled_number(documents: EditorDocument[]) {
   const untitled_numbers = new Set(
     documents
       .filter((document): document is TextEditorDocument => document.kind === 'text')
-      .map((document) => /^Untitled-(\d+)$/.exec(document.name))
+      .map((document) => /^Untitled-(\d+)(?:\..+)?$/.exec(document.name))
       .filter((match): match is RegExpExecArray => match !== null)
       .map((match) => Number(match[1])),
   )
@@ -75,17 +76,39 @@ function useEditorState() {
   const [open_menu, set_open_menu] = useState<TopMenu>(null)
   const [menu_pinned, set_menu_pinned] = useState(false)
   const [settings_open, set_settings_open] = useState(false)
+  const [new_file_modal_open, set_new_file_modal_open] = useState(false)
   const [indent_picker_open, set_indent_picker_open] = useState(false)
   const [language_picker_open, set_language_picker_open] = useState(false)
   const [ai_chat_open, set_ai_chat_open] = useState(false)
   const [theme_mode, set_theme_mode] = useState<ThemeMode>('dark')
+  const [recent_files, set_recent_files] = useState<string[]>([])
+  const [notice, set_notice] = useState<string | null>(null)
   const [system_is_dark, set_system_is_dark] = useState(true)
   const [is_maximized, set_is_maximized] = useState(false)
   const documents_ref = useRef(documents)
   const active_document_id_ref = useRef(active_document_id)
+  const recent_files_ref = useRef(recent_files)
 
   documents_ref.current = documents
   active_document_id_ref.current = active_document_id
+  recent_files_ref.current = recent_files
+
+  useEffect(() => {
+    void window.editor_api.settings.get().then((settings) => {
+      set_theme_mode(settings.theme_mode)
+      set_recent_files(settings.recent_files)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!notice) {
+      return
+    }
+
+    const timeout_id = window.setTimeout(() => set_notice(null), 5000)
+
+    return () => window.clearTimeout(timeout_id)
+  }, [notice])
 
   useEffect(() => {
     const media_query = window.matchMedia('(prefers-color-scheme: dark)')
@@ -197,6 +220,7 @@ function useEditorState() {
       set_open_menu(null)
       set_menu_pinned(false)
       set_settings_open(false)
+      set_new_file_modal_open(false)
       set_indent_picker_open(false)
       set_language_picker_open(false)
       set_pending_close_document_id(null)
@@ -244,6 +268,7 @@ function useEditorState() {
     set_open_menu(null)
     set_menu_pinned(false)
     set_settings_open(false)
+    set_new_file_modal_open(false)
     set_indent_picker_open(false)
     set_language_picker_open(false)
   }
@@ -251,6 +276,7 @@ function useEditorState() {
   const hover_menu = (menu: Exclude<TopMenu, null>) => {
     set_open_menu(menu)
     set_settings_open(false)
+    set_new_file_modal_open(false)
     set_indent_picker_open(false)
     set_language_picker_open(false)
   }
@@ -271,12 +297,14 @@ function useEditorState() {
     set_open_menu(menu)
     set_menu_pinned(true)
     set_settings_open(false)
+    set_new_file_modal_open(false)
     set_indent_picker_open(false)
     set_language_picker_open(false)
   }
 
   const toggle_settings = () => {
     set_settings_open((current_value) => !current_value)
+    set_new_file_modal_open(false)
     set_open_menu(null)
     set_menu_pinned(false)
     set_indent_picker_open(false)
@@ -287,6 +315,7 @@ function useEditorState() {
     set_indent_picker_open((current_value) => !current_value)
     set_language_picker_open(false)
     set_settings_open(false)
+    set_new_file_modal_open(false)
     set_open_menu(null)
     set_menu_pinned(false)
   }
@@ -295,6 +324,7 @@ function useEditorState() {
     set_language_picker_open((current_value) => !current_value)
     set_indent_picker_open(false)
     set_settings_open(false)
+    set_new_file_modal_open(false)
     set_open_menu(null)
     set_menu_pinned(false)
   }
@@ -322,18 +352,49 @@ function useEditorState() {
     set_bottom_panel_open(false)
   }
 
-  const create_text_file = () => {
+  const dismiss_notice = () => {
+    set_notice(null)
+  }
+
+  const update_recent_files = (file_paths: string[]) => {
+    const next_recent_files = [...new Set(file_paths)].slice(0, 5)
+
+    recent_files_ref.current = next_recent_files
+    set_recent_files(next_recent_files)
+    void window.editor_api.settings.update({ recent_files: next_recent_files })
+  }
+
+  const add_recent_file = (file_path: string) => {
+    update_recent_files([file_path, ...recent_files_ref.current.filter((recent_file) => recent_file !== file_path)])
+  }
+
+  const remove_recent_file = (file_path: string) => {
+    update_recent_files(recent_files_ref.current.filter((recent_file) => recent_file !== file_path))
+  }
+
+  const open_new_file_modal = () => {
+    set_open_menu(null)
+    set_menu_pinned(false)
+    set_settings_open(false)
+    set_indent_picker_open(false)
+    set_language_picker_open(false)
+    set_new_file_modal_open(true)
+  }
+
+  const create_text_file = (language = 'Plain Text') => {
     const current_documents = documents_ref.current
     const document_id = get_next_document_id(current_documents)
     const untitled_number = get_next_untitled_number(current_documents)
+    const language_option = get_language_option(language)
+    const extension = language === 'Plain Text' ? null : language_option.preferred_extension
     const new_document: TextEditorDocument = {
       kind: 'text',
       id: document_id,
-      name: `Untitled-${untitled_number}`,
+      name: `Untitled-${untitled_number}${extension ? `.${extension}` : ''}`,
       content: '',
       saved_content: '',
       file_path: null,
-      language: 'Plain Text',
+      language,
       indent_style: 'spaces',
       indent_size: 4,
       dirty: false,
@@ -519,21 +580,34 @@ function useEditorState() {
     }
 
     const saved_content = document.content
-    let saved_file = await window.editor_api.file.save_text({
+    const language_option = get_language_option(document.language)
+    const preferred_extension = language_option.preferred_extension ?? 'txt'
+    const suggested_name =
+      document.file_path || document.name.includes('.') ? document.name : `${document.name}.${preferred_extension}`
+    const save_options = {
       content: saved_content,
       file_path: document.file_path,
       save_as: force_save_as,
-      suggested_name: document.file_path ? document.name : `${document.name}.txt`,
-    })
+      suggested_name,
+      file_type_name: `${language_option.name} files`,
+      file_extensions: language_option.extensions,
+    }
+    let saved_file
 
-    if (saved_file?.status === 'missing') {
-      mark_document_deleted(document.id)
-      saved_file = await window.editor_api.file.save_text({
-        content: saved_content,
-        file_path: document.file_path,
-        save_as: true,
-        suggested_name: document.name,
-      })
+    try {
+      saved_file = await window.editor_api.file.save_text(save_options)
+
+      if (saved_file?.status === 'missing') {
+        mark_document_deleted(document.id)
+        saved_file = await window.editor_api.file.save_text({
+          ...save_options,
+          save_as: true,
+          suggested_name: document.name,
+        })
+      }
+    } catch {
+      set_notice(`Unable to save ${document.name}.`)
+      return false
     }
 
     if (!saved_file || saved_file.status !== 'saved') {
@@ -556,6 +630,7 @@ function useEditorState() {
         }
       }),
     )
+    add_recent_file(saved_file.file_path)
 
     return true
   }
@@ -794,12 +869,68 @@ function useEditorState() {
     set_theme_mode(theme)
     set_open_menu(null)
     set_menu_pinned(false)
+    void window.editor_api.settings.update({ theme_mode: theme })
+  }
+
+  const open_file_path = async (file_path: string) => {
+    close_overlays()
+
+    const existing_document = documents_ref.current.find(
+      (document): document is TextEditorDocument => document.kind === 'text' && document.file_path === file_path,
+    )
+
+    if (existing_document) {
+      set_active_document_id(existing_document.id)
+      add_recent_file(file_path)
+      return
+    }
+
+    const opened_file = await window.editor_api.file.read_text(file_path)
+
+    if (opened_file.status !== 'opened') {
+      if (opened_file.status === 'missing') {
+        remove_recent_file(file_path)
+      }
+
+      set_notice(opened_file.message)
+      return
+    }
+
+    const current_documents = documents_ref.current
+    const document_id = get_next_document_id(current_documents)
+    const new_document: TextEditorDocument = {
+      kind: 'text',
+      id: document_id,
+      name: opened_file.name,
+      content: opened_file.content,
+      saved_content: opened_file.content,
+      file_path: opened_file.file_path,
+      language: get_language_for_file(opened_file.file_path),
+      indent_style: 'spaces',
+      indent_size: 4,
+      dirty: false,
+      deleted: false,
+    }
+
+    set_documents([...current_documents, new_document])
+    set_active_document_id(new_document.id)
+    add_recent_file(opened_file.file_path)
   }
 
   const open_file_dialog = async () => {
     set_open_menu(null)
     set_menu_pinned(false)
-    await window.editor_api.dialog.open_file()
+    const file_path = await window.editor_api.dialog.open_file()
+
+    if (file_path) {
+      await open_file_path(file_path)
+    }
+  }
+
+  const open_recent_file = async (file_path: string) => {
+    set_open_menu(null)
+    set_menu_pinned(false)
+    await open_file_path(file_path)
   }
 
   const open_folder_dialog = async () => {
@@ -811,7 +942,12 @@ function useEditorState() {
   const pending_close_document =
     documents.find((document) => document.id === pending_close_document_id && document.kind === 'text') ?? null
   const overlay_open =
-    open_menu !== null || settings_open || indent_picker_open || language_picker_open || pending_close_document !== null
+    open_menu !== null ||
+    settings_open ||
+    new_file_modal_open ||
+    indent_picker_open ||
+    language_picker_open ||
+    pending_close_document !== null
 
   return {
     active_activity,
@@ -832,18 +968,24 @@ function useEditorState() {
     create_terminal,
     create_text_file,
     delete_terminal,
+    dismiss_notice,
     documents,
     hover_menu,
     indent_picker_open,
     is_maximized,
     language_picker_open,
     leave_menus,
+    new_file_modal_open,
+    notice,
     open_browser,
     open_file_dialog,
     open_folder_dialog,
+    open_new_file_modal,
+    open_recent_file,
     open_menu,
     overlay_open,
     pending_close_document,
+    recent_files,
     resize_terminal_panes,
     resolved_theme,
     save_document,

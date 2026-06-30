@@ -48,10 +48,27 @@ contextBridge.exposeInMainWorld('editor_api', {
     open_file: () => ipcRenderer.invoke('dialog:open-file'),
     open_folder: () => ipcRenderer.invoke('dialog:open-folder'),
   },
+  edit: {
+    copy: () => ipcRenderer.send('edit:command', 'copy'),
+    cut: () => ipcRenderer.send('edit:command', 'cut'),
+    paste: () => ipcRenderer.send('edit:command', 'paste'),
+  },
   file: {
-    save_text: (options: { content: string; file_path: string | null; save_as: boolean; suggested_name: string }) =>
-      ipcRenderer.invoke('file:save-text', options),
+    save_text: (options: {
+      content: string
+      file_path: string | null
+      save_as: boolean
+      suggested_name: string
+      file_type_name: string
+      file_extensions: string[]
+    }) => ipcRenderer.invoke('file:save-text', options),
+    read_text: (file_path: string) => ipcRenderer.invoke('file:read-text', file_path),
     check_paths: (file_paths: string[]) => ipcRenderer.invoke('file:check-paths', file_paths),
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    update: (settings: { theme_mode?: 'light' | 'dark' | 'system'; recent_files?: string[] }) =>
+      ipcRenderer.invoke('settings:update', settings),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

@@ -7,6 +7,7 @@ interface MenuDropdownProps {
 
 interface MenuItemProps {
   children: ReactNode
+  disabled?: boolean
   onClick: () => void
   trailing?: ReactNode
 }
@@ -21,10 +22,11 @@ function MenuDropdown({ children, className = '' }: MenuDropdownProps) {
   )
 }
 
-function MenuItem({ children, onClick, trailing }: MenuItemProps) {
+function MenuItem({ children, disabled = false, onClick, trailing }: MenuItemProps) {
   return (
     <button
-      className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)]"
+      className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)] disabled:text-[var(--muted)] disabled:opacity-45 disabled:hover:bg-transparent"
+      disabled={disabled}
       onClick={onClick}
       type="button"
     >

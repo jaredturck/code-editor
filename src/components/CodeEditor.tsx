@@ -1,17 +1,36 @@
-import { indentWithTab } from '@codemirror/commands'
+import { indentWithTab, redo, redoDepth, undo, undoDepth } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { editor_search_extension, open_editor_search } from '../editor/editorSearch'
 import type { TextEditorDocument, ThemeMode } from '../types/editor'
+
+export interface EditorCommandState {
+  can_undo: boolean
+  can_redo: boolean
+  has_selection: boolean
+}
+
+export interface CodeEditorHandle {
+  copy: () => void
+  cut: () => void
+  focus: () => void
+  open_find: () => void
+  open_replace: () => void
+  paste: () => void
+  redo: () => void
+  undo: () => void
+}
 
 interface CodeEditorProps {
   activeDocument: TextEditorDocument
   documents: TextEditorDocument[]
   theme: Exclude<ThemeMode, 'system'>
   onChange: (document_id: number, content: string) => void
+  onCommandStateChange: (state: EditorCommandState) => void
   onFocus: (document_id: number) => void
 }
 
@@ -62,6 +81,14 @@ function create_editor_theme(theme: Exclude<ThemeMode, 'system'>) {
       '.cm-cursor, .cm-dropCursor': {
         borderLeftColor: 'var(--text)',
       },
+      '.cm-searchMatch': {
+        backgroundColor: 'color-mix(in srgb, #d6ad28 34%, transparent)',
+        outline: '1px solid color-mix(in srgb, #d6ad28 65%, transparent)',
+      },
+      '.cm-searchMatch.cm-searchMatch-selected': {
+        backgroundColor: 'color-mix(in srgb, #38bdf8 42%, transparent)',
+        outline: '1px solid #38bdf8',
+      },
     },
     {
       dark: theme === 'dark',
@@ -75,7 +102,10 @@ function create_indentation_extensions(document: TextEditorDocument) {
   return [EditorState.tabSize.of(document.indent_size), indentUnit.of(indentation), keymap.of([indentWithTab])]
 }
 
-function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: CodeEditorProps) {
+const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEditor(
+  { activeDocument, documents, theme, onChange, onCommandStateChange, onFocus },
+  ref,
+) {
   const container_ref = useRef<HTMLDivElement>(null)
   const editor_view_ref = useRef<EditorView | null>(null)
   const active_document_id_ref = useRef<number | null>(null)
@@ -85,28 +115,39 @@ function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: Cod
   const indentation_compartment_ref = useRef(new Compartment())
   const language_request_ref = useRef(0)
   const on_change_ref = useRef(onChange)
+  const on_command_state_change_ref = useRef(onCommandStateChange)
   const on_focus_ref = useRef(onFocus)
   const theme_ref = useRef(theme)
 
   on_change_ref.current = onChange
+  on_command_state_change_ref.current = onCommandStateChange
   on_focus_ref.current = onFocus
   theme_ref.current = theme
+
+  const notify_command_state = (state: EditorState) => {
+    on_command_state_change_ref.current({
+      can_undo: undoDepth(state) > 0,
+      can_redo: redoDepth(state) > 0,
+      has_selection: state.selection.ranges.some((selection) => !selection.empty),
+    })
+  }
 
   const create_editor_state = (document: TextEditorDocument) => {
     return EditorState.create({
       doc: document.content,
       extensions: [
         basicSetup,
+        editor_search_extension,
         theme_compartment_ref.current.of(create_editor_theme(theme_ref.current)),
         language_compartment_ref.current.of([]),
         indentation_compartment_ref.current.of(create_indentation_extensions(document)),
         EditorView.updateListener.of((update) => {
-          if (!update.docChanged) {
-            return
-          }
-
           state_cache_ref.current.set(document.id, update.state)
-          on_change_ref.current(document.id, update.state.doc.toString())
+          notify_command_state(update.state)
+
+          if (update.docChanged) {
+            on_change_ref.current(document.id, update.state.doc.toString())
+          }
         }),
         EditorView.domEventHandlers({
           focus: () => {
@@ -117,6 +158,54 @@ function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: Cod
       ],
     })
   }
+
+  const run_edit_command = (command: 'copy' | 'cut' | 'paste') => {
+    const editor_view = editor_view_ref.current
+
+    if (!editor_view) {
+      return
+    }
+
+    editor_view.focus()
+    requestAnimationFrame(() => window.editor_api.edit[command]())
+  }
+
+  useImperativeHandle(ref, () => ({
+    copy: () => run_edit_command('copy'),
+    cut: () => run_edit_command('cut'),
+    focus: () => editor_view_ref.current?.focus(),
+    open_find: () => {
+      const editor_view = editor_view_ref.current
+
+      if (editor_view) {
+        open_editor_search(editor_view, false)
+      }
+    },
+    open_replace: () => {
+      const editor_view = editor_view_ref.current
+
+      if (editor_view) {
+        open_editor_search(editor_view, true)
+      }
+    },
+    paste: () => run_edit_command('paste'),
+    redo: () => {
+      const editor_view = editor_view_ref.current
+
+      if (editor_view) {
+        editor_view.focus()
+        redo(editor_view)
+      }
+    },
+    undo: () => {
+      const editor_view = editor_view_ref.current
+
+      if (editor_view) {
+        editor_view.focus()
+        undo(editor_view)
+      }
+    },
+  }))
 
   useEffect(() => {
     if (!container_ref.current) {
@@ -132,6 +221,7 @@ function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: Cod
     editor_view_ref.current = editor_view
     active_document_id_ref.current = activeDocument.id
     state_cache_ref.current.set(activeDocument.id, initial_state)
+    notify_command_state(initial_state)
     editor_view.focus()
 
     return () => {
@@ -164,6 +254,7 @@ function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: Cod
       ],
     })
     state_cache_ref.current.set(activeDocument.id, editor_view.state)
+    notify_command_state(editor_view.state)
     editor_view.focus()
   }, [activeDocument.id])
 
@@ -273,10 +364,11 @@ function CodeEditor({ activeDocument, documents, theme, onChange, onFocus }: Cod
         to: editor_view.state.doc.length,
         insert: current_document.content,
       },
+      annotations: Transaction.addToHistory.of(false),
     })
   }, [documents])
 
   return <div className="code-editor-host min-h-0 flex-1" ref={container_ref} />
-}
+})
 
 export default CodeEditor

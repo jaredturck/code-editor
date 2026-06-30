@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell, WebContentsView } from 'electron'
-import { access, open, writeFile } from 'node:fs/promises'
+import { access, open, readFile, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 
 interface BrowserEntry {
@@ -11,6 +11,70 @@ interface BrowserEntry {
 
 const browser_entries = new Map<string, BrowserEntry>()
 let browser_session_ready = false
+
+type ThemeMode = 'light' | 'dark' | 'system'
+
+interface AppSettings {
+  theme_mode: ThemeMode
+  recent_files: string[]
+}
+
+const default_settings: AppSettings = {
+  theme_mode: 'dark',
+  recent_files: [],
+}
+let settings_cache: AppSettings | null = null
+let settings_write_queue = Promise.resolve()
+
+function sanitize_settings(value: unknown): AppSettings {
+  if (typeof value !== 'object' || value === null) {
+    return { ...default_settings }
+  }
+
+  const settings = value as Partial<AppSettings>
+  const theme_mode =
+    settings.theme_mode === 'light' || settings.theme_mode === 'dark' || settings.theme_mode === 'system'
+      ? settings.theme_mode
+      : default_settings.theme_mode
+  const recent_files = Array.isArray(settings.recent_files)
+    ? settings.recent_files.filter((file_path): file_path is string => typeof file_path === 'string').slice(0, 5)
+    : []
+
+  return { theme_mode, recent_files }
+}
+
+async function read_settings() {
+  if (settings_cache) {
+    return settings_cache
+  }
+
+  try {
+    const settings_text = await readFile(join(app.getPath('userData'), 'settings.json'), 'utf8')
+    settings_cache = sanitize_settings(JSON.parse(settings_text))
+  } catch {
+    settings_cache = { ...default_settings }
+  }
+
+  return settings_cache
+}
+
+async function update_settings(next_settings: Partial<AppSettings>) {
+  const current_settings = await read_settings()
+  const settings = sanitize_settings({ ...current_settings, ...next_settings })
+
+  settings_cache = settings
+  settings_write_queue = settings_write_queue
+    .catch(() => undefined)
+    .then(() => writeFile(join(app.getPath('userData'), 'settings.json'), JSON.stringify(settings, null, 2), 'utf8'))
+
+  try {
+    await settings_write_queue
+  } catch {
+    return settings
+  }
+
+  return settings
+}
 
 function get_event_window(sender: Electron.WebContents) {
   return BrowserWindow.fromWebContents(sender)
@@ -249,6 +313,52 @@ ipcMain.handle('dialog:open-folder', async (event) => {
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })
 
+ipcMain.on('edit:command', (event, command: 'copy' | 'cut' | 'paste') => {
+  const web_contents = get_event_window(event.sender)?.webContents
+
+  if (!web_contents) {
+    return
+  }
+
+  web_contents[command]()
+})
+
+ipcMain.handle('settings:get', () => read_settings())
+
+ipcMain.handle('settings:update', (_event, settings: Partial<AppSettings>) => update_settings(settings))
+
+ipcMain.handle('file:read-text', async (_event, file_path: string) => {
+  try {
+    const content = await readFile(file_path, 'utf8')
+
+    if (content.includes('\0')) {
+      return {
+        status: 'unsupported' as const,
+        message: `${basename(file_path)} does not appear to be a text file.`,
+      }
+    }
+
+    return {
+      status: 'opened' as const,
+      file_path,
+      name: basename(file_path),
+      content,
+    }
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      return {
+        status: 'missing' as const,
+        message: `${basename(file_path)} no longer exists.`,
+      }
+    }
+
+    return {
+      status: 'error' as const,
+      message: `Unable to open ${basename(file_path)}.`,
+    }
+  }
+})
+
 ipcMain.handle('file:check-paths', async (_event, file_paths: string[]) => {
   const path_entries = await Promise.all(
     file_paths.map(async (file_path) => {
@@ -268,18 +378,28 @@ ipcMain.handle(
       file_path: string | null
       save_as: boolean
       suggested_name: string
+      file_type_name: string
+      file_extensions: string[]
     },
   ) => {
     const main_window = get_event_window(event.sender)
     let file_path = options.file_path
 
     if (options.save_as || !file_path) {
+      const file_filters: Electron.FileFilter[] = []
+
+      if (options.file_extensions.length > 0) {
+        file_filters.push({
+          name: options.file_type_name,
+          extensions: options.file_extensions,
+        })
+      }
+
+      file_filters.push({ name: 'All files', extensions: ['*'] })
+
       const dialog_options: Electron.SaveDialogOptions = {
         defaultPath: file_path ?? options.suggested_name,
-        filters: [
-          { name: 'Text files', extensions: ['txt'] },
-          { name: 'All files', extensions: ['*'] },
-        ],
+        filters: file_filters,
       }
       const result = main_window
         ? await dialog.showSaveDialog(main_window, dialog_options)

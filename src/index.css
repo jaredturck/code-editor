@@ -118,3 +118,134 @@ button {
 .code-editor-host .cm-scroller {
   height: 100%;
 }
+
+.code-editor-host .cm-editor {
+  position: relative;
+}
+
+.code-editor-host .cm-panels-top {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  left: auto;
+  z-index: 20;
+  border: 0;
+  background: transparent;
+}
+
+.cm-editor-search-panel {
+  display: flex;
+  width: min(620px, calc(100vw - 390px));
+  min-width: 360px;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--menu-bg) 94%, transparent);
+  box-shadow: 0 14px 45px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+.cm-editor-search-fields {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cm-editor-search-field {
+  display: flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  gap: 2px;
+}
+
+.cm-editor-replace-field {
+  display: none;
+}
+
+.cm-search-replace-open .cm-editor-replace-field {
+  display: flex;
+}
+
+.cm-editor-search-input {
+  min-width: 120px;
+  height: 30px;
+  flex: 1;
+  border: 1px solid var(--input-border);
+  border-radius: 5px;
+  background: var(--input-bg);
+  padding: 0 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.cm-editor-search-input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2);
+}
+
+.cm-editor-search-input[aria-invalid='true'] {
+  border-color: #ef4444;
+}
+
+.cm-editor-search-button {
+  display: flex;
+  height: 28px;
+  min-width: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 6px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.cm-editor-search-button:hover:not(:disabled),
+.cm-editor-search-button.is-active {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.cm-editor-search-button.is-active {
+  box-shadow: inset 0 -1px 0 #38bdf8;
+}
+
+.cm-editor-search-button:disabled {
+  opacity: 0.35;
+}
+
+.cm-editor-search-expand {
+  margin-top: 1px;
+  font-size: 16px;
+  transition: transform 120ms ease;
+}
+
+.cm-editor-search-expand.is-open {
+  color: var(--text);
+}
+
+.cm-editor-search-results {
+  min-width: 72px;
+  padding: 0 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .cm-editor-search-panel {
+    width: min(560px, calc(100vw - 130px));
+  }
+}

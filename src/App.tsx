@@ -1,9 +1,13 @@
+import { useRef, useState } from 'react'
 import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
+import type { CodeEditorHandle, EditorCommandState } from './components/CodeEditor'
 import EditorPanel from './components/EditorPanel'
 import ExplorerPanel from './components/ExplorerPanel'
 import IndentationPicker from './components/IndentationPicker'
 import LanguagePicker from './components/LanguagePicker'
+import NewFileModal from './components/NewFileModal'
+import NoticeToast from './components/NoticeToast'
 import SaveChangesModal from './components/SaveChangesModal'
 import SettingsModal from './components/SettingsModal'
 import StatusBar from './components/StatusBar'
@@ -12,15 +16,28 @@ import TopBar from './components/TopBar'
 import useEditorState from './hooks/useEditorState'
 import usePanelSizes from './hooks/usePanelSizes'
 
+const initial_editor_command_state: EditorCommandState = {
+  can_undo: false,
+  can_redo: false,
+  has_selection: false,
+}
+
 function App() {
   const editor = useEditorState()
   const panels = usePanelSizes(editor.ai_chat_open)
+  const editor_ref = useRef<CodeEditorHandle>(null)
+  const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
   const editor_grid_style = editor.bottom_panel_open
     ? { gridTemplateRows: `minmax(0, 1fr) ${panels.bottom_panel_height}px` }
     : { gridTemplateRows: 'minmax(0, 1fr)' }
+
+  const run_editor_command = (command: keyof CodeEditorHandle) => {
+    editor.close_overlays()
+    requestAnimationFrame(() => editor_ref.current?.[command]())
+  }
 
   return (
     <div
@@ -37,21 +54,35 @@ function App() {
 
       <TopBar
         aiChatOpen={editor.ai_chat_open}
+        canCopy={editor_command_state.has_selection}
+        canCut={editor_command_state.has_selection}
+        canRedo={editor_command_state.can_redo}
+        canUndo={editor_command_state.can_undo}
+        hasActiveTextDocument={editor.active_text_document !== null}
         isMaximized={editor.is_maximized}
-        onCloseMenu={editor.close_overlays}
+        onCopy={() => run_editor_command('copy')}
+        onCreateFile={editor.open_new_file_modal}
         onCreateTerminal={editor.create_terminal}
-        onCreateTextFile={editor.create_text_file}
+        onCreateTextFile={() => editor.create_text_file()}
+        onCut={() => run_editor_command('cut')}
+        onFind={() => run_editor_command('open_find')}
         onHoverMenu={editor.hover_menu}
         onLeaveMenus={editor.leave_menus}
-        onOpenFile={editor.open_file_dialog}
-        onOpenFolder={editor.open_folder_dialog}
-        onSave={() => editor.save_document()}
-        onSaveAs={() => editor.save_document(true)}
+        onOpenFile={() => void editor.open_file_dialog()}
+        onOpenFolder={() => void editor.open_folder_dialog()}
+        onOpenRecent={(file_path) => void editor.open_recent_file(file_path)}
+        onPaste={() => run_editor_command('paste')}
+        onRedo={() => run_editor_command('redo')}
+        onReplace={() => run_editor_command('open_replace')}
+        onSave={() => void editor.save_document()}
+        onSaveAs={() => void editor.save_document(true)}
         onSelectTheme={editor.select_theme}
         onSplitTerminal={editor.split_terminal}
         onToggleAiChat={editor.toggle_ai_chat}
         onToggleMenu={editor.toggle_menu}
+        onUndo={() => run_editor_command('undo')}
         openMenu={editor.open_menu}
+        recentFiles={editor.recent_files}
         themeMode={editor.theme_mode}
       />
 
@@ -78,7 +109,9 @@ function App() {
             activeDocumentId={editor.active_document_id}
             browserVisible={!editor.overlay_open}
             documents={editor.documents}
+            editorRef={editor_ref}
             onCloseDocument={editor.close_document}
+            onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
             onSelectDocument={editor.select_document}
             onUpdateDocument={editor.update_document}
@@ -131,10 +164,14 @@ function App() {
 
       {editor.language_picker_open && editor.active_text_document && (
         <LanguagePicker
-          document={editor.active_text_document}
+          activeLanguage={editor.active_text_document.language}
           onClose={editor.close_overlays}
-          onSelect={editor.update_document_language}
+          onSelect={(language) => editor.update_document_language(editor.active_text_document!.id, language)}
         />
+      )}
+
+      {editor.new_file_modal_open && (
+        <NewFileModal onClose={editor.close_overlays} onCreate={editor.create_text_file} />
       )}
 
       {editor.settings_open && <SettingsModal onClose={editor.close_overlays} />}
@@ -147,6 +184,8 @@ function App() {
           onSave={() => void editor.confirm_close_save()}
         />
       )}
+
+      {editor.notice && <NoticeToast message={editor.notice} onClose={editor.dismiss_notice} />}
     </div>
   )
 }

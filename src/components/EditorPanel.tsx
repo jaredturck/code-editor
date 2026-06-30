@@ -1,7 +1,8 @@
+import type { RefObject } from 'react'
 import logo from '../assets/logo.png'
 import type { EditorDocument, TextEditorDocument, ThemeMode } from '../types/editor'
 import BrowserPanel from './BrowserPanel'
-import CodeEditor from './CodeEditor'
+import CodeEditor, { type CodeEditorHandle, type EditorCommandState } from './CodeEditor'
 import Icon from './Icon'
 import close_icon from './images/close.svg'
 
@@ -9,15 +10,17 @@ interface EditorPanelProps {
   activeDocumentId: number | null
   browserVisible: boolean
   documents: EditorDocument[]
+  editorRef: RefObject<CodeEditorHandle | null>
   theme: Exclude<ThemeMode, 'system'>
   onCloseDocument: (document_id: number) => void
+  onEditorCommandStateChange: (state: EditorCommandState) => void
   onFocusDocument: (document_id: number) => void
   onSelectDocument: (document_id: number) => void
   onUpdateDocument: (document_id: number, content: string) => void
 }
 
 function FileBreadcrumbs({ document }: { document: TextEditorDocument }) {
-  const path_segments = document.file_path ? document.file_path.split('/').filter(Boolean) : []
+  const path_segments = document.file_path ? document.file_path.split(/[\\/]/).filter(Boolean) : []
 
   return (
     <div className="flex h-7 shrink-0 items-center gap-1 overflow-hidden border-b border-[var(--border)] bg-[var(--editor-bg)] px-3 text-[11px] text-[var(--muted)]">
@@ -43,14 +46,20 @@ function EditorPanel({
   activeDocumentId,
   browserVisible,
   documents,
+  editorRef,
   theme,
   onCloseDocument,
+  onEditorCommandStateChange,
   onFocusDocument,
   onSelectDocument,
   onUpdateDocument,
 }: EditorPanelProps) {
   const active_document = documents.find((document) => document.id === activeDocumentId) ?? null
   const text_documents = documents.filter((document): document is TextEditorDocument => document.kind === 'text')
+  const editor_document =
+    active_document?.kind === 'text'
+      ? active_document
+      : (text_documents.find((document) => document.id === activeDocumentId) ?? text_documents[0] ?? null)
 
   if (!active_document) {
     return (
@@ -116,20 +125,22 @@ function EditorPanel({
         })}
       </div>
 
-      {active_document.kind === 'text' ? (
-        <>
-          <FileBreadcrumbs document={active_document} />
+      {editor_document && (
+        <div className={`${active_document.kind === 'text' ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col`}>
+          <FileBreadcrumbs document={editor_document} />
           <CodeEditor
-            activeDocument={active_document}
+            activeDocument={editor_document}
             documents={text_documents}
             onChange={onUpdateDocument}
+            onCommandStateChange={onEditorCommandStateChange}
             onFocus={onFocusDocument}
+            ref={editorRef}
             theme={theme}
           />
-        </>
-      ) : (
-        <BrowserPanel document={active_document} visible={browserVisible} />
+        </div>
       )}
+
+      {active_document.kind === 'browser' && <BrowserPanel document={active_document} visible={browserVisible} />}
     </section>
   )
 }

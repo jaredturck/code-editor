@@ -4,6 +4,11 @@ export type ThemeMode = 'light' | 'dark' | 'system'
 export type TopMenu = 'file' | 'edit' | 'view' | 'terminal' | null
 export type IndentStyle = 'spaces' | 'tabs'
 
+export interface EditorSettings {
+  theme_mode: ThemeMode
+  recent_files: string[]
+}
+
 export interface TextEditorDocument {
   kind: 'text'
   id: number
