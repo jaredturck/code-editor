@@ -10,8 +10,8 @@ import {
   search,
   setSearchQuery,
 } from '@codemirror/search'
-import { Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
-import { EditorView, keymap, type Panel, type ViewUpdate } from '@codemirror/view'
+import { StateEffect, StateField, type Extension } from '@codemirror/state'
+import { EditorView, type Panel, type ViewUpdate } from '@codemirror/view'
 
 const set_replace_open = StateEffect.define<boolean>()
 const replace_open_field = StateField.define({
@@ -303,20 +303,6 @@ function create_search_panel(view: EditorView) {
 export const editor_search_extension: Extension = [
   replace_open_field,
   search({ top: true, createPanel: create_search_panel }),
-  Prec.high(
-    keymap.of([
-      {
-        key: 'Mod-f',
-        run: (view) => open_editor_search(view, false),
-        preventDefault: true,
-      },
-      {
-        key: 'Mod-h',
-        run: (view) => open_editor_search(view, true),
-        preventDefault: true,
-      },
-    ]),
-  ),
 ]
 
 export function open_editor_search(view: EditorView, replace_open: boolean) {

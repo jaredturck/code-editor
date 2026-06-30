@@ -65,6 +65,38 @@ interface EditApi {
 interface EditorSettings {
   theme_mode: 'light' | 'dark' | 'system'
   recent_files: string[]
+  restore_recent_files: boolean
+  confirm_unsaved_close: boolean
+  default_language: string
+  editor_preset: 'minimal' | 'balanced' | 'full' | 'custom'
+  editor: {
+    default_indent_style: 'spaces' | 'tabs'
+    default_indent_size: number
+    auto_indent: boolean
+    close_brackets: boolean
+    bracket_matching: boolean
+    multiple_selections: boolean
+    code_folding: boolean
+    fold_gutter: boolean
+    word_wrap: boolean
+  }
+  appearance: {
+    line_numbers: boolean
+    highlight_active_line: boolean
+    highlight_selection_matches: boolean
+    render_whitespace: 'off' | 'all'
+    highlight_trailing_whitespace: boolean
+    show_special_characters: boolean
+    scroll_past_end: boolean
+  }
+  suggestions: {
+    mode: 'off' | 'manual' | 'typing'
+    accept_on_enter: boolean
+    show_details: boolean
+    show_type_icons: boolean
+    delay: number
+  }
+  keybindings: Partial<Record<string, { enabled: boolean; key: string | null }>>
 }
 
 interface SettingsApi {

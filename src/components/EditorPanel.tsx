@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import logo from '../assets/logo.png'
-import type { EditorDocument, TextEditorDocument, ThemeMode } from '../types/editor'
+import type { EditorDocument, EditorSettings, TextEditorDocument, ThemeMode } from '../types/editor'
 import BrowserPanel from './BrowserPanel'
 import CodeEditor, { type CodeEditorHandle, type EditorCommandState } from './CodeEditor'
 import Icon from './Icon'
@@ -11,6 +11,7 @@ interface EditorPanelProps {
   browserVisible: boolean
   documents: EditorDocument[]
   editorRef: RefObject<CodeEditorHandle | null>
+  settings: EditorSettings
   theme: Exclude<ThemeMode, 'system'>
   onCloseDocument: (document_id: number) => void
   onEditorCommandStateChange: (state: EditorCommandState) => void
@@ -47,6 +48,7 @@ function EditorPanel({
   browserVisible,
   documents,
   editorRef,
+  settings,
   theme,
   onCloseDocument,
   onEditorCommandStateChange,
@@ -135,6 +137,7 @@ function EditorPanel({
             onCommandStateChange={onEditorCommandStateChange}
             onFocus={onFocusDocument}
             ref={editorRef}
+            settings={settings}
             theme={theme}
           />
         </div>

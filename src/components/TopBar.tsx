@@ -1,5 +1,7 @@
 import logo from '../assets/logo.png'
-import type { ThemeMode, TopMenu } from '../types/editor'
+import { format_shortcut, get_editor_command, get_effective_keybinding } from '../editor/editorCommands'
+import type { EditorCommandId, EditorSettings, TopMenu } from '../types/editor'
+import type { EditorCommandState } from './CodeEditor'
 import Icon from './Icon'
 import { MenuDropdown, MenuItem, MenuSeparator } from './MenuDropdown'
 import ai_chat_icon from './images/ai-chat.svg'
@@ -10,36 +12,27 @@ import restore_icon from './images/restore.svg'
 
 interface TopBarProps {
   aiChatOpen: boolean
-  canCopy: boolean
-  canCut: boolean
-  canRedo: boolean
-  canUndo: boolean
+  commandState: EditorCommandState
   hasActiveTextDocument: boolean
   isMaximized: boolean
   openMenu: TopMenu
   recentFiles: string[]
-  themeMode: ThemeMode
-  onCopy: () => void
+  settings: EditorSettings
   onCreateFile: () => void
   onCreateTerminal: () => void
   onCreateTextFile: () => void
-  onCut: () => void
-  onFind: () => void
   onHoverMenu: (menu: Exclude<TopMenu, null>) => void
   onLeaveMenus: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
   onOpenRecent: (file_path: string) => void
-  onPaste: () => void
-  onRedo: () => void
-  onReplace: () => void
+  onRunEditorCommand: (command_id: EditorCommandId) => void
   onSave: () => void
   onSaveAs: () => void
-  onSelectTheme: (theme: ThemeMode) => void
   onSplitTerminal: () => void
   onToggleAiChat: () => void
   onToggleMenu: (menu: Exclude<TopMenu, null>) => void
-  onUndo: () => void
+  onUpdateSettings: (settings: EditorSettings) => void
 }
 
 const menu_button_class =
@@ -57,37 +50,101 @@ function get_recent_file_parts(file_path: string) {
 
 function TopBar({
   aiChatOpen,
-  canCopy,
-  canCut,
-  canRedo,
-  canUndo,
+  commandState,
   hasActiveTextDocument,
   isMaximized,
   openMenu,
   recentFiles,
-  themeMode,
-  onCopy,
+  settings,
   onCreateFile,
   onCreateTerminal,
   onCreateTextFile,
-  onCut,
-  onFind,
   onHoverMenu,
   onLeaveMenus,
   onOpenFile,
   onOpenFolder,
   onOpenRecent,
-  onPaste,
-  onRedo,
-  onReplace,
+  onRunEditorCommand,
   onSave,
   onSaveAs,
-  onSelectTheme,
   onSplitTerminal,
   onToggleAiChat,
   onToggleMenu,
-  onUndo,
+  onUpdateSettings,
 }: TopBarProps) {
+  const command_is_disabled = (command_id: EditorCommandId) => {
+    if (!hasActiveTextDocument) {
+      return true
+    }
+
+    const binding = get_effective_keybinding(settings.keybindings, command_id)
+
+    if (!binding.enabled) {
+      return true
+    }
+
+    if (command_id === 'undo') {
+      return !commandState.can_undo
+    }
+
+    if (command_id === 'redo') {
+      return !commandState.can_redo
+    }
+
+    if (command_id === 'cut' || command_id === 'copy') {
+      return !commandState.has_selection
+    }
+
+    if (
+      (command_id === 'select_next_occurrence' ||
+        command_id === 'add_cursor_above' ||
+        command_id === 'add_cursor_below') &&
+      !settings.editor.multiple_selections
+    ) {
+      return true
+    }
+
+    if (
+      (command_id === 'fold' || command_id === 'unfold' || command_id === 'fold_all' || command_id === 'unfold_all') &&
+      !settings.editor.code_folding
+    ) {
+      return true
+    }
+
+    return false
+  }
+
+  const render_command = (command_id: EditorCommandId) => {
+    const command = get_editor_command(command_id)
+    const binding = get_effective_keybinding(settings.keybindings, command_id)
+
+    return (
+      <MenuItem
+        disabled={command_is_disabled(command_id)}
+        onClick={() => onRunEditorCommand(command_id)}
+        trailing={binding.key ? format_shortcut(binding.key) : undefined}
+      >
+        {command.label}
+      </MenuItem>
+    )
+  }
+
+  const update_editor_setting = (key: keyof EditorSettings['editor'], value: boolean) => {
+    onUpdateSettings({
+      ...settings,
+      editor_preset: 'custom',
+      editor: { ...settings.editor, [key]: value },
+    })
+  }
+
+  const update_appearance_setting = (key: keyof EditorSettings['appearance'], value: boolean | string) => {
+    onUpdateSettings({
+      ...settings,
+      editor_preset: 'custom',
+      appearance: { ...settings.appearance, [key]: value },
+    })
+  }
+
   return (
     <header className="window-drag-region relative z-[200] flex h-9 shrink-0 items-center border-b border-[var(--border)] bg-[var(--surface-1)] text-xs">
       <div className="window-no-drag flex h-full items-center pl-2">
@@ -167,30 +224,41 @@ function TopBar({
           </button>
 
           {openMenu === 'edit' && (
-            <MenuDropdown className="left-0">
-              <MenuItem disabled={!hasActiveTextDocument || !canUndo} onClick={onUndo} trailing="Ctrl+Z">
-                Undo
-              </MenuItem>
-              <MenuItem disabled={!hasActiveTextDocument || !canRedo} onClick={onRedo} trailing="Ctrl+Shift+Z">
-                Redo
-              </MenuItem>
+            <MenuDropdown className="left-0 min-w-60">
+              {render_command('undo')}
+              {render_command('redo')}
               <MenuSeparator />
-              <MenuItem disabled={!hasActiveTextDocument || !canCut} onClick={onCut} trailing="Ctrl+X">
-                Cut
-              </MenuItem>
-              <MenuItem disabled={!hasActiveTextDocument || !canCopy} onClick={onCopy} trailing="Ctrl+C">
-                Copy
-              </MenuItem>
-              <MenuItem disabled={!hasActiveTextDocument} onClick={onPaste} trailing="Ctrl+V">
-                Paste
-              </MenuItem>
+              {render_command('cut')}
+              {render_command('copy')}
+              {render_command('paste')}
               <MenuSeparator />
-              <MenuItem disabled={!hasActiveTextDocument} onClick={onFind} trailing="Ctrl+F">
-                Find
-              </MenuItem>
-              <MenuItem disabled={!hasActiveTextDocument} onClick={onReplace} trailing="Ctrl+H">
-                Replace
-              </MenuItem>
+              {render_command('select_all')}
+              {render_command('select_next_occurrence')}
+              <MenuSeparator />
+              {render_command('toggle_line_comment')}
+              <MenuSeparator />
+              {render_command('find')}
+              {render_command('replace')}
+            </MenuDropdown>
+          )}
+        </div>
+
+        <div className="relative h-full" onMouseEnter={() => onHoverMenu('go')} onMouseLeave={onLeaveMenus}>
+          <button
+            className={`${menu_button_class} ${openMenu === 'go' ? 'bg-[var(--hover)] text-[var(--text)]' : ''}`}
+            onClick={() => onToggleMenu('go')}
+            type="button"
+          >
+            Go
+          </button>
+
+          {openMenu === 'go' && (
+            <MenuDropdown className="left-0 min-w-60">
+              {render_command('go_to_line')}
+              {render_command('go_to_matching_bracket')}
+              <MenuSeparator />
+              {render_command('next_match')}
+              {render_command('previous_match')}
             </MenuDropdown>
           )}
         </div>
@@ -205,7 +273,31 @@ function TopBar({
           </button>
 
           {openMenu === 'view' && (
-            <MenuDropdown className="left-0">
+            <MenuDropdown className="left-0 min-w-56">
+              <MenuItem
+                onClick={() => update_editor_setting('word_wrap', !settings.editor.word_wrap)}
+                trailing={settings.editor.word_wrap ? '✓' : undefined}
+              >
+                Word Wrap
+              </MenuItem>
+              <MenuItem
+                onClick={() =>
+                  update_appearance_setting(
+                    'render_whitespace',
+                    settings.appearance.render_whitespace === 'all' ? 'off' : 'all',
+                  )
+                }
+                trailing={settings.appearance.render_whitespace === 'all' ? '✓' : undefined}
+              >
+                Render Whitespace
+              </MenuItem>
+              <MenuItem
+                onClick={() => update_appearance_setting('scroll_past_end', !settings.appearance.scroll_past_end)}
+                trailing={settings.appearance.scroll_past_end ? '✓' : undefined}
+              >
+                Scroll Past End
+              </MenuItem>
+              <MenuSeparator />
               <div className="group relative">
                 <button
                   className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs text-[var(--text)] hover:bg-[var(--hover)]"
@@ -216,13 +308,22 @@ function TopBar({
                 </button>
 
                 <div className={submenu_class}>
-                  <MenuItem onClick={() => onSelectTheme('light')} trailing={themeMode === 'light' ? '✓' : undefined}>
+                  <MenuItem
+                    onClick={() => onUpdateSettings({ ...settings, theme_mode: 'light' })}
+                    trailing={settings.theme_mode === 'light' ? '✓' : undefined}
+                  >
                     Light
                   </MenuItem>
-                  <MenuItem onClick={() => onSelectTheme('dark')} trailing={themeMode === 'dark' ? '✓' : undefined}>
+                  <MenuItem
+                    onClick={() => onUpdateSettings({ ...settings, theme_mode: 'dark' })}
+                    trailing={settings.theme_mode === 'dark' ? '✓' : undefined}
+                  >
                     Dark
                   </MenuItem>
-                  <MenuItem onClick={() => onSelectTheme('system')} trailing={themeMode === 'system' ? '✓' : undefined}>
+                  <MenuItem
+                    onClick={() => onUpdateSettings({ ...settings, theme_mode: 'system' })}
+                    trailing={settings.theme_mode === 'system' ? '✓' : undefined}
+                  >
                     System
                   </MenuItem>
                 </div>

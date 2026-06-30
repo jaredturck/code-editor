@@ -67,8 +67,7 @@ contextBridge.exposeInMainWorld('editor_api', {
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
-    update: (settings: { theme_mode?: 'light' | 'dark' | 'system'; recent_files?: string[] }) =>
-      ipcRenderer.invoke('settings:update', settings),
+    update: (settings: unknown) => ipcRenderer.invoke('settings:update', settings),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

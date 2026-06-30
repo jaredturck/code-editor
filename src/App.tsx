@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
 import type { CodeEditorHandle, EditorCommandState } from './components/CodeEditor'
+import type { EditorCommandId } from './types/editor'
 import EditorPanel from './components/EditorPanel'
 import ExplorerPanel from './components/ExplorerPanel'
 import IndentationPicker from './components/IndentationPicker'
@@ -19,7 +20,12 @@ import usePanelSizes from './hooks/usePanelSizes'
 const initial_editor_command_state: EditorCommandState = {
   can_undo: false,
   can_redo: false,
+  can_fold: false,
+  can_unfold: false,
   has_selection: false,
+  selection_count: 1,
+  line: 1,
+  column: 1,
 }
 
 function App() {
@@ -34,9 +40,9 @@ function App() {
     ? { gridTemplateRows: `minmax(0, 1fr) ${panels.bottom_panel_height}px` }
     : { gridTemplateRows: 'minmax(0, 1fr)' }
 
-  const run_editor_command = (command: keyof CodeEditorHandle) => {
+  const run_editor_command = (command_id: EditorCommandId) => {
     editor.close_overlays()
-    requestAnimationFrame(() => editor_ref.current?.[command]())
+    requestAnimationFrame(() => editor_ref.current?.run_command(command_id))
   }
 
   return (
@@ -54,36 +60,30 @@ function App() {
 
       <TopBar
         aiChatOpen={editor.ai_chat_open}
-        canCopy={editor_command_state.has_selection}
-        canCut={editor_command_state.has_selection}
-        canRedo={editor_command_state.can_redo}
-        canUndo={editor_command_state.can_undo}
+        commandState={editor_command_state}
         hasActiveTextDocument={editor.active_text_document !== null}
         isMaximized={editor.is_maximized}
-        onCopy={() => run_editor_command('copy')}
         onCreateFile={editor.open_new_file_modal}
         onCreateTerminal={editor.create_terminal}
         onCreateTextFile={() => editor.create_text_file()}
-        onCut={() => run_editor_command('cut')}
-        onFind={() => run_editor_command('open_find')}
         onHoverMenu={editor.hover_menu}
         onLeaveMenus={editor.leave_menus}
         onOpenFile={() => void editor.open_file_dialog()}
         onOpenFolder={() => void editor.open_folder_dialog()}
         onOpenRecent={(file_path) => void editor.open_recent_file(file_path)}
-        onPaste={() => run_editor_command('paste')}
-        onRedo={() => run_editor_command('redo')}
-        onReplace={() => run_editor_command('open_replace')}
+        onRunEditorCommand={run_editor_command}
         onSave={() => void editor.save_document()}
         onSaveAs={() => void editor.save_document(true)}
-        onSelectTheme={editor.select_theme}
         onSplitTerminal={editor.split_terminal}
         onToggleAiChat={editor.toggle_ai_chat}
         onToggleMenu={editor.toggle_menu}
-        onUndo={() => run_editor_command('undo')}
+        onUpdateSettings={(settings) => {
+          editor.apply_settings(settings)
+          editor.close_overlays()
+        }}
         openMenu={editor.open_menu}
         recentFiles={editor.recent_files}
-        themeMode={editor.theme_mode}
+        settings={editor.settings}
       />
 
       <div
@@ -110,6 +110,7 @@ function App() {
             browserVisible={!editor.overlay_open}
             documents={editor.documents}
             editorRef={editor_ref}
+            settings={editor.settings}
             onCloseDocument={editor.close_document}
             onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
@@ -150,6 +151,7 @@ function App() {
 
       <StatusBar
         activeDocument={editor.active_text_document}
+        commandState={editor_command_state}
         onToggleIndentation={editor.toggle_indent_picker}
         onToggleLanguage={editor.toggle_language_picker}
       />
@@ -174,7 +176,9 @@ function App() {
         <NewFileModal onClose={editor.close_overlays} onCreate={editor.create_text_file} />
       )}
 
-      {editor.settings_open && <SettingsModal onClose={editor.close_overlays} />}
+      {editor.settings_open && (
+        <SettingsModal onApply={editor.apply_settings} onClose={editor.close_overlays} settings={editor.settings} />
+      )}
 
       {editor.pending_close_document && editor.pending_close_document.kind === 'text' && (
         <SaveChangesModal

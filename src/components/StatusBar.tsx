@@ -1,16 +1,23 @@
 import type { TextEditorDocument } from '../types/editor'
+import type { EditorCommandState } from './CodeEditor'
 
 interface StatusBarProps {
   activeDocument: TextEditorDocument | null
+  commandState: EditorCommandState
   onToggleIndentation: () => void
   onToggleLanguage: () => void
 }
 
-function StatusBar({ activeDocument, onToggleIndentation, onToggleLanguage }: StatusBarProps) {
+function StatusBar({ activeDocument, commandState, onToggleIndentation, onToggleLanguage }: StatusBarProps) {
   return (
     <footer className="flex h-[22px] shrink-0 items-center justify-end gap-1 border-t border-[var(--border)] bg-[var(--surface-1)] px-2 text-[11px] text-[var(--muted)]">
       {activeDocument && (
         <>
+          <span className="px-2">
+            {commandState.selection_count > 1
+              ? `${commandState.selection_count} selections`
+              : `Ln ${commandState.line}, Col ${commandState.column}`}
+          </span>
           <button
             className="h-full px-2 hover:bg-[var(--hover)] hover:text-[var(--text)]"
             onClick={onToggleIndentation}

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { get_language_for_file, get_language_option } from '../data/languages'
+import { clone_editor_settings, default_editor_settings } from '../editor/editorSettings'
 import type {
   ActivitySection,
   BottomPanelTab,
   BrowserEditorDocument,
   EditorDocument,
+  EditorSettings,
   IndentStyle,
   TerminalSession,
   TextEditorDocument,
-  ThemeMode,
   TopMenu,
 } from '../types/editor'
 
@@ -80,23 +81,28 @@ function useEditorState() {
   const [indent_picker_open, set_indent_picker_open] = useState(false)
   const [language_picker_open, set_language_picker_open] = useState(false)
   const [ai_chat_open, set_ai_chat_open] = useState(false)
-  const [theme_mode, set_theme_mode] = useState<ThemeMode>('dark')
-  const [recent_files, set_recent_files] = useState<string[]>([])
+  const [settings, set_settings] = useState<EditorSettings>(() => clone_editor_settings(default_editor_settings))
   const [notice, set_notice] = useState<string | null>(null)
   const [system_is_dark, set_system_is_dark] = useState(true)
   const [is_maximized, set_is_maximized] = useState(false)
   const documents_ref = useRef(documents)
   const active_document_id_ref = useRef(active_document_id)
-  const recent_files_ref = useRef(recent_files)
+  const settings_ref = useRef(settings)
 
   documents_ref.current = documents
   active_document_id_ref.current = active_document_id
-  recent_files_ref.current = recent_files
+  settings_ref.current = settings
 
   useEffect(() => {
-    void window.editor_api.settings.get().then((settings) => {
-      set_theme_mode(settings.theme_mode)
-      set_recent_files(settings.recent_files)
+    void window.editor_api.settings.get().then((loaded_settings) => {
+      const normalized_settings = clone_editor_settings(loaded_settings)
+
+      if (!normalized_settings.restore_recent_files) {
+        normalized_settings.recent_files = []
+      }
+
+      settings_ref.current = normalized_settings
+      set_settings(normalized_settings)
     })
   }, [])
 
@@ -234,12 +240,12 @@ function useEditorState() {
   }, [])
 
   const resolved_theme = useMemo(() => {
-    if (theme_mode === 'system') {
+    if (settings.theme_mode === 'system') {
       return system_is_dark ? 'dark' : 'light'
     }
 
-    return theme_mode
-  }, [system_is_dark, theme_mode])
+    return settings.theme_mode
+  }, [settings.theme_mode, system_is_dark])
 
   const active_document = useMemo(() => {
     return documents.find((document) => document.id === active_document_id) ?? null
@@ -356,20 +362,46 @@ function useEditorState() {
     set_notice(null)
   }
 
-  const update_recent_files = (file_paths: string[]) => {
-    const next_recent_files = [...new Set(file_paths)].slice(0, 5)
+  const apply_settings = (next_settings: EditorSettings) => {
+    const normalized_settings = clone_editor_settings(next_settings)
 
-    recent_files_ref.current = next_recent_files
-    set_recent_files(next_recent_files)
+    if (!normalized_settings.restore_recent_files) {
+      normalized_settings.recent_files = []
+    }
+
+    settings_ref.current = normalized_settings
+    set_settings(normalized_settings)
+    void window.editor_api.settings.update(normalized_settings).then((saved_settings) => {
+      settings_ref.current = saved_settings
+      set_settings(saved_settings)
+    })
+  }
+
+  const update_recent_files = (file_paths: string[]) => {
+    if (!settings_ref.current.restore_recent_files) {
+      return
+    }
+
+    const next_recent_files = [...new Set(file_paths)].slice(0, 5)
+    const next_settings = {
+      ...settings_ref.current,
+      recent_files: next_recent_files,
+    }
+
+    settings_ref.current = next_settings
+    set_settings(next_settings)
     void window.editor_api.settings.update({ recent_files: next_recent_files })
   }
 
   const add_recent_file = (file_path: string) => {
-    update_recent_files([file_path, ...recent_files_ref.current.filter((recent_file) => recent_file !== file_path)])
+    update_recent_files([
+      file_path,
+      ...settings_ref.current.recent_files.filter((recent_file) => recent_file !== file_path),
+    ])
   }
 
   const remove_recent_file = (file_path: string) => {
-    update_recent_files(recent_files_ref.current.filter((recent_file) => recent_file !== file_path))
+    update_recent_files(settings_ref.current.recent_files.filter((recent_file) => recent_file !== file_path))
   }
 
   const open_new_file_modal = () => {
@@ -381,12 +413,13 @@ function useEditorState() {
     set_new_file_modal_open(true)
   }
 
-  const create_text_file = (language = 'Plain Text') => {
+  const create_text_file = (language = settings_ref.current.default_language) => {
     const current_documents = documents_ref.current
     const document_id = get_next_document_id(current_documents)
     const untitled_number = get_next_untitled_number(current_documents)
     const language_option = get_language_option(language)
-    const extension = language === 'Plain Text' ? null : language_option.preferred_extension
+    const selected_language = language_option.name
+    const extension = selected_language === 'Plain Text' ? null : language_option.preferred_extension
     const new_document: TextEditorDocument = {
       kind: 'text',
       id: document_id,
@@ -394,9 +427,9 @@ function useEditorState() {
       content: '',
       saved_content: '',
       file_path: null,
-      language,
-      indent_style: 'spaces',
-      indent_size: 4,
+      language: selected_language,
+      indent_style: settings_ref.current.editor.default_indent_style,
+      indent_size: settings_ref.current.editor.default_indent_size,
       dirty: false,
       deleted: false,
     }
@@ -486,7 +519,7 @@ function useEditorState() {
       return
     }
 
-    if (document.kind === 'text' && document.dirty) {
+    if (document.kind === 'text' && document.dirty && settings_ref.current.confirm_unsaved_close) {
       set_pending_close_document_id(document_id)
       close_overlays()
       return
@@ -865,13 +898,6 @@ function useEditorState() {
     )
   }
 
-  const select_theme = (theme: ThemeMode) => {
-    set_theme_mode(theme)
-    set_open_menu(null)
-    set_menu_pinned(false)
-    void window.editor_api.settings.update({ theme_mode: theme })
-  }
-
   const open_file_path = async (file_path: string) => {
     close_overlays()
 
@@ -906,8 +932,8 @@ function useEditorState() {
       saved_content: opened_file.content,
       file_path: opened_file.file_path,
       language: get_language_for_file(opened_file.file_path),
-      indent_style: 'spaces',
-      indent_size: 4,
+      indent_style: settings_ref.current.editor.default_indent_style,
+      indent_size: settings_ref.current.editor.default_indent_size,
       dirty: false,
       deleted: false,
     }
@@ -951,6 +977,7 @@ function useEditorState() {
 
   return {
     active_activity,
+    apply_settings,
     active_browser_document,
     active_document,
     active_document_id,
@@ -985,7 +1012,7 @@ function useEditorState() {
     open_menu,
     overlay_open,
     pending_close_document,
-    recent_files,
+    recent_files: settings.recent_files,
     resize_terminal_panes,
     resolved_theme,
     save_document,
@@ -993,12 +1020,12 @@ function useEditorState() {
     select_document,
     select_bottom_panel_tab,
     select_terminal,
-    select_theme,
+    settings,
     settings_open,
     split_terminal,
     submit_terminal_input,
     terminals,
-    theme_mode,
+    theme_mode: settings.theme_mode,
     toggle_ai_chat,
     toggle_indent_picker,
     toggle_language_picker,
