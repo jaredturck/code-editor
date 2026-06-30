@@ -29,3 +29,8 @@ if (typeof window !== 'undefined') {
     },
   })
 }
+
+if (typeof Range !== 'undefined') {
+  Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0)
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList
+}

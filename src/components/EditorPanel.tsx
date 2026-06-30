@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useMemo, type RefObject } from 'react'
 import logo from '../assets/logo.png'
 import type {
   EditorDiagnostic,
@@ -84,6 +84,10 @@ function EditorPanel({
       ? active_document
       : (text_documents.find((document) => document.id === activeDocumentId) ?? text_documents[0] ?? null)
   const active_markdown = active_document?.kind === 'text' && is_markdown(active_document)
+  const editor_diagnostics = useMemo(
+    () => diagnostics.filter((diagnostic) => diagnostic.document_id === editor_document?.id),
+    [diagnostics, editor_document?.id],
+  )
 
   if (!active_document) {
     return (
@@ -171,7 +175,7 @@ function EditorPanel({
           </div>
           <CodeEditor
             activeDocument={editor_document}
-            diagnostics={diagnostics.filter((diagnostic) => diagnostic.document_id === editor_document.id)}
+            diagnostics={editor_diagnostics}
             documents={text_documents}
             onChange={onUpdateDocument}
             onCommandStateChange={onEditorCommandStateChange}

@@ -99,7 +99,7 @@ function TerminalPane({
       lineHeight: 1.25,
       scrollback: 5000,
       theme: {
-        background: styles.getPropertyValue('--terminal-active').trim() || '#111113',
+        background: styles.getPropertyValue('--terminal-bg').trim() || '#18181b',
         foreground: styles.getPropertyValue('--terminal-text').trim() || '#d4d4d4',
         cursor: '#38bdf8',
         selectionBackground: '#2563eb66',
@@ -178,7 +178,7 @@ function TerminalPane({
 
   return (
     <div
-      className={`min-w-0 overflow-hidden ${active ? 'bg-[var(--terminal-active)]' : ''}`}
+      className={`min-w-0 overflow-hidden bg-[var(--terminal-bg)] ${active ? 'ring-1 ring-inset ring-[var(--border)]' : ''}`}
       onMouseDown={() => {
         onSelectTerminal(terminal.id)
         terminal_ref.current?.focus()

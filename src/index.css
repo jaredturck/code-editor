@@ -55,6 +55,7 @@ button {
   --hover: #2d2d33;
   --selected: #34343a;
   --terminal-active: rgba(255, 255, 255, 0.015);
+  --terminal-bg: #18181b;
   --terminal-text: #d4d4d8;
   --terminal-prompt: #a1a1aa;
   --logo-filter: invert(1);
@@ -80,6 +81,7 @@ button {
   --hover: #d8d8dc;
   --selected: #ceced3;
   --terminal-active: rgba(0, 0, 0, 0.025);
+  --terminal-bg: #f7f7f8;
   --terminal-text: #27272a;
   --terminal-prompt: #52525b;
   --logo-filter: invert(0);

@@ -83,19 +83,15 @@ import {
   get_managed_shortcut_keys,
 } from '../editor/editorCommands'
 import { editor_search_extension, open_editor_search } from '../editor/editorSearch'
+import {
+  editor_command_states_equal,
+  get_diagnostics_signature,
+  type EditorCommandSnapshot,
+} from '../editor/editorPerformance'
 import type { EditorCommandId, EditorDiagnostic, EditorSettings, TextEditorDocument, ThemeMode } from '../types/editor'
 import EditorContextMenu from './EditorContextMenu'
 
-export interface EditorCommandState {
-  can_undo: boolean
-  can_redo: boolean
-  can_fold: boolean
-  can_unfold: boolean
-  has_selection: boolean
-  selection_count: number
-  line: number
-  column: number
-}
+export type EditorCommandState = EditorCommandSnapshot
 
 export interface CodeEditorHandle {
   focus: () => void
@@ -288,6 +284,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const indentation_compartment_ref = useRef(new Compartment())
   const settings_compartment_ref = useRef(new Compartment())
   const parser_timer_ref = useRef<number | null>(null)
+  const last_command_state_ref = useRef<EditorCommandState | null>(null)
+  const last_diagnostics_signature_ref = useRef<string | null>(null)
+  const synchronized_content_ref = useRef(new Map<number, string>())
   const on_parser_diagnostics_ref = useRef(onParserDiagnostics)
   const language_request_ref = useRef(0)
   const on_change_ref = useRef(onChange)
@@ -317,7 +316,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const notify_command_state = (state: EditorState) => {
     const command_state = get_command_state(state)
 
-    set_context_command_state(command_state)
+    if (editor_command_states_equal(last_command_state_ref.current, command_state)) {
+      return
+    }
+
+    last_command_state_ref.current = command_state
     on_command_state_change_ref.current(command_state)
   }
 
@@ -627,7 +630,10 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
           notify_command_state(update.state)
 
           if (update.docChanged) {
-            on_change_ref.current(document.id, update.state.doc.toString())
+            const content = update.state.doc.toString()
+
+            synchronized_content_ref.current.set(document.id, content)
+            on_change_ref.current(document.id, content)
             schedule_parser_diagnostics(update.view, document)
           }
         }),
@@ -681,6 +687,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   }
 
   const apply_diagnostics = (view: EditorView, editor_diagnostics: EditorDiagnostic[]) => {
+    const signature = get_diagnostics_signature(activeDocument.id, editor_diagnostics)
+
+    if (last_diagnostics_signature_ref.current === signature) {
+      return
+    }
+
     const code_mirror_diagnostics: Diagnostic[] = editor_diagnostics.map((diagnostic) => {
       const start_line = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, diagnostic.line)))
       const end_line = view.state.doc.line(Math.max(1, Math.min(view.state.doc.lines, diagnostic.end_line)))
@@ -699,6 +711,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     })
 
     view.dispatch(setDiagnostics(view.state, code_mirror_diagnostics))
+    last_diagnostics_signature_ref.current = signature
     state_cache_ref.current.set(activeDocument.id, view.state)
   }
 
@@ -736,6 +749,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     editor_view_ref.current = editor_view
     active_document_id_ref.current = activeDocument.id
     state_cache_ref.current.set(activeDocument.id, initial_state)
+    synchronized_content_ref.current.set(activeDocument.id, activeDocument.content)
     notify_command_state(initial_state)
     editor_view.focus()
 
@@ -781,6 +795,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     const next_state = state_cache_ref.current.get(activeDocument.id) ?? create_editor_state(activeDocument)
 
     state_cache_ref.current.set(activeDocument.id, next_state)
+    synchronized_content_ref.current.set(activeDocument.id, next_state.doc.toString())
     active_document_id_ref.current = activeDocument.id
     editor_view.setState(next_state)
     editor_view.dispatch({
@@ -839,13 +854,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     }
 
     apply_diagnostics(editor_view, diagnostics)
-  }, [
-    activeDocument.id,
-    diagnostics,
-    settings.diagnostics.show_gutter,
-    settings.diagnostics.show_hover,
-    settings.diagnostics.show_squiggles,
-  ])
+  }, [activeDocument.id, diagnostics])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
@@ -911,6 +920,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     for (const document_id of state_cache_ref.current.keys()) {
       if (!active_ids.has(document_id)) {
         state_cache_ref.current.delete(document_id)
+        synchronized_content_ref.current.delete(document_id)
       }
     }
   }, [documents])
@@ -918,19 +928,18 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   useEffect(() => {
     const editor_view = editor_view_ref.current
 
-    if (!editor_view) {
+    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
       return
     }
 
-    const current_document = documents.find((document) => document.id === active_document_id_ref.current)
-
-    if (!current_document) {
+    if (synchronized_content_ref.current.get(activeDocument.id) === activeDocument.content) {
       return
     }
 
     const current_content = editor_view.state.doc.toString()
 
-    if (current_content === current_document.content) {
+    if (current_content === activeDocument.content) {
+      synchronized_content_ref.current.set(activeDocument.id, activeDocument.content)
       return
     }
 
@@ -938,11 +947,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       changes: {
         from: 0,
         to: editor_view.state.doc.length,
-        insert: current_document.content,
+        insert: activeDocument.content,
       },
       annotations: Transaction.addToHistory.of(false),
     })
-  }, [documents])
+    synchronized_content_ref.current.set(activeDocument.id, activeDocument.content)
+  }, [activeDocument.content, activeDocument.id])
 
   return (
     <div className="code-editor-host relative min-h-0 flex-1" ref={host_ref}>
