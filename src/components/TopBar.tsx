@@ -15,6 +15,7 @@ interface TopBarProps {
   themeMode: ThemeMode
   onCloseMenu: () => void
   onCreateTerminal: () => void
+  onCreateTextFile: () => void
   onHoverMenu: (menu: Exclude<TopMenu, null>) => void
   onLeaveMenus: () => void
   onOpenFile: () => void
@@ -37,6 +38,7 @@ function TopBar({
   themeMode,
   onCloseMenu,
   onCreateTerminal,
+  onCreateTextFile,
   onHoverMenu,
   onLeaveMenus,
   onOpenFile,
@@ -62,7 +64,7 @@ function TopBar({
 
           {openMenu === 'file' && (
             <MenuDropdown className="left-0">
-              <MenuItem onClick={onCloseMenu}>New Text File</MenuItem>
+              <MenuItem onClick={onCreateTextFile}>New Text File</MenuItem>
               <MenuItem onClick={onCloseMenu}>New File</MenuItem>
               <MenuSeparator />
               <MenuItem onClick={onOpenFile}>Open File</MenuItem>

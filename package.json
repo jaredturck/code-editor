@@ -17,7 +17,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/state": "^6.7.0",
+    "@codemirror/view": "^6.43.4",
     "@tailwindcss/vite": "^4.3.2",
+    "codemirror": "^6.0.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.2"
@@ -30,10 +33,10 @@
     "concurrently": "^10.0.3",
     "electron": "^42.5.1",
     "oxlint": "^1.69.0",
+    "prettier": "3.9.4",
     "typescript": "~6.0.2",
     "vite": "^8.1.0",
-    "wait-on": "^9.0.10",
-    "prettier": "3.9.4"
+    "wait-on": "^9.0.10"
   },
   "main": "dist-electron/main.cjs"
 }

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ActivitySection, BottomPanelTab, TerminalSession, ThemeMode, TopMenu } from '../types/editor'
+import type {
+  ActivitySection,
+  BottomPanelTab,
+  EditorDocument,
+  TerminalSession,
+  ThemeMode,
+  TopMenu,
+} from '../types/editor'
 
 const initial_terminals: TerminalSession[] = [
   {
@@ -22,8 +29,37 @@ function get_next_terminal_id(terminals: TerminalSession[]) {
   return next_terminal_id
 }
 
+function get_next_document_id(documents: EditorDocument[]) {
+  const document_ids = new Set(documents.map((document) => document.id))
+  let next_document_id = 1
+
+  while (document_ids.has(next_document_id)) {
+    next_document_id += 1
+  }
+
+  return next_document_id
+}
+
+function get_next_untitled_number(documents: EditorDocument[]) {
+  const untitled_numbers = new Set(
+    documents
+      .map((document) => /^Untitled-(\d+)$/.exec(document.name))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => Number(match[1])),
+  )
+  let next_untitled_number = 1
+
+  while (untitled_numbers.has(next_untitled_number)) {
+    next_untitled_number += 1
+  }
+
+  return next_untitled_number
+}
+
 function useEditorState() {
   const [active_activity, set_active_activity] = useState<ActivitySection>('explorer')
+  const [documents, set_documents] = useState<EditorDocument[]>([])
+  const [active_document_id, set_active_document_id] = useState<number | null>(null)
   const [bottom_panel_open, set_bottom_panel_open] = useState(true)
   const [bottom_panel_tab, set_bottom_panel_tab] = useState<BottomPanelTab>('terminal')
   const [terminals, set_terminals] = useState<TerminalSession[]>(initial_terminals)
@@ -157,6 +193,56 @@ function useEditorState() {
 
   const close_bottom_panel = () => {
     set_bottom_panel_open(false)
+  }
+
+  const create_text_file = () => {
+    const document_id = get_next_document_id(documents)
+    const untitled_number = get_next_untitled_number(documents)
+    const new_document: EditorDocument = {
+      id: document_id,
+      name: `Untitled-${untitled_number}`,
+      content: '',
+      saved_content: '',
+      file_path: null,
+      language: 'text',
+      dirty: false,
+    }
+
+    set_documents([...documents, new_document])
+    set_active_document_id(new_document.id)
+    close_overlays()
+  }
+
+  const select_document = (document_id: number) => {
+    set_active_document_id(document_id)
+  }
+
+  const close_document = (document_id: number) => {
+    const document_index = documents.findIndex((document) => document.id === document_id)
+    const remaining_documents = documents.filter((document) => document.id !== document_id)
+
+    if (active_document_id === document_id) {
+      const replacement_index = Math.min(document_index, remaining_documents.length - 1)
+      set_active_document_id(remaining_documents[replacement_index]?.id ?? null)
+    }
+
+    set_documents(remaining_documents)
+  }
+
+  const update_document = (document_id: number, content: string) => {
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.id !== document_id) {
+          return document
+        }
+
+        return {
+          ...document,
+          content,
+          dirty: content !== document.saved_content,
+        }
+      }),
+    )
   }
 
   const create_terminal = () => {
@@ -301,14 +387,18 @@ function useEditorState() {
 
   return {
     active_activity,
+    active_document_id,
     active_terminal_id,
     ai_chat_open,
     bottom_panel_open,
     bottom_panel_tab,
     close_bottom_panel,
+    close_document,
     close_overlays,
     create_terminal,
+    create_text_file,
     delete_terminal,
+    documents,
     hover_menu,
     is_maximized,
     leave_menus,
@@ -317,6 +407,7 @@ function useEditorState() {
     open_menu,
     resolved_theme,
     select_activity,
+    select_document,
     select_bottom_panel_tab,
     select_terminal,
     select_theme,
@@ -328,6 +419,7 @@ function useEditorState() {
     toggle_ai_chat,
     toggle_menu,
     toggle_settings,
+    update_document,
     update_terminal_input,
     visible_terminals,
   }

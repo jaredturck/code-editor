@@ -54,16 +54,12 @@ function TerminalPane({
       ))}
 
       <div className="flex min-w-0 items-center">
-        <span className="shrink-0 text-[var(--terminal-prompt)]">
-          {prompt}&nbsp;
-        </span>
+        <span className="shrink-0 text-[var(--terminal-prompt)]">{prompt}&nbsp;</span>
         <input
           aria-label={`${terminal.name} command input`}
           autoFocus={active}
           className="min-w-0 flex-1 border-0 bg-transparent p-0 font-mono text-[13px] text-[var(--terminal-text)] caret-sky-400 outline-none"
-          onChange={(event) =>
-            onUpdateTerminalInput(terminal.id, event.target.value)
-          }
+          onChange={(event) => onUpdateTerminalInput(terminal.id, event.target.value)}
           onFocus={() => onSelectTerminal(terminal.id)}
           onKeyDown={handle_terminal_key_down}
           spellCheck={false}
@@ -91,9 +87,7 @@ function TerminalSessionRow({
     <div
       className={`group relative flex h-7 items-center ${isActive ? 'bg-[var(--selected)]' : 'hover:bg-[var(--hover)]'}`}
     >
-      {child && (
-        <span className="absolute -left-3 top-1/2 h-px w-3 bg-[var(--muted)]/50" />
-      )}
+      {child && <span className="absolute -left-3 top-1/2 h-px w-3 bg-[var(--muted)]/50" />}
 
       <button
         className="min-w-0 flex-1 truncate px-3 text-left text-xs text-[var(--text)]"
@@ -136,10 +130,7 @@ function TerminalPanel({
 }: TerminalPanelProps) {
   const root_terminals = terminals
     .filter((terminal) => terminal.parent_id === null)
-    .sort(
-      (first_terminal, second_terminal) =>
-        first_terminal.id - second_terminal.id,
-    )
+    .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
 
   return (
     <section
@@ -161,9 +152,7 @@ function TerminalPanel({
             type="button"
           >
             PROBLEMS
-            {activeTab === 'problems' && (
-              <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />
-            )}
+            {activeTab === 'problems' && <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />}
           </button>
 
           <button
@@ -172,9 +161,7 @@ function TerminalPanel({
             type="button"
           >
             TERMINAL
-            {activeTab === 'terminal' && (
-              <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />
-            )}
+            {activeTab === 'terminal' && <span className="absolute inset-x-0 bottom-0 h-px bg-sky-500" />}
           </button>
         </div>
 
@@ -248,10 +235,7 @@ function TerminalPanel({
             {root_terminals.map((terminal) => {
               const child_terminals = terminals
                 .filter((item) => item.parent_id === terminal.id)
-                .sort(
-                  (first_terminal, second_terminal) =>
-                    first_terminal.id - second_terminal.id,
-                )
+                .sort((first_terminal, second_terminal) => first_terminal.id - second_terminal.id)
 
               return (
                 <div key={terminal.id}>

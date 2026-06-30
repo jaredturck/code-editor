@@ -36,6 +36,7 @@ function App() {
         isMaximized={editor.is_maximized}
         onCloseMenu={editor.close_overlays}
         onCreateTerminal={editor.create_terminal}
+        onCreateTextFile={editor.create_text_file}
         onHoverMenu={editor.hover_menu}
         onLeaveMenus={editor.leave_menus}
         onOpenFile={editor.open_file_dialog}
@@ -63,13 +64,17 @@ function App() {
           settingsOpen={editor.settings_open}
         />
 
-        <ExplorerPanel
-          activeSection={editor.active_activity}
-          onResize={panels.start_sidebar_resize}
-        />
+        <ExplorerPanel activeSection={editor.active_activity} onResize={panels.start_sidebar_resize} />
 
         <main className="grid min-h-0" style={editor_grid_style}>
-          <EditorPanel />
+          <EditorPanel
+            activeDocumentId={editor.active_document_id}
+            documents={editor.documents}
+            onCloseDocument={editor.close_document}
+            onSelectDocument={editor.select_document}
+            onUpdateDocument={editor.update_document}
+            theme={editor.resolved_theme}
+          />
 
           {editor.bottom_panel_open && (
             <TerminalPanel
@@ -100,9 +105,7 @@ function App() {
         )}
       </div>
 
-      {editor.settings_open && (
-        <SettingsModal onClose={editor.close_overlays} />
-      )}
+      {editor.settings_open && <SettingsModal onClose={editor.close_overlays} />}
     </div>
   )
 }

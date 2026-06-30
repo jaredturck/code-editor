@@ -39,8 +39,7 @@ function start_resize(
   document.body.style.userSelect = 'none'
 
   const resize_panel = (move_event: PointerEvent) => {
-    const current_coordinate =
-      axis === 'x' ? move_event.clientX : move_event.clientY
+    const current_coordinate = axis === 'x' ? move_event.clientX : move_event.clientY
     const distance = (current_coordinate - start_coordinate) * direction
     const next_value = clamp(current_value + distance, minimum, get_maximum())
 
@@ -70,70 +69,37 @@ function usePanelSizes(ai_chat_open: boolean) {
 
   const get_sidebar_maximum = () => {
     const reserved_ai_width = ai_chat_open ? ai_chat_width : 0
-    const available_width =
-      window.innerWidth -
-      activity_bar_width -
-      reserved_ai_width -
-      minimum_editor_width
+    const available_width = window.innerWidth - activity_bar_width - reserved_ai_width - minimum_editor_width
 
-    return Math.max(
-      sidebar_min_width,
-      Math.min(sidebar_max_width, available_width),
-    )
+    return Math.max(sidebar_min_width, Math.min(sidebar_max_width, available_width))
   }
 
   const get_bottom_panel_maximum = () => {
-    const available_height =
-      window.innerHeight - top_bar_height - minimum_editor_height
+    const available_height = window.innerHeight - top_bar_height - minimum_editor_height
 
-    return Math.max(
-      bottom_panel_min_height,
-      Math.min(bottom_panel_max_height, available_height),
-    )
+    return Math.max(bottom_panel_min_height, Math.min(bottom_panel_max_height, available_height))
   }
 
   const get_terminal_list_maximum = () => {
-    return Math.max(
-      terminal_list_min_width,
-      Math.min(terminal_list_max_width, Math.floor(window.innerWidth * 0.4)),
-    )
+    return Math.max(terminal_list_min_width, Math.min(terminal_list_max_width, Math.floor(window.innerWidth * 0.4)))
   }
 
   const get_ai_chat_maximum = () => {
-    const available_width =
-      window.innerWidth -
-      activity_bar_width -
-      sidebar_width -
-      minimum_editor_width
+    const available_width = window.innerWidth - activity_bar_width - sidebar_width - minimum_editor_width
 
-    return Math.max(
-      ai_chat_min_width,
-      Math.min(ai_chat_max_width, available_width),
-    )
+    return Math.max(ai_chat_min_width, Math.min(ai_chat_max_width, available_width))
   }
 
   useEffect(() => {
     const clamp_panel_sizes = () => {
-      set_sidebar_width((current_width) =>
-        clamp(current_width, sidebar_min_width, get_sidebar_maximum()),
-      )
+      set_sidebar_width((current_width) => clamp(current_width, sidebar_min_width, get_sidebar_maximum()))
       set_bottom_panel_height((current_height) =>
-        clamp(
-          current_height,
-          bottom_panel_min_height,
-          get_bottom_panel_maximum(),
-        ),
+        clamp(current_height, bottom_panel_min_height, get_bottom_panel_maximum()),
       )
       set_terminal_list_width((current_width) =>
-        clamp(
-          current_width,
-          terminal_list_min_width,
-          get_terminal_list_maximum(),
-        ),
+        clamp(current_width, terminal_list_min_width, get_terminal_list_maximum()),
       )
-      set_ai_chat_width((current_width) =>
-        clamp(current_width, ai_chat_min_width, get_ai_chat_maximum()),
-      )
+      set_ai_chat_width((current_width) => clamp(current_width, ai_chat_min_width, get_ai_chat_maximum()))
     }
 
     clamp_panel_sizes()
@@ -145,15 +111,7 @@ function usePanelSizes(ai_chat_open: boolean) {
   }, [ai_chat_open, ai_chat_width, sidebar_width])
 
   const start_sidebar_resize = (event: ReactPointerEvent<HTMLElement>) => {
-    start_resize(
-      event,
-      sidebar_width,
-      'x',
-      1,
-      sidebar_min_width,
-      get_sidebar_maximum,
-      set_sidebar_width,
-    )
+    start_resize(event, sidebar_width, 'x', 1, sidebar_min_width, get_sidebar_maximum, set_sidebar_width)
   }
 
   const start_bottom_panel_resize = (event: ReactPointerEvent<HTMLElement>) => {
@@ -168,9 +126,7 @@ function usePanelSizes(ai_chat_open: boolean) {
     )
   }
 
-  const start_terminal_list_resize = (
-    event: ReactPointerEvent<HTMLElement>,
-  ) => {
+  const start_terminal_list_resize = (event: ReactPointerEvent<HTMLElement>) => {
     start_resize(
       event,
       terminal_list_width,
@@ -183,15 +139,7 @@ function usePanelSizes(ai_chat_open: boolean) {
   }
 
   const start_ai_chat_resize = (event: ReactPointerEvent<HTMLElement>) => {
-    start_resize(
-      event,
-      ai_chat_width,
-      'x',
-      -1,
-      ai_chat_min_width,
-      get_ai_chat_maximum,
-      set_ai_chat_width,
-    )
+    start_resize(event, ai_chat_width, 'x', -1, ai_chat_min_width, get_ai_chat_maximum, set_ai_chat_width)
   }
 
   return {
