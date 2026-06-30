@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
-import { join } from 'node:path'
+import { writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 
 function get_event_window(sender: Electron.WebContents) {
   return BrowserWindow.fromWebContents(sender)
@@ -57,6 +58,48 @@ ipcMain.handle('dialog:open-folder', async (event) => {
 
   return result.canceled ? null : (result.filePaths[0] ?? null)
 })
+
+ipcMain.handle(
+  'file:save-text',
+  async (
+    event,
+    options: {
+      content: string
+      file_path: string | null
+      save_as: boolean
+      suggested_name: string
+    },
+  ) => {
+    const main_window = get_event_window(event.sender)
+    let file_path = options.file_path
+
+    if (options.save_as || !file_path) {
+      const dialog_options: Electron.SaveDialogOptions = {
+        defaultPath: file_path ?? options.suggested_name,
+        filters: [
+          { name: 'Text files', extensions: ['txt'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      }
+      const result = main_window
+        ? await dialog.showSaveDialog(main_window, dialog_options)
+        : await dialog.showSaveDialog(dialog_options)
+
+      if (result.canceled || !result.filePath) {
+        return null
+      }
+
+      file_path = result.filePath
+    }
+
+    await writeFile(file_path, options.content, 'utf8')
+
+    return {
+      file_path,
+      name: basename(file_path),
+    }
+  },
+)
 
 function create_window() {
   const main_window = new BrowserWindow({

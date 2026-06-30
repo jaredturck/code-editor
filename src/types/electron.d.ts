@@ -15,10 +15,27 @@ interface DialogApi {
   open_folder: () => Promise<string | null>
 }
 
+interface SaveTextFileOptions {
+  content: string
+  file_path: string | null
+  save_as: boolean
+  suggested_name: string
+}
+
+interface SavedTextFile {
+  file_path: string
+  name: string
+}
+
+interface FileApi {
+  save_text: (options: SaveTextFileOptions) => Promise<SavedTextFile | null>
+}
+
 interface EditorApi {
   platform: string
   app: AppControlsApi
   dialog: DialogApi
+  file: FileApi
   window: WindowControlsApi
 }
 

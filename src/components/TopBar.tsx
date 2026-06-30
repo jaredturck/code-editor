@@ -20,6 +20,8 @@ interface TopBarProps {
   onLeaveMenus: () => void
   onOpenFile: () => void
   onOpenFolder: () => void
+  onSave: () => void
+  onSaveAs: () => void
   onSelectTheme: (theme: ThemeMode) => void
   onSplitTerminal: () => void
   onToggleAiChat: () => void
@@ -43,6 +45,8 @@ function TopBar({
   onLeaveMenus,
   onOpenFile,
   onOpenFolder,
+  onSave,
+  onSaveAs,
   onSelectTheme,
   onSplitTerminal,
   onToggleAiChat,
@@ -83,8 +87,8 @@ function TopBar({
                 </div>
               </div>
               <MenuSeparator />
-              <MenuItem onClick={onCloseMenu}>Save</MenuItem>
-              <MenuItem onClick={onCloseMenu}>Save As</MenuItem>
+              <MenuItem onClick={onSave}>Save</MenuItem>
+              <MenuItem onClick={onSaveAs}>Save As</MenuItem>
               <MenuSeparator />
               <MenuItem onClick={() => window.editor_api.window.close()}>Close Window</MenuItem>
               <MenuItem onClick={() => window.editor_api.app.exit()}>Exit</MenuItem>

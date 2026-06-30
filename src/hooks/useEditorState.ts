@@ -245,6 +245,61 @@ function useEditorState() {
     )
   }
 
+  const save_document = async (save_as = false) => {
+    const active_document = documents.find((document) => document.id === active_document_id)
+
+    close_overlays()
+
+    if (!active_document) {
+      return
+    }
+
+    const saved_content = active_document.content
+    const saved_file = await window.editor_api.file.save_text({
+      content: saved_content,
+      file_path: active_document.file_path,
+      save_as,
+      suggested_name: active_document.file_path ? active_document.name : `${active_document.name}.txt`,
+    })
+
+    if (!saved_file) {
+      return
+    }
+
+    set_documents((current_documents) =>
+      current_documents.map((document) => {
+        if (document.id !== active_document.id) {
+          return document
+        }
+
+        return {
+          ...document,
+          name: saved_file.name,
+          file_path: saved_file.file_path,
+          saved_content,
+          dirty: document.content !== saved_content,
+        }
+      }),
+    )
+  }
+
+  useEffect(() => {
+    const save_with_shortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') {
+        return
+      }
+
+      event.preventDefault()
+      void save_document(event.shiftKey)
+    }
+
+    window.addEventListener('keydown', save_with_shortcut, true)
+
+    return () => {
+      window.removeEventListener('keydown', save_with_shortcut, true)
+    }
+  }, [active_document_id, documents])
+
   const create_terminal = () => {
     const terminal_id = get_next_terminal_id(terminals)
     const new_terminal: TerminalSession = {
@@ -406,6 +461,7 @@ function useEditorState() {
     open_folder_dialog,
     open_menu,
     resolved_theme,
+    save_document,
     select_activity,
     select_document,
     select_bottom_panel_tab,

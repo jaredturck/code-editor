@@ -41,6 +41,8 @@ function App() {
         onLeaveMenus={editor.leave_menus}
         onOpenFile={editor.open_file_dialog}
         onOpenFolder={editor.open_folder_dialog}
+        onSave={() => editor.save_document()}
+        onSaveAs={() => editor.save_document(true)}
         onSelectTheme={editor.select_theme}
         onSplitTerminal={editor.split_terminal}
         onToggleAiChat={editor.toggle_ai_chat}

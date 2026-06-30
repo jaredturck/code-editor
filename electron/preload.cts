@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld('editor_api', {
     open_file: () => ipcRenderer.invoke('dialog:open-file'),
     open_folder: () => ipcRenderer.invoke('dialog:open-folder'),
   },
+  file: {
+    save_text: (options: {
+      content: string
+      file_path: string | null
+      save_as: boolean
+      suggested_name: string
+    }) => ipcRenderer.invoke('file:save-text', options),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     toggle_maximize: () => ipcRenderer.send('window:toggle-maximize'),

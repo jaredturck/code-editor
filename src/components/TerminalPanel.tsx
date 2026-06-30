@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import Icon from './Icon'
 import trash_icon from './images/trash.svg'
@@ -35,16 +36,23 @@ function TerminalPane({
   onSubmitTerminalInput: (terminalId: number) => void
   onUpdateTerminalInput: (terminalId: number, input: string) => void
 }) {
+  const input_ref = useRef<HTMLInputElement>(null)
+
   const handle_terminal_key_down = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
       onSubmitTerminalInput(terminal.id)
     }
   }
 
+  const focus_terminal = () => {
+    onSelectTerminal(terminal.id)
+    input_ref.current?.focus()
+  }
+
   return (
     <div
       className={`min-w-0 overflow-auto px-4 py-3 font-mono text-[13px] text-[var(--terminal-text)] ${active ? 'bg-[var(--terminal-active)]' : ''}`}
-      onClick={() => onSelectTerminal(terminal.id)}
+      onClick={focus_terminal}
     >
       {terminal.history.map((command, index) => (
         <div className="whitespace-pre-wrap" key={`${terminal.id}-${index}`}>
@@ -62,6 +70,7 @@ function TerminalPane({
           onChange={(event) => onUpdateTerminalInput(terminal.id, event.target.value)}
           onFocus={() => onSelectTerminal(terminal.id)}
           onKeyDown={handle_terminal_key_down}
+          ref={input_ref}
           spellCheck={false}
           value={terminal.input}
         />
