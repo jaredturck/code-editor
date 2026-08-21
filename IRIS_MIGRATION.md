@@ -326,16 +326,16 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Streaming, cancellation and observable activity timeline
   - Encrypted active-chat restoration/persistence and approval/question cards
   - Research/context-only per-session capability boundary
-- [ ] **Planning and autonomous project runs**
+- [x] **Planning and autonomous project runs**
   - Planning and structured TODOs
   - Long-running project execution
   - Checkpoints, pause/resume and completion verification
-- [ ] **Editor-aware filesystem tools**
+- [x] **Editor-aware filesystem tools**
   - Agent read/write/edit/patch operations
   - Workspace containment and symlink safety
   - Unsaved CodeMirror buffer awareness
   - Human/agent edit-collision handling
-- [ ] **Terminal, build, test and diagnostics tools**
+- [x] **Terminal, build, test and diagnostics tools**
   - Brokered terminal execution
   - Build/test/lint commands
   - Diagnostics exposed to agents
@@ -343,7 +343,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Search, retrieval and project understanding
 
-- [ ] **Exact code search**
+- [x] **Exact code search**
   - Ripgrep / find / fd / filename search
   - Search-panel and agent-tool integration
 - [ ] **Semantic file search and indexing**
@@ -454,9 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Add editor-buffer-aware agent filesystem reads/writes for unsaved files while preserving workspace containment and human/agent collision safety.
-2. Connect brokered terminal/build/test/diagnostics tools so the agent can run and verify its edits.
-3. Add durable autonomous project-run planning, checkpoints, richer TODO/timeline display and resume behavior.
-4. Connect semantic/exact search results to the existing Search activity and workspace watcher; backend retrieval is already callable by Agent Chat.
-5. Enable multi-agent delegation/review with file write leases/collision prevention.
-6. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
+1. Connect semantic file search and indexing to the existing Search activity and workspace watcher.
+2. Enable multi-agent delegation/review with file write leases/collision prevention.
+3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

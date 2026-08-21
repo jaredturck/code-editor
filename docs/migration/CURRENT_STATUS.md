@@ -7,15 +7,17 @@ Completed integration milestones:
 - Durable planning and autonomous project runs
 - Editor-aware workspace filesystem tools
 - Brokered terminal/build/test/diagnostics tools
+- Exact code search
 
-The agent can now plan durable work, read and edit workspace files through live CodeMirror-aware authority, execute opt-in terminal commands through the IRIS broker, and receive bounded workspace diagnostics. File authority remains workspace-contained with symlink and revision collision checks; terminal authority remains explicitly controlled by AI Settings.
+The agent can now plan durable work, read and edit workspace files through live CodeMirror-aware authority, execute opt-in terminal commands through the IRIS broker, receive bounded workspace diagnostics, and run workspace-scoped ripgrep/find/fd exact searches from Agent Chat and the existing Search activity. File authority remains workspace-contained with symlink and revision collision checks; terminal authority remains explicitly controlled by AI Settings.
 
 ## Next milestone
 
-**Exact Code Search**
+**Semantic File Search and Indexing**
 
-- ripgrep/find/fd/filename search
-- Search-panel integration
-- brokered agent exact-search tools
+- semantic filesystem index
+- incremental workspace indexing
+- text embeddings and similar-file search
+- Search-panel semantic mode
 
-Semantic indexing, RAG, multi-agent delegation, vision, automation, and broader system authority remain later milestones.
+Document/media intelligence, RAG, multi-agent delegation, vision, automation, and broader system authority remain later milestones.

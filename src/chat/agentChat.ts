@@ -42,6 +42,9 @@ const editor_workspace_tools = [
   'files.diff',
   'files.patch',
   'files.edit',
+  'search.ripgrep',
+  'search.find',
+  'search.fd',
 ]
 
 const agent_terminal_tools = ['terminal.exec']

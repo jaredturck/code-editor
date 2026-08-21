@@ -373,7 +373,7 @@ function ExplorerPanel({
         {panel_titles[activeSection]}
       </div>
 
-      {activeSection === 'search' && <SearchPanel />}
+      {activeSection === 'search' && <SearchPanel rootPath={rootPath} onOpenFile={onOpenFile} />}
 
       {activeSection === 'explorer' && (
         <div className="flex min-h-0 flex-1 flex-col">
