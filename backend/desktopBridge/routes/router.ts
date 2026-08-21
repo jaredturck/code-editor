@@ -7,6 +7,7 @@
 import type { BridgeRequest, BridgeResponse, BridgeRouteHandler } from '../types.js';
 import type { BridgeSecurityContext } from '../shared/bridgeAuthorization.js';
 import { handleCoreRoutes } from './coreRoutes.js';
+import { handleDocumentRoutes } from './documentRoutes.js';
 import { handleFileRoutes } from './fileRoutes.js';
 import { handleAutomationAiRoutes } from './automationAiRoutes.js';
 import { handlePersistenceRoutes } from './persistenceRoutes.js';
@@ -25,6 +26,7 @@ export type { BridgeRequest, BridgeResponse } from '../types.js';
 // keep `/system/*` matches exact, or consolidate them into one group.
 const ROUTE_HANDLERS: readonly BridgeRouteHandler[] = [
   handleCoreRoutes,
+  handleDocumentRoutes,
   handleFileRoutes,
   handleAutomationAiRoutes,
   handlePersistenceRoutes,

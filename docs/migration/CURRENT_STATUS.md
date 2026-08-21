@@ -9,15 +9,16 @@ Completed integration milestones:
 - Brokered terminal/build/test/diagnostics tools
 - Exact code search
 - Semantic file search and indexing
+- Document, PDF and archive intelligence
 
-The Code Editor now uses the migrated IRIS semantic filesystem index directly from the existing Search activity. Semantic text searches are filtered to the open workspace, indexed summaries and scores are surfaced without importing the old IRIS Search UI, and results can pivot into the existing similar-file lookup. The workspace refresh pipeline schedules debounced incremental IRIS rescans whenever the semantic index is ready, while model installation and full index lifecycle controls remain in AI Settings.
+The Code Editor now uses the migrated IRIS semantic filesystem index from the existing Search activity, including bounded document/PDF/archive retrieval. Indexed Office/OpenDocument/PDF/ZIP results can be inspected as extracted text without unpacking archives to disk; PDF page counts and generic ZIP archive-entry provenance are surfaced when available. Semantic rescans remain driven by workspace changes and index/model lifecycle remains managed in AI Settings.
 
 ## Next milestone
 
-**Document, PDF and Archive Intelligence**
+**Image and Video Semantic Indexing**
 
-- document/PDF extraction and indexing
-- archive inspection
-- indexed document retrieval
+- CLIP image embeddings
+- image/video semantic search
+- media worker queues and persistence
 
-Image/video semantic search, concepts, RAG, multi-agent delegation, vision, automation, and broader system authority remain later milestones.
+Semantic concepts, RAG, multi-agent delegation, vision controls, automation, and broader system authority remain later milestones.

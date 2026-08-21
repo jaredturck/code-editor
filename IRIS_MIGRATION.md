@@ -121,7 +121,7 @@ The per-session allowlist applies to **every** catalog tool, including tools mar
 
 The existing Search activity now exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show the indexed semantic summary/score, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
 
-The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. Document/PDF/archive extraction, CLIP media search, semantic concepts and RAG remain separate checklist milestones. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
+The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor now also exposes the migrated bounded document/PDF/archive extraction path from Search: indexed Office/OpenDocument/PDF/ZIP hits can be retrieved as extracted text without unpacking archives to disk, including PDF page-count and archive-entry provenance when available. CLIP media search, semantic concepts and RAG remain separate checklist milestones. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
 
 ### Settings → IRIS provider/agent configuration
 
@@ -351,7 +351,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Incremental workspace indexing
   - Text embeddings and similar-file search
   - Search-panel semantic mode
-- [ ] **Document, PDF and archive intelligence**
+- [x] **Document, PDF and archive intelligence**
   - Document/PDF extraction and indexing
   - Archive inspection and document retrieval
 - [ ] **Image and video semantic indexing**
@@ -454,6 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect document, PDF and archive intelligence to project indexing and retrieval.
+1. Connect image and video semantic indexing to the existing Search activity.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

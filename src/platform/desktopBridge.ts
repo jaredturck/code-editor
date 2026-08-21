@@ -1,4 +1,5 @@
 export * from './desktopBridgeBase'
+export * from './documentBridge'
 
 import * as base from './desktopBridgeBase'
 import type { BridgeFileNode, BridgeOptions, BridgeRecord } from './desktopBridgeBase'
