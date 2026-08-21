@@ -2,12 +2,14 @@ export * from './desktopBridgeBase'
 export * from './documentBridge'
 
 import * as base from './desktopBridgeBase'
+import { loadProjectSkillDefinitions, mergeProjectSkillDefinitions } from './projectSkillLoader'
 import type {
   BridgeFileNode,
   BridgeFileSemanticResult,
   BridgeFileSemanticSearchKind,
   BridgeOptions,
   BridgeRecord,
+  BridgeSkillDefinition,
 } from './desktopBridgeBase'
 
 export interface EditorFileAuthority {
@@ -39,6 +41,26 @@ export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
         })
         .catch(() => '')
     : null
+}
+
+export async function listSkillDefinitions(
+  profile: string,
+): Promise<{ profile?: string; skills?: BridgeSkillDefinition[] }> {
+  const result = await base.listSkillDefinitions(profile)
+  const global_skills = Array.isArray(result?.skills) ? result.skills : []
+  const workspace_root = editor_workspace_root ? await editor_workspace_root : ''
+
+  if (!workspace_root) return result
+
+  const project_skills = await loadProjectSkillDefinitions(workspace_root, {
+    listDirectory,
+    readTextFile,
+  })
+
+  return {
+    ...result,
+    skills: mergeProjectSkillDefinitions(global_skills, project_skills),
+  }
 }
 
 export async function searchFileSemanticIndex(

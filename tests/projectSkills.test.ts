@@ -1,178 +1,165 @@
-export * from './desktopBridgeBase'
-export * from './documentBridge'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import * as base from './desktopBridgeBase'
-import { loadProjectSkillDefinitions, mergeProjectSkillDefinitions } from './projectSkillLoader'
-import type {
-  BridgeFileNode,
-  BridgeFileSemanticResult,
-  BridgeFileSemanticSearchKind,
-  BridgeOptions,
-  BridgeRecord,
-  BridgeSkillDefinition,
-} from './desktopBridgeBase'
+const bridge_state = vi.hoisted(() => ({
+  files: new Map<string, string>(),
+  globals: [] as Array<Record<string, unknown>>,
+  tree: null as Record<string, unknown> | null,
+}))
 
-export interface EditorFileAuthority {
-  execute: (tool_name: string, args?: BridgeRecord) => Promise<unknown>
+vi.mock('../src/platform/desktopBridgeBase', () => ({
+  listSkillDefinitions: async () => ({ profile: 'default', skills: bridge_state.globals }),
+}))
+
+import { loadSkillContext } from '../src/platform/agent/agentSkillEngine'
+import { listSkillDefinitions, setEditorFileAuthority } from '../src/platform/desktopBridge'
+import {
+  loadProjectSkillDefinitions,
+  mergeProjectSkillDefinitions,
+  type ProjectSkillIO,
+} from '../src/platform/projectSkillLoader'
+
+const project_skill = `---
+id: secure-review
+title: Project Security Review
+description: Review security-sensitive code and trust boundaries.
+triggers: ["security", "review", "trust boundary"]
+priority: 9
+enabled: true
+---
+
+Inspect the project-specific trust boundary before changing security-sensitive code.`
+
+function project_io(): ProjectSkillIO {
+  return {
+    listDirectory: async () => {
+      if (!bridge_state.tree) throw new Error('skills directory does not exist')
+      return { rootPath: '/workspace/.iris/skills', tree: bridge_state.tree as never }
+    },
+    readTextFile: async (path: string) => {
+      const content = bridge_state.files.get(path)
+      if (content === undefined) throw new Error(`${path} does not exist`)
+      return { content }
+    },
+  }
 }
 
-let editor_file_authority: EditorFileAuthority | null = null
-let editor_workspace_root: Promise<string> | null = null
-
-function normalize_workspace_path(file_path: string) {
-  const normalized = String(file_path || '').replace(/\\/g, '/').replace(/\/+$/, '')
-  const windows = typeof window !== 'undefined' && window.editor_api?.platform === 'win32'
-  return windows ? normalized.toLowerCase() : normalized
+function editor_authority() {
+  return {
+    execute: async (tool_name: string, args: Record<string, unknown> = {}) => {
+      if (tool_name === 'files.list') {
+        if (String(args.path || '') === '') return { rootPath: '/workspace', tree: { name: 'workspace', path: '/workspace', type: 'directory', children: [] } }
+        return project_io().listDirectory(String(args.path || ''), Number(args.depth) || 3)
+      }
+      if (tool_name === 'files.read') {
+        const result = await project_io().readTextFile(String(args.path || ''))
+        return { path: String(args.path || ''), content: result.content, isBinary: false }
+      }
+      throw new Error(`unexpected tool ${tool_name}`)
+    },
+  }
 }
 
-function path_is_in_workspace(root_path: string, file_path: string) {
-  const root = normalize_workspace_path(root_path)
-  const target = normalize_workspace_path(file_path)
-  return Boolean(root) && (target === root || target.startsWith(`${root}/`))
-}
-
-export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
-  editor_file_authority = authority
-  editor_workspace_root = authority
-    ? authority.execute('files.list', { path: '', depth: 1 })
-        .then((result) => {
-          const record = result && typeof result === 'object' ? result as BridgeRecord : {}
-          return String(record.rootPath || '')
-        })
-        .catch(() => '')
-    : null
-}
-
-export async function listSkillDefinitions(
-  profile: string,
-): Promise<{ profile?: string; skills?: BridgeSkillDefinition[] }> {
-  const result = await base.listSkillDefinitions(profile)
-  const global_skills = Array.isArray(result?.skills) ? result.skills : []
-  const workspace_root = editor_workspace_root ? await editor_workspace_root : ''
-
-  if (!workspace_root) return result
-
-  const project_skills = await loadProjectSkillDefinitions(workspace_root, {
-    listDirectory,
-    readTextFile,
+describe('project skill loading', () => {
+  beforeEach(() => {
+    setEditorFileAuthority(null)
+    bridge_state.files.clear()
+    bridge_state.globals = []
+    bridge_state.tree = {
+      name: 'skills',
+      path: '/workspace/.iris/skills',
+      type: 'directory',
+      children: [
+        {
+          name: 'secure-review.md',
+          path: '/workspace/.iris/skills/secure-review.md',
+          type: 'file',
+        },
+      ],
+    }
+    bridge_state.files.set('/workspace/.iris/skills/secure-review.md', project_skill)
   })
 
-  return {
-    ...result,
-    skills: mergeProjectSkillDefinitions(global_skills, project_skills),
-  }
-}
+  it('loads bounded project skills and applies project settings', async () => {
+    bridge_state.files.set(
+      '/workspace/.iris/skills.json',
+      JSON.stringify({ skills: { 'secure-review': { priority: 17 } } }),
+    )
 
-export async function searchFileSemanticIndex(
-  query: string,
-  limit = 30,
-  kind: BridgeFileSemanticSearchKind = 'all',
-): Promise<BridgeFileSemanticResult[]> {
-  const requested_limit = Math.max(1, Math.min(100, Math.round(Number(limit) || 30)))
-  const workspace_root = editor_workspace_root ? await editor_workspace_root : ''
-  const search_limit = workspace_root ? Math.min(100, requested_limit * 3) : requested_limit
-  const results = await base.searchFileSemanticIndex(query, search_limit, kind)
+    const skills = await loadProjectSkillDefinitions('/workspace', project_io())
+    expect(skills).toHaveLength(1)
+    expect(skills[0]).toMatchObject({
+      id: 'secure-review',
+      title: 'Project Security Review',
+      priority: 17,
+      enabled: true,
+    })
+    expect(skills[0].provenance).toMatchObject({
+      source: 'project',
+      workspaceRoot: '/workspace',
+      path: '/workspace/.iris/skills/secure-review.md',
+    })
+  })
 
-  if (!workspace_root) return results.slice(0, requested_limit)
-  return results
-    .filter((result) => path_is_in_workspace(workspace_root, result.path))
-    .slice(0, requested_limit)
-}
+  it('merges project definitions over global skills through the active editor workspace', async () => {
+    bridge_state.globals = [
+      {
+        id: 'secure-review',
+        title: 'Global Security Review',
+        summary: 'Global instructions',
+        instructions: 'Global body',
+        enabled: true,
+      },
+    ]
+    setEditorFileAuthority(editor_authority())
 
-export async function listDirectory(
-  path: string,
-  depth = 3,
-): Promise<{ rootPath: string; tree: BridgeFileNode }> {
-  if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.list', { path, depth })) as {
-      rootPath: string
-      tree: BridgeFileNode
-    }
-  }
-  return base.listDirectory(path, depth)
-}
+    const result = await listSkillDefinitions('default')
+    expect(result.skills).toHaveLength(1)
+    expect(result.skills?.[0].title).toBe('Project Security Review')
+  })
 
-export async function readTextFile(
-  path: string,
-  options: BridgeOptions = {},
-): Promise<{ path: string; content: string; isBinary: boolean }> {
-  if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.read', { path, ...options })) as {
-      path: string
-      content: string
-      isBinary: boolean
-    }
-  }
-  return base.readTextFile(path, options)
-}
+  it('keeps merged project skills progressively loadable for capable autonomous agents', async () => {
+    bridge_state.globals = [
+      {
+        id: 'general-code',
+        title: 'General Code',
+        summary: 'General coding guidance',
+        triggers: ['code'],
+        instructions: 'Use the normal coding workflow.',
+        enabled: true,
+      },
+    ]
+    setEditorFileAuthority(editor_authority())
 
-export async function writeTextFile(
-  path: string,
-  content: string,
-  options: { append?: boolean; fileManager?: boolean } = {},
-): Promise<BridgeRecord> {
-  if (editor_file_authority && options.fileManager !== true) {
-    return (await editor_file_authority.execute('files.write', {
-      path,
-      content,
-      mode: options.append === true ? 'append' : 'create',
-    })) as BridgeRecord
-  }
-  return base.writeTextFile(path, content, options)
-}
+    const context = await loadSkillContext({
+      settings: {
+        skills_enabled: true,
+        skills_profile: 'default',
+        skills_token_budget: 2200,
+        skills_max_active: 4,
+      },
+      userInput: 'Review the security trust boundary in this project',
+      conversation: [],
+      role: 'orchestrator',
+      toolset: 'lean',
+    })
 
-export async function editTextFile(
-  path: string,
-  oldText: string,
-  newText: string,
-  options: { replaceAll?: boolean; fileManager?: boolean } = {},
-): Promise<BridgeRecord> {
-  if (editor_file_authority && options.fileManager !== true) {
-    return (await editor_file_authority.execute('files.edit', {
-      path,
-      oldText,
-      newText,
-      replaceAll: options.replaceAll === true,
-    })) as BridgeRecord
-  }
-  return base.editTextFile(path, oldText, newText, options)
-}
+    expect(context.loadError).toBe('')
+    expect(context.cards.some((card) => card.id === 'secure-review')).toBe(true)
+    expect(context.active.some((skill) => skill.id === 'secure-review')).toBe(false)
+    expect(context.loadablePool?.['secure-review']?.instructions).toContain('project-specific trust boundary')
+  })
 
-export async function powerStat(path_or_paths: string | string[]): Promise<BridgeRecord> {
-  if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.stat', {
-      path: Array.isArray(path_or_paths) ? path_or_paths : [path_or_paths],
-    })) as BridgeRecord
-  }
-  return base.powerStat(path_or_paths)
-}
+  it('fails closed for project skills when the project settings file is malformed', async () => {
+    bridge_state.files.set('/workspace/.iris/skills.json', '{broken json')
+    await expect(loadProjectSkillDefinitions('/workspace', project_io())).resolves.toEqual([])
+  })
 
-export async function powerDiff(
-  path: string,
-  new_content: string,
-  context_lines = 3,
-): Promise<BridgeRecord> {
-  if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.diff', {
-      path,
-      newContent: new_content,
-      contextLines: context_lines,
-    })) as BridgeRecord
-  }
-  return base.powerDiff(path, new_content, context_lines)
-}
-
-export async function powerPatch(
-  path: string,
-  patch: string,
-  dry_run = false,
-): Promise<BridgeRecord> {
-  if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.patch', {
-      path,
-      patch,
-      dryRun: dry_run,
-    })) as BridgeRecord
-  }
-  return base.powerPatch(path, patch, dry_run)
-}
+  it('lets project definitions override global definitions deterministically', async () => {
+    const project_skills = await loadProjectSkillDefinitions('/workspace', project_io())
+    const merged = mergeProjectSkillDefinitions([
+      { id: 'secure-review', title: 'Global Security Review', enabled: true },
+    ], project_skills)
+    expect(merged).toHaveLength(1)
+    expect(merged[0].title).toBe('Project Security Review')
+  })
+})
