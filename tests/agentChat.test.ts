@@ -85,7 +85,7 @@ describe('core agent chat integration', () => {
     expect(ready.key_id).toBe('2')
   })
 
-  it('binds the configured Orchestrator while hard-disabling filesystem, terminal and multi-agent authority', () => {
+  it('binds configured workspace and terminal authority without enabling multi-agent execution', () => {
     key_state.keys.set('openai:2', 'secret-key')
     const settings = build_core_agent_settings(agent_settings(), '/workspace')
 
@@ -94,19 +94,18 @@ describe('core agent chat integration', () => {
     expect(settings.ai_runtime_api_key).toBe('secret-key')
     expect(settings.agent_working_dir).toBe('/workspace')
     expect(settings.agent_multi_enabled).toBe(false)
-    expect(settings.agent_permission_tier_orchestrator).toBe(1)
-    expect(settings.permissions_file_read).toBe(false)
-    expect(settings.permissions_file_write).toBe(false)
-    expect(settings.permissions_terminal).toBe(false)
+    expect(settings.agent_permission_tier_orchestrator).toBe(3)
+    expect(settings.permissions_file_read).toBe(true)
+    expect(settings.permissions_file_write).toBe(true)
+    expect(settings.permissions_terminal).toBe(true)
     expect(settings.agent_tool_allowlist).toContain('search.web')
     expect(settings.agent_tool_allowlist).toContain('todo.update')
-    expect(settings.agent_tool_allowlist).not.toContain('files.read')
-    expect(settings.agent_tool_allowlist).not.toContain('files.write')
-    expect(settings.agent_tool_allowlist).not.toContain('terminal.exec')
+    expect(settings.agent_tool_allowlist).toContain('files.read')
+    expect(settings.agent_tool_allowlist).toContain('files.write')
+    expect(settings.agent_tool_allowlist).toContain('terminal.exec')
     expect(settings.agent_tool_allowlist).not.toContain('agent.delegate')
     expect(settings.agent_tool_allowlist).not.toContain('system.processes')
   })
-
 
   it('supports plan-first runs without widening the core Chat capability boundary', () => {
     key_state.keys.set('openai:2', 'secret-key')
@@ -116,8 +115,8 @@ describe('core agent chat integration', () => {
 
     expect(settings.agent_project_run_mode).toBe('plan_first')
     expect(settings.agent_tool_allowlist).toContain('user.ask')
-    expect(settings.agent_tool_allowlist).not.toContain('files.write')
-    expect(settings.agent_tool_allowlist).not.toContain('terminal.exec')
+    expect(settings.agent_tool_allowlist).toContain('files.write')
+    expect(settings.agent_tool_allowlist).toContain('terminal.exec')
     expect(todos).toHaveLength(1)
     expect(todos[0].status).toBe('in_progress')
     expect(input).toContain('PLAN FIRST')
@@ -131,11 +130,13 @@ describe('core agent chat integration', () => {
     expect(input).toContain('Do not redo completed tasks')
   })
 
-  it('keeps filesystem and host-inspection tools out of the core Chat scope even with a workspace open', () => {
+  it('enables editor filesystem tools while keeping host-inspection tools out of Agent Chat', () => {
     const tools = get_core_agent_tool_allowlist('/workspace')
     expect(tools).toContain('search.web')
     expect(tools).toContain('chat.recall')
-    expect(tools).not.toContain('files.read')
+    expect(tools).toContain('files.read')
+    expect(tools).toContain('files.edit')
+    expect(tools).toContain('files.patch')
     expect(tools).not.toContain('search.ripgrep')
     expect(tools).not.toContain('memory.query')
     expect(tools).not.toContain('system.stats')
