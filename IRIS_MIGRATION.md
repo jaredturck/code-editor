@@ -308,6 +308,157 @@ This is the main validation item that could not be completed in the migration en
 
 Old `dist/` and `dist-electron/` output from the supplied Code Editor is not authoritative after migration and should be regenerated. IRIS `server-dist/` and generated Electron output were never treated as source. The migrated backend builds into `backend-dist/`.
 
+## Development integration checklist
+
+This checklist tracks the remaining product integration work. An unchecked item does **not** necessarily mean the backend code is missing; in many cases the IRIS implementation is already migrated and only needs to be connected, adapted, tested, or surfaced in the Code Editor UI.
+
+### Foundation already connected
+
+- [x] Secure storage bootstrap
+- [x] Encrypted local bridge lifecycle
+- [x] Encrypted renderer-state hydration
+- [x] Provider credential vault foundation
+- [x] Bridge capability-permission foundation
+- [x] Emergency-stop foundation
+- [x] Screen-source IPC foundation
+
+### Agent and editor integration
+
+- [ ] **AI settings and provider configuration**
+  - API keys and provider accounts
+  - Model discovery and selection
+  - Orchestrator / Executor / Scout / Reviewer assignments
+  - Agent safety, budget, web and package policies
+- [ ] **Core agent chat integration**
+  - Connect `AI Chat` to `runAgentSession`
+  - Native tool calling and structured-controller fallback
+  - Streaming, cancellation and tool-result timeline
+- [ ] **Planning and autonomous project runs**
+  - Planning and structured TODOs
+  - Long-running project execution
+  - Checkpoints, pause/resume and completion verification
+- [ ] **Editor-aware filesystem tools**
+  - Agent read/write/edit/patch operations
+  - Workspace containment and symlink safety
+  - Unsaved CodeMirror buffer awareness
+  - Human/agent edit-collision handling
+- [ ] **Terminal, build, test and diagnostics tools**
+  - Brokered terminal execution
+  - Build/test/lint commands
+  - Diagnostics exposed to agents
+  - Error → fix → rerun feedback loop
+
+### Search, retrieval and project understanding
+
+- [ ] **Exact code search**
+  - Ripgrep / find / fd / filename search
+  - Search-panel and agent-tool integration
+- [ ] **Semantic file search and indexing**
+  - Semantic filesystem index
+  - Incremental workspace indexing
+  - Text embeddings and similar-file search
+  - Search-panel semantic mode
+- [ ] **Document, PDF and archive intelligence**
+  - Document/PDF extraction and indexing
+  - Archive inspection and document retrieval
+- [ ] **Image and video semantic indexing**
+  - CLIP image embeddings
+  - Image/video semantic search
+  - Media worker queues and persistence
+- [ ] **Semantic concepts**
+  - Concept clustering, centroids and membership
+  - Concept-driven file discovery
+- [ ] **RAG and project context engine**
+  - Semantic candidate retrieval
+  - Live-file evidence reads
+  - Context assembly and ranking
+- [ ] **Memory and context compaction**
+  - Project working memory
+  - Chat remember/recall
+  - Long-run summarization and rolling compaction
+
+### Persistence and reusable agent infrastructure
+
+- [ ] **Conversation and run persistence**
+  - Encrypted chats/messages
+  - Agent runs, TODOs and checkpoints
+  - Resume previous runs
+- [ ] **Skills system**
+  - Built-in and user skills
+  - Progressive skill loading
+  - Project-specific skills and settings
+- [ ] **Artifacts and large outputs**
+  - Artifact creation and chunked persistence
+  - Research/test/architecture reports
+  - Editor artifact viewing
+
+### Research, providers and model execution
+
+- [ ] **Web search and research**
+  - Search/fetch tools and source handling
+  - Network safety and untrusted-content boundary
+  - Browser/editor integration
+- [ ] **Model routing, health and failover**
+  - Capability-aware routing
+  - Health monitoring and recovery
+  - Provider/model failover
+- [ ] **Hybrid local + cloud execution**
+  - Local/cloud coordination
+  - Cloud consultation/final synthesis
+  - Shared usage budgets
+- [ ] **Advanced local model runtime integration**
+  - Project 3 runtime adapters
+  - GPU/VRAM-aware scheduling
+  - Quantization and custom local backends
+
+### Multi-agent development
+
+- [ ] **Multi-agent orchestration**
+  - Orchestrator, Executor, Scout and Reviewer roles
+  - Delegation, task bus and parallel execution
+  - Peer consultation and result recall
+- [ ] **Multi-agent coding coordination**
+  - File ownership / write leases
+  - Agent-agent collision prevention
+  - Human-agent collision prevention
+- [ ] **Review and autonomous quality control**
+  - Independent review/verification agents
+  - Automated remediation and re-review
+  - Final acceptance gate
+
+### Additional IRIS capabilities
+
+- [ ] **Audio and voice**
+  - Transcription backend and provider configuration
+  - Voice input for Agent Chat
+- [ ] **Vision and screen capabilities**
+  - Screen capture and vision runtime
+  - Permissioned visual verification/actions
+- [ ] **Automation**
+  - Automation service and approvals
+  - Future scheduled/background project tasks
+- [ ] **System monitoring and runtime visibility**
+  - CPU/RAM/GPU/process monitoring
+  - Model, agent, token and cost visibility
+- [ ] **Launcher and local-system capabilities**
+  - Installed application/tool discovery
+  - Development-environment management
+  - Agent discovery of local developer tooling
+- [ ] **Security and autonomous-run policy**
+  - Workspace-scoped autonomous authority
+  - Exact-operation approvals and capability tokens
+  - Filesystem/network/package/vision/automation policy
+
+### Validation and hardening
+
+- [ ] **Re-enable migrated IRIS tests**
+  - Backend, agent, broker/security and provider suites
+  - Semantic-index and multi-agent suites
+- [ ] **Re-enable benchmarks**
+- [ ] **Add Code Editor + agent integration tests**
+- [ ] **Add long-running run/recovery tests**
+- [ ] **Add multi-agent collision tests**
+
 ## Next integration priorities
 
 1. Connect the existing AI Chat panel to `runAgentSession` while adding the minimum approval/run-state UI required to preserve IRIS's safety contract.
