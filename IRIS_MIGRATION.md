@@ -391,19 +391,19 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Research, providers and model execution
 
-- [ ] **Web search and research**
+- [x] **Web search and research**
   - Search/fetch tools and source handling
   - Network safety and untrusted-content boundary
   - Browser/editor integration
-- [ ] **Model routing, health and failover**
+- [x] **Model routing, health and failover**
   - Capability-aware routing
   - Health monitoring and recovery
   - Provider/model failover
-- [ ] **Hybrid local + cloud execution**
+- [x] **Hybrid local + cloud execution**
   - Local/cloud coordination
   - Cloud consultation/final synthesis
   - Shared usage budgets
-- [ ] **Advanced local model runtime integration**
+- [x] **Advanced local model runtime integration**
   - Project 3 runtime adapters
   - GPU/VRAM-aware scheduling
   - Quantization and custom local backends
@@ -458,7 +458,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect web search and research end-to-end through the autonomous agent, preserving IRIS source/network safety and the untrusted-content boundary.
-2. Connect model routing, health/failover and hybrid local + cloud execution so long project runs can recover from provider/model failures without losing state.
-3. Enable multi-agent delegation/review with file write leases and agent-agent collision prevention.
-4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
+1. Enable multi-agent orchestration with Orchestrator, Executor, Scout and Reviewer/Overwatcher roles, delegation and result recall.
+2. Add file ownership/write leases and agent-agent collision prevention before allowing parallel coding agents to modify the workspace.
+3. Connect independent review, remediation/re-review and final acceptance gating for autonomous quality control.
+4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem after the remaining capability batches are connected.
