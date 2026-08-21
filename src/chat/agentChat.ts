@@ -2,10 +2,10 @@ import { resolveAgentIdentity, resolveAgentRoleSettings } from '@/platform/agent
 import { getToolPresentation } from '@/platform/agent/toolCatalog'
 import { hasKeyFor } from '@/platform/keyStore'
 import { findAIProvider } from '@/platform/providers/providerRegistry'
-import type { ProjectRunMode } from '@/chat/projectRunController'
 import { stripTerminalControlCharacters } from '@/platform/security'
 import type { OrbSettings } from '@/platform/settingsStorage'
 import type { AIAttachment, AgentActivityItem, AIChatMessage } from '@/types/editor'
+import type { ProjectRunMode } from '@/chat/projectRunController'
 
 export interface AgentChatDescriptor {
   provider: string
@@ -34,8 +34,25 @@ const core_agent_tools = [
   'sources.lookup',
 ]
 
-export function get_core_agent_tool_allowlist(_workspace_root: string | null) {
-  return [...core_agent_tools]
+const editor_workspace_tools = [
+  'files.list',
+  'files.read',
+  'files.write',
+  'files.stat',
+  'files.diff',
+  'files.patch',
+  'files.edit',
+]
+
+const agent_terminal_tools = ['terminal.exec']
+
+export function get_core_agent_tool_allowlist(
+  workspace_root: string | null,
+  terminal_enabled = false,
+) {
+  const tools = workspace_root ? [...core_agent_tools, ...editor_workspace_tools] : [...core_agent_tools]
+  if (workspace_root && terminal_enabled) tools.push(...agent_terminal_tools)
+  return tools
 }
 
 export function should_block_core_agent_permission_grant(
@@ -103,15 +120,16 @@ export function build_core_agent_settings(
     agent_planning_mode: false,
     agent_project_run_mode: run_mode,
     force_session_alive: false,
-    agent_permission_tier_orchestrator: 1,
-    permissions_file_read: false,
-    permissions_file_write: false,
-    permissions_terminal: false,
+    agent_permission_tier_orchestrator: Math.max(1, Number(bound.agent_permission_tier_orchestrator) || 1),
+    permissions_file_read: Boolean(workspace_root && bound.permissions_file_read === true),
+    permissions_file_write: Boolean(workspace_root && bound.permissions_file_write === true),
+    permissions_terminal: Boolean(workspace_root && bound.permissions_terminal === true),
     permissions_screen_capture: false,
     permissions_mouse_control: false,
-    agent_tool_allowlist: get_core_agent_tool_allowlist(workspace_root),
+    agent_tool_allowlist: get_core_agent_tool_allowlist(workspace_root, Boolean(workspace_root && bound.permissions_terminal === true)),
   }
 }
+
 
 export function build_project_run_seed_todos(goal: string, run_mode: ProjectRunMode) {
   if (run_mode !== 'plan_first') return []
