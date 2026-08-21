@@ -11,14 +11,16 @@ Completed integration milestones:
 - Semantic file search and indexing
 - Document, PDF and archive intelligence
 - Image and video semantic indexing
+- Semantic concepts
 
-The Code Editor now uses the migrated IRIS semantic filesystem index from the existing Search activity for text, documents, images and videos. The new Media mode searches the persisted CLIP image/video space, keeps results scoped to the open workspace, surfaces video-frame timestamps, and opens media with the operating system rather than treating binary files as editor text. IRIS's existing image preparation queue/worker pools, video frame extraction and encrypted semantic persistence remain the implementation source; workspace rescans and model/index lifecycle remain managed through the existing semantic-index controls.
+The Code Editor now uses the migrated IRIS semantic filesystem index from the existing Search activity for text, documents, images, videos and concept-driven discovery. The Concepts mode searches the persistent MiniLM and CLIP concept centroids, resolves their stored memberships, filters member files to the open workspace, and preserves document/media handling already connected by the previous milestones. IRIS's existing clustering workers, centroid generation and encrypted membership persistence remain the implementation source.
 
 ## Next milestone
 
-**Semantic Concepts**
+**RAG and Project Context Engine**
 
-- concept clustering, centroids and membership
-- concept-driven file discovery
+- semantic candidate retrieval
+- live-file evidence reads
+- context assembly and ranking
 
-RAG, memory/context compaction, persistence infrastructure, multi-agent work, additional IRIS capabilities and final validation remain later milestones.
+Memory/context compaction, persistence infrastructure, multi-agent work, additional IRIS capabilities and final validation remain later milestones.

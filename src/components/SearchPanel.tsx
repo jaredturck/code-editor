@@ -6,8 +6,10 @@ import {
   openFileWithSystem,
   powerFd,
   powerRipgrep,
+  searchFileSemanticConcepts,
   searchFileSemanticIndex,
   type BridgeDocumentInspection,
+  type BridgeFileSemanticConceptGroup,
   type BridgeFileSemanticResult,
 } from '../platform/desktopBridge'
 
@@ -20,9 +22,10 @@ interface SearchResult {
   document?: boolean
   semantic_type?: 'text' | 'image' | 'video'
   timestamp_ms?: number
+  concept_title?: string
 }
 
-type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media'
+type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media' | 'concepts'
 
 const document_extensions = new Set([
   '.pdf',
@@ -70,6 +73,36 @@ function format_timestamp(value?: number) {
   const minutes = Math.floor(total_seconds / 60)
   const seconds = total_seconds % 60
   return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function concept_results_for_workspace(
+  root_path: string,
+  groups: BridgeFileSemanticConceptGroup[],
+) {
+  let visible_groups = 0
+  const results: SearchResult[] = []
+
+  for (const group of groups) {
+    const members = group.results.filter((item) => path_is_in_workspace(root_path, item.path))
+    if (!members.length) continue
+    visible_groups += 1
+
+    for (const item of members) {
+      results.push({
+        path: item.path,
+        line: null,
+        content: item.summary,
+        score: item.score,
+        semantic: true,
+        document: item.semanticType === 'text' && is_document_path(item.path),
+        semantic_type: item.semanticType,
+        timestamp_ms: item.timestampMs,
+        concept_title: group.title,
+      })
+    }
+  }
+
+  return { results, visible_groups }
 }
 
 function SearchToggle({
@@ -139,12 +172,15 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     try {
       const status = await getFileSemanticStatus(false)
       const media_mode = mode === 'media'
+      const concept_mode = mode === 'concepts'
 
       if (status.indexStatus === 'ready') {
         set_semantic_status(
-          media_mode
-            ? `${status.semanticCount.toLocaleString()} semantic records · CLIP ${status.imageModel}`
-            : `${status.semanticCount.toLocaleString()} embedded files indexed`,
+          concept_mode
+            ? `${Number(status.conceptCount || 0).toLocaleString()} concept centroids indexed`
+            : media_mode
+              ? `${status.semanticCount.toLocaleString()} semantic records · CLIP ${status.imageModel}`
+              : `${status.semanticCount.toLocaleString()} embedded files indexed`,
         )
       } else if (status.indexStatus === 'building') {
         set_semantic_status(status.stage ? `Indexing · ${status.stage}` : 'Semantic index is building')
@@ -173,7 +209,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     set_document_inspection(null)
     set_error('')
 
-    if (mode === 'semantic' || mode === 'documents' || mode === 'media') {
+    if (mode === 'semantic' || mode === 'documents' || mode === 'media' || mode === 'concepts') {
       void refresh_semantic_status(mode)
     }
   }
@@ -212,7 +248,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         set_results(next_results)
         set_result_label('File-name matches')
         set_error(String(response.error || ''))
-      } else if (search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media') {
+      } else if (search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') {
         const status = await refresh_semantic_status(search_mode)
 
         if (!status || status.indexStatus !== 'ready') {
@@ -239,6 +275,20 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             .slice(0, 200)
           set_results(semantic_results(media, 'media'))
           set_result_label('Image and video matches')
+        } else if (search_mode === 'concepts') {
+          if (!Number(status.conceptCount || 0)) {
+            set_results([])
+            set_result_label('')
+            set_error('Concept index is empty. Rebuild the semantic index in Settings → AI → Semantic Index.')
+            return
+          }
+
+          const groups = await searchFileSemanticConcepts(search_query, 10, 20)
+          const discovered = concept_results_for_workspace(rootPath, groups)
+          set_results(discovered.results)
+          set_result_label(
+            `${discovered.visible_groups} concept cluster${discovered.visible_groups === 1 ? '' : 's'}`,
+          )
         } else {
           const response = await searchFileSemanticIndex(search_query, 200, 'text')
           const documents_only = search_mode === 'documents'
@@ -345,8 +395,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
       <form className="shrink-0" onSubmit={(event) => void run_search(event)}>
-        <div className="mb-2 grid grid-cols-5 rounded border border-[var(--input-border)] bg-[var(--input-bg)] p-0.5 text-[10px]">
-          {(['text', 'files', 'semantic', 'documents', 'media'] as SearchMode[]).map((mode) => (
+        <div className="mb-2 grid grid-cols-6 rounded border border-[var(--input-border)] bg-[var(--input-bg)] p-0.5 text-[10px]">
+          {(['text', 'files', 'semantic', 'documents', 'media', 'concepts'] as SearchMode[]).map((mode) => (
             <button
               aria-pressed={search_mode === mode}
               className={`rounded px-1 py-1 ${search_mode === mode ? 'bg-[var(--selected)] text-[var(--text)]' : 'text-[var(--muted)]'}`}
@@ -354,7 +404,17 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               onClick={() => select_search_mode(mode)}
               type="button"
             >
-              {mode === 'text' ? 'Text' : mode === 'files' ? 'Files' : mode === 'semantic' ? 'Semantic' : mode === 'documents' ? 'Docs' : 'Media'}
+              {mode === 'text'
+                ? 'Text'
+                : mode === 'files'
+                  ? 'Files'
+                  : mode === 'semantic'
+                    ? 'Semantic'
+                    : mode === 'documents'
+                      ? 'Docs'
+                      : mode === 'media'
+                        ? 'Media'
+                        : 'Concepts'}
             </button>
           ))}
         </div>
@@ -390,7 +450,9 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                         ? 'Search indexed documents and PDFs'
                         : search_mode === 'media'
                           ? 'Describe an image or video'
-                          : 'Search'
+                          : search_mode === 'concepts'
+                            ? 'Describe a concept or project theme'
+                            : 'Search'
                 }
                 type="text"
                 value={query}
@@ -417,11 +479,13 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               </div>
             )}
 
-            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media') && (
+            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') && (
               <div className="px-0.5 text-[10px] leading-4 text-[var(--muted)]">
                 {semantic_status || (search_mode === 'media'
                   ? 'Uses the existing encrypted IRIS CLIP image/video index.'
-                  : 'Uses the existing encrypted IRIS text-embedding index.')}
+                  : search_mode === 'concepts'
+                    ? 'Uses the existing encrypted IRIS concept centroids and memberships.'
+                    : 'Uses the existing encrypted IRIS text-embedding index.')}
               </div>
             )}
           </div>
@@ -470,7 +534,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             {results.map((result, index) => (
               <div
                 className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]"
-                key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${index}`}
+                key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${result.concept_title || ''}:${index}`}
               >
                 <button
                   className="min-w-0 flex-1 px-1.5 py-1.5 text-left"
@@ -495,6 +559,11 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                       </span>
                     )}
                   </div>
+                  {result.concept_title && (
+                    <div className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)]">
+                      Concept · {result.concept_title}
+                    </div>
+                  )}
                   {result.content && (
                     <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">{result.content}</div>
                   )}
