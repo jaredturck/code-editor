@@ -1,18 +1,18 @@
-# Migrated IRIS Backend Not Yet Exposed by the Code Editor UI
+# Migrated IRIS Backend Remaining Integration Ledger
 
 This file is the deliberate "dead/unwired code" ledger requested for the migration. Code listed here is **not accidental dead code**: it is preserved IRIS functionality whose original UI was not copied or whose Code Editor integration requires a later product decision.
 
 Nothing in this list should be deleted merely because the current UI does not call it yet.
 
-## 1. Full agent-session runtime
+## 1. Agent-session extensions beyond the core Chat milestone
 
 **Location:** `src/platform/agent/runtime/`, `src/platform/agentRuntime.ts`
 
-**Present:** stateful agent loop, structured-controller fallback, capability policy, broker, safety, duration/operation limits, TODO tracing, continuity/compaction, web/package policy, finalization.
+**Connected now:** the existing AI Chat panel invokes `runAgentSession`, supports native tools/controller fallback, visible answer streaming, bounded observable activity, approvals/questions, cancellation and the configured Orchestrator.
 
-**Why not connected yet:** the current AI Chat panel is an Ollama-only streaming chat and has no UI contract for approvals, durable run state, plans/TODOs, timeline events, provider selection or autonomous-run authority.
+**Still intentionally unwired:** direct workspace filesystem/search/RAG authority, multi-hour autonomous project-run checkpoints/resume, rich plan/TODO presentation, steering/force-session-alive UX, write/terminal authority and multi-agent execution. P006 session-scopes Chat to research/context tools until the dedicated workspace and process safety integrations are completed.
 
-**Planned Code Editor surface:** existing AI Chat panel.
+**Planned Code Editor surface:** existing AI Chat panel and future run details within that surface.
 
 ## 2. Cloud/local provider registry and agent model assignments
 
@@ -22,9 +22,9 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Connected portion:** the existing Code Editor Settings modal now exposes provider credentials, model curation and Orchestrator/Executor/Scout/Reviewer assignments.
 
-**Still unwired:** AI Chat continues to use its original Ollama-only execution path, so these provider/agent assignments do not yet drive visible Chat execution.
+**Connected now:** AI Chat resolves the configured Orchestrator provider/model/key slot and uses it for real IRIS agent execution. The legacy Ollama model picker has been removed from Chat; Ollama remains available through the local provider and for the existing speech workflow.
 
-**Planned Code Editor surface:** existing AI Chat panel.
+**Still unwired:** dedicated runtime UI for complexity routing, hybrid local/cloud synthesis and richer health/failover visibility.
 
 ## 3. Agent permissions and approval flow
 
@@ -32,11 +32,9 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** policy/approval logic and trusted bridge permissions.
 
-**Connected portion:** Electron bridge permission get/update and fail-closed defaults.
+**Connected portion:** Electron bridge permission get/update, fail-closed defaults and Code Editor-native approval/question cards in AI Chat. Settings can still manage trusted bridge permissions explicitly.
 
-**Why not fully connected:** no current approval cards/dialogs in the Code Editor. Old IRIS visual approval cards were intentionally not copied into the live UI.
-
-**Planned surface:** AI Chat activity/timeline using Code Editor styling.
+**Still intentionally unwired:** Chat-originated persistent machine-permission grants are denied in P006, and file/terminal/screen/mouse/host-inspection/multi-agent tools are session-blocked rather than merely hidden. They will be surfaced only with their dedicated editor/process authority milestones.
 
 ## 4. Semantic filesystem / semantic file search
 
@@ -50,13 +48,11 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 ## 5. RAG retrieval
 
-**Location:** `src/platform/agent/ragRetrieval.ts`
+**Location:** `src/platform/agent/ragRetrieval.ts` and the agent tool broker.
 
 **Present:** semantic candidate retrieval followed by live source reading.
 
-**Dependency:** semantic index and agent runtime integration.
-
-**Planned surface:** invisible agent capability; Search UI may expose results separately.
+**Still unwired:** P006 deliberately does not expose `rag.retrieve` to Agent Chat until the editor-aware workspace authority layer is connected. Direct semantic/RAG result presentation in the existing Search activity and tighter watcher-driven index refresh UX also remain pending.
 
 ## 6. Multi-agent orchestration
 
@@ -64,7 +60,7 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** delegation, task registry, result retrieval, peer consultation, mesh discovery, role bounds and orchestration.
 
-**Why not connected yet:** first Code Editor agent-run UI is not active yet, and concurrent coding also needs editor-aware write collision/lease handling.
+**Why not connected yet:** P006 deliberately forces single-Orchestrator execution. Concurrent coding also needs editor-aware write collision/lease handling before delegation is safe.
 
 **Planned surface:** AI Chat run details / Agents subview, without IRIS's old workspace shell.
 
@@ -86,11 +82,11 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** search, source reading, progress events, history persistence, provider fallback/security policy.
 
-**Connected portion:** Electron hidden DuckDuckGo provider can be started by the bridge.
+**Connected portion:** Agent Chat can use brokered `search.web`, `web.fetch` and trusted-source lookup under IRIS network/site policy; the hidden DuckDuckGo provider remains available through the bridge.
 
-**Why not fully connected:** existing Search panel has not been adapted, and the current AI Chat does not use the broker yet.
+**Still unwired:** human-facing web-research Search UI, saved-research browsing and Browser-assisted research presentation.
 
-**Planned surfaces:** agent tool + existing Search activity + existing Browser where useful.
+**Planned surfaces:** existing Search activity + existing Browser where useful.
 
 ## 9. Encrypted chat/session/agent persistence
 
@@ -98,11 +94,11 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** encrypted database, chats/messages, agent state, artifacts, sub-agent results, skills, semantic data, search history.
 
-**Connected portion:** secure key bootstrap, encrypted bridge, durable renderer store hydration.
+**Connected portion:** secure key bootstrap, encrypted bridge, durable renderer store hydration, encrypted active-chat creation/restoration, user/assistant message persistence, warm TODO state and durable bounded agent-run history. Assistant completion is persisted before the UI marks it complete.
 
-**Why not fully visible:** existing `useAIChat` still owns ephemeral legacy chat state.
+**Still unwired:** chat switcher/history management UI, resumable in-flight autonomous project runs and full checkpoint recovery.
 
-**Planned surface:** existing AI Chat with durable conversations/project runs.
+**Planned surface:** existing AI Chat with richer conversation/project-run controls.
 
 ## 10. Notes/memory backend
 
@@ -178,11 +174,9 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Location:** `src/platform-features/chat-ui/`
 
-**Present:** approval controller, layout/scroll controller, timeline conversion, persistence/export and usage helpers.
+**Connected portion:** the migrated approval controller/normalization logic now backs Code Editor-native approval/question cards, and P006 adapts IRIS timeline events into a compact collapsible activity list without exposing raw reasoning.
 
-**Why not connected:** original visual components intentionally omitted so the existing Code Editor AI Chat remains the UI shell.
-
-**Planned use:** adapt these helpers behind the existing AI Chat design.
+**Still unwired:** old IRIS-specific timeline grouping/layout, export/history controls and usage dashboards remain available as reference/controller code where useful but are not copied visually.
 
 ## 18. Original IRIS tests/benchmarks
 

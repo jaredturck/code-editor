@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type useAIChat from '../hooks/useAIChat'
+import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
 
 interface AIChatPanelProps {
@@ -10,9 +11,93 @@ interface AIChatPanelProps {
   onResize: (event: ReactPointerEvent<HTMLElement>) => void
 }
 
+interface ApprovalCardProps {
+  request: ApprovalRequest
+  onDecision: (request_id: string, decision: string) => void
+  onAnswer: (request_id: string, answer: string) => void
+}
+
 function format_seconds(seconds: number) {
   const minutes = Math.floor(seconds / 60)
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function ApprovalCard({ request, onDecision, onAnswer }: ApprovalCardProps) {
+  const [custom_answer, set_custom_answer] = useState('')
+  const question = String(request.requestType || '').toLowerCase() === 'question'
+  const question_options = Array.isArray(request.questionOptions) ? request.questionOptions : []
+  const approval_options = Array.isArray(request.options) ? request.options : []
+  const description = question
+    ? String(request.question || request.reason || 'The agent needs your input.')
+    : String(
+        request.requestedAction ||
+          request.reason ||
+          'The agent is requesting permission before continuing.',
+      )
+
+  return (
+    <div className="mb-2 rounded-lg border border-amber-500/35 bg-amber-500/8 p-2 text-[10px] text-[var(--text)]">
+      <div className="font-medium text-amber-300">{question ? 'Agent question' : 'Approval required'}</div>
+      <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[var(--muted)]">{description}</p>
+
+      {question ? (
+        <>
+          {question_options.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {question_options.map((option) => (
+                <button
+                  className="rounded border border-[var(--border)] bg-[var(--surface-3)] px-2 py-1 hover:border-sky-500 hover:text-[var(--text)]"
+                  key={option}
+                  onClick={() => onAnswer(request.id, option)}
+                  type="button"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {request.allowOther !== false && (
+            <div className="mt-2 flex gap-1.5">
+              <input
+                aria-label="Answer agent question"
+                className="min-w-0 flex-1 rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1 text-[10px] outline-none focus:border-sky-500"
+                onChange={(event) => set_custom_answer(event.target.value)}
+                placeholder="Type an answer…"
+                value={custom_answer}
+              />
+              <button
+                className="rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500 disabled:opacity-40"
+                disabled={!custom_answer.trim()}
+                onClick={() => onAnswer(request.id, custom_answer.trim())}
+                type="button"
+              >
+                Answer
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+          {approval_options.map((option) => (
+            <button
+              className={
+                option.recommended
+                  ? 'rounded bg-amber-500 px-2 py-1 font-medium text-black hover:bg-amber-400'
+                  : 'rounded border border-[var(--border)] px-2 py-1 text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]'
+              }
+              key={option.id}
+              onClick={() => onDecision(request.id, option.id)}
+              title={option.description || undefined}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
@@ -24,6 +109,14 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
       block: 'end',
     })
   }, [chat.messages])
+
+  const status_label = chat.restoring_chat
+    ? 'Restoring secure chat'
+    : chat.agent_descriptor.ready
+      ? chat.generating
+        ? chat.run_status || 'Agent working'
+        : 'Agent ready'
+      : 'Agent setup required'
 
   return (
     <aside
@@ -40,29 +133,28 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
       />
 
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-xs font-medium text-[var(--text)]">AI Chat</h2>
-          <div className="flex items-center gap-1 text-[9px] text-[var(--muted)]">
+          <div className="flex min-w-0 items-center gap-1 text-[9px] text-[var(--muted)]">
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                 chat.connection_status === 'connected'
-                  ? 'bg-emerald-400'
+                  ? chat.generating
+                    ? 'bg-sky-400'
+                    : 'bg-emerald-400'
                   : chat.connection_status === 'checking'
                     ? 'bg-amber-400'
                     : 'bg-red-400'
               }`}
             />
-            {chat.connection_status === 'connected'
-              ? 'Ollama connected'
-              : chat.connection_status === 'checking'
-                ? 'Checking Ollama'
-                : 'Ollama offline'}
+            <span className="truncate">{status_label}</span>
           </div>
         </div>
 
         <button
-          className="ml-auto rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-          onClick={chat.clear_chat}
+          className="ml-auto rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={chat.generating || chat.restoring_chat}
+          onClick={() => void chat.clear_chat()}
           title="Clear chat"
           type="button"
         >
@@ -80,40 +172,30 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-2">
-        <select
-          aria-label="Ollama model"
-          className="min-w-0 flex-1 rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1.5 text-[10px] text-[var(--text)] outline-none focus:border-sky-500"
-          disabled={chat.loading_models || chat.models.length === 0}
-          onChange={(event) => chat.set_selected_model(event.target.value)}
-          value={chat.selected_model}
-        >
-          {chat.models.length === 0 ? (
-            <option value="">No installed models</option>
-          ) : (
-            chat.models.map((model) => (
-              <option key={model.name} value={model.name}>
-                {model.name}
-              </option>
-            ))
-          )}
-        </select>
-        <button
-          aria-label="Refresh Ollama models"
-          className="h-7 w-7 rounded text-sm text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-          disabled={chat.loading_models}
-          onClick={() => void chat.refresh_models()}
-          title="Refresh models"
-          type="button"
-        >
-          ↻
-        </button>
+        <div className="min-w-0 flex-1">
+          <div className="text-[9px] font-medium uppercase tracking-wide text-[var(--muted)]">Orchestrator</div>
+          <div
+            className={`truncate text-[10px] ${
+              chat.agent_descriptor.ready ? 'text-[var(--text)]' : 'text-amber-300'
+            }`}
+            title={chat.agent_descriptor.message}
+          >
+            {chat.agent_descriptor.ready
+              ? `${chat.agent_descriptor.provider_label} · ${chat.agent_descriptor.model}`
+              : chat.agent_descriptor.message}
+          </div>
+        </div>
+        <span className="shrink-0 text-[9px] text-[var(--muted)]">Settings → AI</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-4">
         {chat.messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-xs text-[var(--muted)]">
             <div className="mb-2 text-2xl opacity-50">✦</div>
-            <p>Ask a local Ollama model about your code.</p>
+            <p>Ask your configured agent about the current project.</p>
+            <p className="mt-1 text-[10px]">
+              This stage can research and analyze attachments; workspace tools come next.
+            </p>
             <p className="mt-1 text-[10px]">Attach the active file to include unsaved changes.</p>
           </div>
         ) : (
@@ -141,16 +223,42 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                     ))}
                   </div>
                 )}
+
+                {message.role === 'assistant' && message.activity && message.activity.length > 0 && (
+                  <details className="mb-2 rounded border border-[var(--border)] bg-black/[0.05] px-2 py-1.5">
+                    <summary className="cursor-pointer select-none text-[9px] font-medium text-[var(--muted)]">
+                      Agent activity · {message.activity.length} action{message.activity.length === 1 ? '' : 's'}
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                      {message.activity.map((activity) => (
+                        <div className="border-l border-[var(--border)] pl-2" key={activity.id}>
+                          <div className="text-[9px] font-medium text-[var(--text)]">{activity.label}</div>
+                          {activity.detail && (
+                            <div className="mt-0.5 whitespace-pre-wrap break-words text-[9px] leading-relaxed text-[var(--muted)]">
+                              {activity.detail}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
                 {message.role === 'assistant' ? (
                   message.content ? (
                     <MarkdownView baseFilePath={null} content={message.content} />
                   ) : (
-                    <span className="text-[var(--muted)]">Thinking…</span>
+                    <span className="text-[var(--muted)]">{chat.run_status || 'Agent working…'}</span>
                   )
                 ) : (
                   <div className="whitespace-pre-wrap">{message.content}</div>
                 )}
                 {message.streaming && <span className="ml-1 inline-block h-3 w-1 animate-pulse bg-sky-400" />}
+                {message.role === 'assistant' && (message.provider || message.model) && !message.streaming && (
+                  <div className="mt-2 border-t border-[var(--border)] pt-1.5 text-[8px] text-[var(--muted)]">
+                    {[message.provider, message.model].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </article>
             ))}
             <div ref={message_end_ref} />
@@ -167,6 +275,15 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             </button>
           </div>
         )}
+
+        {chat.approval_requests.map((request) => (
+          <ApprovalCard
+            key={request.id}
+            onAnswer={chat.answer_question}
+            onDecision={(request_id, decision) => void chat.resolve_approval(request_id, decision)}
+            request={request}
+          />
+        ))}
 
         {chat.attachments.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1.5">
@@ -216,7 +333,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
           <textarea
             aria-label="AI chat prompt"
             className="h-20 w-full resize-none border-0 bg-transparent p-1 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-            disabled={chat.generating}
+            disabled={chat.generating || chat.restoring_chat}
             onChange={(event) => chat.set_prompt(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
@@ -224,13 +341,14 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                 void chat.submit_prompt()
               }
             }}
-            placeholder="Ask about your code…"
+            placeholder="Ask the agent about your project…"
             value={chat.prompt}
           />
 
           <div className="mt-1 flex items-center gap-1">
             <button
               className="rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              disabled={chat.generating}
               onClick={chat.attach_active_file}
               title="Attach active file"
               type="button"
@@ -239,6 +357,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             </button>
             <button
               className="rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              disabled={chat.generating}
               onClick={() => void chat.choose_attachment()}
               title="Choose attachment"
               type="button"
@@ -250,7 +369,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
               className={`rounded px-2 py-1 text-[10px] ${
                 chat.recording ? 'bg-red-500/15 text-red-300' : 'text-[var(--muted)] hover:bg-[var(--hover)]'
               }`}
-              disabled={chat.transcribing}
+              disabled={chat.transcribing || chat.generating}
               onClick={() => (chat.recording ? chat.stop_recording() : void chat.begin_recording())}
               type="button"
             >
@@ -272,7 +391,11 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             ) : (
               <button
                 className="ml-auto rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!chat.prompt.trim() && chat.attachments.length === 0}
+                disabled={
+                  chat.restoring_chat ||
+                  !chat.agent_descriptor.ready ||
+                  (!chat.prompt.trim() && chat.attachments.length === 0)
+                }
                 onClick={() => void chat.submit_prompt()}
                 type="button"
               >

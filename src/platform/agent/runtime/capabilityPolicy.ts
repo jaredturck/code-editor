@@ -483,6 +483,23 @@ export function evaluateToolAccess(
     };
   }
 
+  // Optional per-session tool allowlist. When present it applies to every catalog tool,
+  // including internal tools: some internal entries can inspect the host, create artifacts,
+  // call cloud peers, or delegate work. A scoped session therefore opts in to each tool
+  // explicitly instead of treating the internal flag as a security boundary. When absent,
+  // legacy IRIS behavior is unchanged.
+  const sessionToolAllowlist = Array.isArray(settings?.agent_tool_allowlist)
+    ? new Set(settings.agent_tool_allowlist.map((value) => String(value || '').trim()).filter(Boolean))
+    : null;
+  if (sessionToolAllowlist && !sessionToolAllowlist.has(name)) {
+    return {
+      available: false,
+      reason: `${name} is outside the active session tool scope.`,
+      code: 'session_tool_not_allowed',
+      permissionKey: null,
+    };
+  }
+
   // Tagged-model-mesh tools (Workstream D) are advertised ONLY when the communication
   // bridge AND peer consultation are both enabled — so models never see them in a
   // single-model session. (Existing agent.delegate/* are gated at the broker by role.)

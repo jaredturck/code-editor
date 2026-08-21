@@ -195,3 +195,68 @@ The migration environment still does not contain the complete project dependency
 ```bash
 npm run verify:full
 ```
+
+
+## Core Agent Chat Integration patch validation (P006)
+
+P006 replaces the Code Editor's legacy direct Ollama Chat request path with the migrated IRIS agent runtime while retaining the existing Chat shell and deliberately limiting this first agent-facing milestone to research/context capabilities.
+
+### Files introduced/changed by this patch
+
+- `src/App.tsx`
+- `src/chat/agentChat.ts`
+- `src/components/AIChatPanel.tsx`
+- `src/hooks/useAIChat.ts`
+- `src/platform/agent/runtime/capabilityPolicy.ts`
+- `src/types/editor.ts`
+- `tests/AIChatPanel.test.tsx`
+- `tests/agentCapabilityScope.test.ts`
+- `tests/agentChat.test.ts`
+- `docs/migration/CORE_AGENT_CHAT_PLAN.md`
+- `docs/migration/CORE_AGENT_CHAT_REVIEW.md`
+- migration/status documentation
+
+### Static validation
+
+- TypeScript-family files parsed across active `src/`, `backend/`, `electron/` and `tests/`: **269**
+- Physical lines parsed: **87,226**
+- Parser errors: **0**
+- Relative/`@/` imports inspected: **795**
+- Intentional generated-output test imports: **3**
+- Unresolved source imports: **0**
+- Diff whitespace errors: **0**
+- Legacy direct Chat request/model-picker references in the migrated Chat controller/panel: **0**
+- P006 session-allowlisted tools: **14**
+- Allowlisted names missing from the canonical IRIS tool catalog: **0**
+
+A dependency-aware TypeScript check was also attempted with the globally available compiler. It reached project configuration loading but stopped at the missing installed dependency type `vite/client`; this is an environment/dependency-tree gap rather than a reported P006 source diagnostic.
+
+### Focused tests added
+
+- configured Orchestrator provider/model/key-slot resolution;
+- research/context-only session tool allowlist construction;
+- denial of excluded normal and `internal` catalog tools at capability-policy evaluation;
+- denial of Chat-originated persistent machine-permission grants;
+- legacy persisted image-attachment restoration;
+- reasoning/activity sanitization and bounded observable activity;
+- configured Orchestrator presentation in the existing Chat shell;
+- approval/question card behavior;
+- preservation of active-file attachment, manual attachment and voice controls.
+
+### Security review result
+
+The changed renderer-to-agent authority path was reviewed as security-sensitive. The review corrected three issues before packaging: the session allowlist now applies to catalog entries marked `internal`; direct filesystem/search/RAG exposure is deferred because the current trusted bridge root is the user's home directory rather than a workspace authorization boundary; and Core Agent Chat refuses persistent machine-permission grants so an approval request cannot widen P006 authority. Provider keys remain Electron-secured and ephemeral at runtime, raw reasoning events are discarded, raw tool output previews are excluded from activity metadata, and excluded file/terminal/multi-agent/host-control tools remain broker-blocked. Full details are in `CORE_AGENT_CHAT_REVIEW.md`.
+
+### Bug/style review result
+
+The review corrected legacy image-attachment normalization, verified cancellation and approval cleanup, bounded activity history to 200 items, and confirmed clear-chat removes the encrypted active chat/warm state. A changed-file whitespace/style pass reported no whitespace errors. New Code Editor files follow the existing no-semicolon style while the migrated IRIS policy file retains its surrounding style.
+
+### Dependency-aware validation
+
+The recovery environment does not contain the project's installed `node_modules`, and its npm cache is insufficient to reconstruct the dependency tree offline. Vitest, Oxlint, Prettier, Electron/backend builds and the full project typecheck therefore cannot be truthfully executed here. After applying P006, run:
+
+```bash
+npm run verify:full
+```
+
+Any dependency-aware failure from that command should be treated as the first corrective item before the next feature milestone.

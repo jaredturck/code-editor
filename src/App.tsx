@@ -44,7 +44,7 @@ function App() {
     onPathDeleted: editor.mark_document_paths_deleted,
     onNotice: editor.show_notice,
   })
-  const chat = useAIChat(editor.settings, editor.apply_settings, editor.active_text_document)
+  const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path)
   const panels = usePanelSizes(editor.ai_chat_open)
   const editor_ref = useRef<CodeEditorHandle>(null)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)

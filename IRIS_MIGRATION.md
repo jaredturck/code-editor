@@ -91,10 +91,11 @@ Files:
 A global `CommandOrControl+Shift+Backspace` emergency stop now:
 - terminates editor terminal PTYs;
 - aborts active legacy Ollama requests;
+- aborts the active Code Editor IRIS agent run;
 - revokes bridge terminal/launcher/automation/microphone permissions;
 - broadcasts `platform:emergency-stop` to renderers.
 
-This is the migrated foundation for later stopping full agent/sub-agent runs.
+Multi-agent/sub-agent cancellation is still reserved for the later orchestration milestone.
 
 ### Screen-source access foundation
 
@@ -104,25 +105,15 @@ The trusted Electron main process exposes screen-source enumeration to migrated 
 
 ### AI Chat → full IRIS agent runtime
 
-**Backend status:** migrated.
+**Status: CONNECTED (core agent milestone).**
 
-The following are present under `src/platform/`:
-- `runAgentSession` facade;
-- native tool-calling and structured-controller paths;
-- planning/TODO state;
-- capability policy;
-- tool broker;
-- safety and limit policies;
-- continuity/context handling;
-- verification/finalization;
-- skills;
-- provider routing;
-- health/failover;
-- multi-agent orchestration.
+The existing Code Editor `AI Chat` panel now executes through the migrated `runAgentSession` runtime instead of the legacy direct Ollama chat request path. The configured Orchestrator provider/model/key slot is resolved from Settings, cloud and local providers share the same agent path, native tool calling and structured-controller fallback remain available, and agent output streams into the existing Chat shell.
 
-**Current Code Editor UI status:** the existing `AI Chat` panel still uses its original direct Ollama path. It was deliberately not replaced during the bulk source migration because the current panel has no equivalent UI for IRIS approvals, long-run state, provider/key selection, TODO timeline, or autonomous-run authority. Silently auto-granting filesystem/terminal permissions merely to make the first migration look connected would weaken IRIS's security design.
+This milestone also connects encrypted chat restoration/persistence, durable run history, warm TODO state, compact approval/question cards, cancellation, global emergency-stop handling and a bounded observable activity timeline. Raw model reasoning streams are deliberately excluded from the Code Editor transcript and persisted activity metadata.
 
-The runtime is therefore present and ready for the next integration stage without recreating it.
+P006 intentionally exposes only a research/context tool scope: skills, current-chat memory/context controls, approvals/questions, TODO updates, trusted-source lookup and policy-governed web search/fetch. The security review found that enabling the migrated filesystem/search/RAG tools before the editor-aware authority layer would make the bridge's broader home-directory root part of the trust boundary, so direct workspace filesystem access is deliberately deferred rather than shipped with a weaker boundary.
+
+The per-session allowlist applies to **every** catalog tool, including tools marked `internal`; this blocks host process inspection, artifacts, cloud consultation, delegation, file operations, exact code search, RAG, terminal execution, screen/mouse control and other later-stage capabilities even if broader persistent permissions exist. Chat also refuses requests to persist machine permissions during P006. Those capabilities remain scheduled for their dedicated editor-awareness/safety milestones.
 
 ### Search → semantic filesystem
 
@@ -138,7 +129,7 @@ The runtime is therefore present and ready for the next integration stage withou
 
 The existing VS Code-inspired Settings modal now exposes the migrated IRIS AI configuration without importing the old IRIS Settings UI. The AI tab is split into Providers, Models, Agents, Routing, Autonomy, Limits, Skills and Semantic Index sections.
 
-Connected settings include secure provider credentials, explicit provider testing/model discovery, model curation, Orchestrator/Executor/Scout/Reviewer assignments, per-role permission tiers, routing/failover policy, brokered capability permissions, web/package guards, long-run budgets, skill-runtime configuration and semantic-index maintenance. The original Code Editor Ollama Chat/speech settings remain available during the staged Chat migration.
+Connected settings include secure provider credentials, explicit provider testing/model discovery, model curation, Orchestrator/Executor/Scout/Reviewer assignments, per-role permission tiers, routing/failover policy, brokered capability permissions, web/package guards, long-run budgets, skill-runtime configuration and semantic-index maintenance. The original Code Editor Ollama speech settings remain available; model/provider selection for Chat now comes from the configured IRIS Orchestrator.
 
 ### Existing Code Editor native capabilities → agent tools
 
@@ -329,10 +320,12 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Model discovery and selection
   - Orchestrator / Executor / Scout / Reviewer assignments
   - Agent safety, budget, web and package policies
-- [ ] **Core agent chat integration**
+- [x] **Core agent chat integration**
   - Connect `AI Chat` to `runAgentSession`
   - Native tool calling and structured-controller fallback
-  - Streaming, cancellation and tool-result timeline
+  - Streaming, cancellation and observable activity timeline
+  - Encrypted active-chat restoration/persistence and approval/question cards
+  - Research/context-only per-session capability boundary
 - [ ] **Planning and autonomous project runs**
   - Planning and structured TODOs
   - Long-running project execution
@@ -455,15 +448,15 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Backend, agent, broker/security and provider suites
   - Semantic-index and multi-agent suites
 - [ ] **Re-enable benchmarks**
-- [ ] **Add Code Editor + agent integration tests**
+- [x] **Add Code Editor + agent integration tests**
 - [ ] **Add long-running run/recovery tests**
 - [ ] **Add multi-agent collision tests**
 
 ## Next integration priorities
 
-1. Connect the existing AI Chat panel to `runAgentSession` while adding the minimum approval/run-state UI required to preserve IRIS's safety contract.
-2. Connect semantic search results to the existing Search activity and workspace watcher; semantic-index configuration is already available in Settings.
-3. Add editor-buffer-aware agent filesystem reads/writes for unsaved files.
-4. Add durable autonomous project-run state, checkpoints, TODO/timeline display and resume behavior.
+1. Add editor-buffer-aware agent filesystem reads/writes for unsaved files while preserving workspace containment and human/agent collision safety.
+2. Connect brokered terminal/build/test/diagnostics tools so the agent can run and verify its edits.
+3. Add durable autonomous project-run planning, checkpoints, richer TODO/timeline display and resume behavior.
+4. Connect semantic/exact search results to the existing Search activity and workspace watcher; backend retrieval is already callable by Agent Chat.
 5. Enable multi-agent delegation/review with file write leases/collision prevention.
 6. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

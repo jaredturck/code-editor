@@ -200,6 +200,16 @@ export interface AIAttachment {
   preview: string | null
 }
 
+export interface AgentActivityItem {
+  id: string
+  type: string
+  label: string
+  detail: string
+  status: string
+  tool: string
+  at: number
+}
+
 export interface AIChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -207,4 +217,8 @@ export interface AIChatMessage {
   attachments: AIAttachment[]
   streaming?: boolean
   error?: boolean
+  activity?: AgentActivityItem[]
+  provider?: string
+  model?: string
+  run_id?: string
 }

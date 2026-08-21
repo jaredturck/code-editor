@@ -233,9 +233,13 @@ Implementation/validation details are recorded in `AI_SETTINGS_PROVIDER_PLAN.md`
 
 ### 7. Existing AI Chat integration
 
-The current AI Chat visual surface is retained. Its backend is migrated from direct Ollama-only chat toward `runAgentSession` using the IRIS runtime. The current active-file attachment behavior is preserved, and the workspace root is supplied to the agent runtime so file/terminal activity can be scoped.
+P006 completes the core Chat cutover while retaining the current Code Editor visual shell. `useAIChat` now resolves the configured Orchestrator, builds encrypted conversation context, invokes `runAgentSession`, streams the visible answer, presents bounded observable activity, handles approvals/questions and restores/persists the active encrypted chat.
 
-Approvals and richer timeline presentation can be progressively surfaced without replacing the editor shell. If an approval UI is not fully exposed in this migration, the relevant runtime remains present and is documented in the ledger.
+The first connected agent scope is intentionally research/context-only. A per-session capability allowlist is enforced inside IRIS capability policy for **all** catalog tools, including `internal` tools, so host inspection, artifacts, cloud consultation, delegation, file operations, exact code search, RAG, terminal execution and screen/mouse control are neither available nor requestable from Code Editor Chat yet. Existing active-file/manual attachments and the microphone composer workflow remain in place.
+
+The P006 security review intentionally deferred direct filesystem/search/RAG tools even when a workspace is open. The migrated loopback bridge is rooted at the user's home directory, while the stronger editor-aware workspace authority/realpath/symlink contract belongs to the filesystem milestone. P006 therefore does not pretend that `agent_working_dir` alone is an authorization boundary.
+
+Implementation, security and validation details are recorded in `CORE_AGENT_CHAT_PLAN.md` and `CORE_AGENT_CHAT_REVIEW.md`.
 
 ### 8. Search integration
 
@@ -296,10 +300,10 @@ No migrated implementation is deleted merely because its original panel was not 
 
 ## Post-migration follow-up sequence
 
-1. Promote AI Chat from compatibility integration to durable autonomous project-run UX.
-2. Wire semantic search results into the existing Search activity and workspace watcher.
-3. Add resumable long-duration runs/checkpointing.
-4. Surface plans/TODOs, timeline and approvals inside AI Chat; skill configuration is already available in Settings.
+1. Add editor-buffer-aware filesystem write/edit/patch authority and human/agent collision handling.
+2. Connect brokered terminal/build/test/diagnostics execution for the edit → run → fix → verify loop.
+3. Promote Agent Chat to durable long-duration autonomous project runs with checkpoints and resume.
+4. Wire semantic/exact search into the existing Search activity and workspace watcher.
 5. Enable multi-agent delegation/review and collision control.
 6. Integrate model/cache management and local runtime work from Projects 1 and 3.
 7. Re-enable/import compatible IRIS tests subsystem-by-subsystem.
