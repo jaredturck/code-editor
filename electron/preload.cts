@@ -182,3 +182,26 @@ contextBridge.exposeInMainWorld('editor_api', {
     },
   },
 })
+
+contextBridge.exposeInMainWorld('orbitDesktop', {
+  isDesktopShell: true,
+  windowRole: 'editor',
+  security: {
+    getBridgePermissions: () => ipcRenderer.invoke('platform:bridge-permissions-get'),
+    updateBridgePermissions: (permissions: unknown) =>
+      ipcRenderer.invoke('platform:bridge-permissions-update', permissions),
+  },
+  credentials: {
+    status: () => ipcRenderer.sendSync('iris:credential-status'),
+    list: () => ipcRenderer.sendSync('iris:credential-list'),
+    get: (provider: string) => ipcRenderer.sendSync('iris:credential-get', provider),
+    set: (provider: string, value: string) => ipcRenderer.sendSync('iris:credential-set', provider, value),
+    delete: (provider: string) => ipcRenderer.sendSync('iris:credential-delete', provider),
+  },
+  getScreenSources: () => ipcRenderer.invoke('platform:get-screen-sources'),
+  onAgentStopRequest: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('platform:emergency-stop', listener)
+    return () => ipcRenderer.removeListener('platform:emergency-stop', listener)
+  },
+})

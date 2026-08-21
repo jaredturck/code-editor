@@ -1,0 +1,821 @@
+/**
+ * Orchestration Client
+ *
+ * Frontend-side client for the multi-agent bus.
+ * Wraps subAgentRuntime's in-process queue with the interface expected by
+ * agentRuntime's new agent.delegate / agent.recall / agent.status / agent.roster tools.
+ *
+ * Task orchestration is in-process; bridge-backed handoff uses the Electron-owned local server,
+ * no added latency beyond the sub-agent AI calls themselves.
+ *
+ * Role-based: any provider can be orchestrator / executor / scout.
+ * Guards check for 'orchestrator' role, not for 'claude' provider.
+ */
+
+import { buildSTP, summariseSTP } from '@/platform/stpBuilder';
+import { buildSkillProfile } from '@/platform/skillProfiles';
+import {
+  applyAgentIdentityToSettings,
+  normalizeAgentRole,
+  resolveAgentRoleSettings,
+  resolveCurrentAgentRole,
+} from '@/platform/agent/agentIdentity';
+import type { AgentRoleId } from '@/platform/agent/agentIdentity';
+import { buildAgentRoster, type RosterMember } from '@/platform/agent/modelTags';
+import { recordModelFailure, isModelHealthy } from '@/platform/agent/modelHealth';
+import { getKey } from '@/platform/keyStore';
+import { subscribeSettingsChanged } from '@/platform/settingsStorage';
+import type {
+  BroadcastArgs,
+  DelegateArgs,
+  DelegateResult,
+  DelegateTarget,
+  DelegationEvaluation,
+  OrchestrationModeResult,
+  RecallArgs,
+  RecallResult,
+  StatusArgs,
+  SubAgentLoopHandle,
+  SubAgentRosterEntry,
+  SubAgentSettings,
+  SubAgentTaskResult,
+  VerifyArgs,
+  VerifyResult,
+} from '@/platform/agent/subAgentTypes';
+import {
+  postTask,
+  postTaskBatch,
+  waitForTask,
+  waitForAllTasks,
+  pollTaskResult,
+  getTaskStatus,
+  getAgentRoster,
+  isAgentAvailable,
+  broadcastToAgents,
+  startSubAgentLoop,
+  resolveAgentId,
+  subscribeSubAgentEvents,
+  TASK_STATUS,
+} from '@/platform/subAgentRuntime';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+// Default per-task budget when the orchestrator doesn't specify one. Raised from
+// 45s: that left a ~38s soft deadline, too short for real model calls (one slow
+// reasoning call would exhaust it), so delegated tasks were timing out once the
+// connection fix let them actually run. The orchestrator can still override via
+// args.timeoutMs (clamped 5s–300s in handleAgentDelegate).
+const DEFAULT_DELEGATE_TIMEOUT_MS = 130000;
+const DELEGATE_AVAILABILITY_WAIT_MS = 10000;
+const DELEGATE_AVAILABILITY_POLL_MS = 500;
+const MAX_PARALLEL_DELEGATIONS = 16;
+const MAX_ACTIVE_SUB_AGENT_LOOPS = 8;
+
+interface DelegationTaskLike {
+  output?: { schema?: Record<string, unknown> };
+  budget?: { maxSteps?: unknown };
+}
+
+interface DelegationResultLike {
+  status?: string;
+  result?: unknown;
+  stepsUsed?: unknown;
+  stepBudget?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+// ── Delegate helpers ──────────────────────────────────────────────────────────
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Wait up to maxWaitMs for an agent to become idle before posting.
+ * Falls back to posting anyway (task queues, agent picks it up when free).
+ *
+ * @param {string} agentId
+ * @param {number} maxWaitMs
+ * @returns {Promise<boolean>} true if agent became available, false if waited out
+ */
+async function awaitAgentAvailable(
+  agentId: string,
+  maxWaitMs = DELEGATE_AVAILABILITY_WAIT_MS,
+): Promise<boolean> {
+  const start = Date.now();
+
+  while (Date.now() - start < maxWaitMs) {
+    if (isAgentAvailable(agentId)) return true;
+    await waitMs(DELEGATE_AVAILABILITY_POLL_MS);
+  }
+
+  return false; // Post anyway — agent will pick it up when ready
+}
+
+// ── Satisfaction evaluation ───────────────────────────────────────────────────
+
+/**
+ * Evaluates whether a delegation result is satisfactory.
+ * Claude uses this to decide whether to accept, retry, or take over.
+ *
+ * @param {object} task     - The original STP object
+ * @param {object} result   - The task result from the bus
+ * @returns {{ satisfied: boolean, reason: string, warning?: string }}
+ */
+export function evaluateDelegationResult(
+  task: DelegationTaskLike,
+  result: DelegationResultLike | null | undefined,
+): DelegationEvaluation {
+  if (!result) {
+    return { satisfied: false, reason: 'no_result' };
+  }
+
+  if (result.status === TASK_STATUS.FAILED) {
+    return { satisfied: false, reason: 'agent_failed' };
+  }
+
+  if (result.status === TASK_STATUS.TIMEOUT) {
+    return { satisfied: false, reason: 'timeout' };
+  }
+
+  // Output schema validation
+  if (task?.output?.schema && Object.keys(task.output.schema).length > 0) {
+    const schema = task.output.schema;
+    const res = result.result;
+
+    if (!isRecord(res)) {
+      return { satisfied: false, reason: 'schema_mismatch' };
+    }
+
+    const missing = Object.keys(schema).filter((k) => !(k in res));
+    if (missing.length > 0) {
+      return { satisfied: false, reason: `missing_fields: ${missing.join(', ')}` };
+    }
+  }
+
+  // Empty result check
+  if (
+    !result.result ||
+    (typeof result.result === 'object' && Object.keys(result.result).length === 0)
+  ) {
+    return { satisfied: false, reason: 'empty_result' };
+  }
+
+  return { satisfied: true, reason: 'ok' };
+}
+
+// ── Delegation target resolution ──────────────────────────────────────────────
+
+/**
+ * Resolve a delegation target into a stable role-based agent id plus the settings that sub-agent
+ * should run with (its OWN provider/model/key from the flat `agent_models` mesh, via
+ * resolveAgentRoleSettings). This keeps the agent id the orchestrator delegates to aligned with the
+ * loops started at session bootstrap, and guarantees each role uses its assigned model rather than
+ * inheriting the orchestrator's. (pickDelegateMember layers per-key distribution on top of this.)
+ *
+ * @param {string} toAgent  - role name or provider alias the model asked for
+ * @param {object} settings - orchestrator settings (the flat agent_models list backs the binding)
+ * @returns {{ agentId: 'executor'|'scout'|'orchestrator', role: string, provider: string, model: string, identity: object, subSettings: object }}
+ */
+export function resolveDelegateTarget(
+  toAgent: unknown,
+  settings: SubAgentSettings,
+): DelegateTarget {
+  const role = normalizeAgentRole(toAgent);
+  const resolved = resolveAgentRoleSettings(role, settings);
+
+  // subSettings carries the role's provider/model AND its own API key — the key
+  // binding lives in applyAgentIdentityToSettings (agentIdentity.ts) so both this
+  // path and the sessionRunner bootstrap resolve it identically.
+  return {
+    agentId: role,
+    role,
+    provider: resolved.identity.provider,
+    model: resolved.identity.model,
+    identity: resolved.identity,
+    subSettings: resolved.settings,
+  };
+}
+
+// ── Agent tool implementations ────────────────────────────────────────────────
+// These are called by agentRuntime's tool broker when Claude uses agent.* tools.
+
+/**
+ * agent.delegate — Post a task to a sub-agent.
+ * Non-blocking by default; returns taskId for later recall.
+ *
+ * @param {object} args
+ * @param {object} settings  - Current AI settings (for resolving caller identity)
+ * @returns {Promise<object>}
+ */
+export async function handleAgentDelegate(
+  args: DelegateArgs,
+  settings: SubAgentSettings,
+): Promise<DelegateResult> {
+  // Spread delegated work across the role's keyed standby members (round-robin) so it doesn't all
+  // hit Key 1 — or target a specific member id (e.g. a teamwork part owner). Falls back to the role
+  // primary when no distinct members are pooled.
+  const {
+    agentId: toAgent,
+    identity,
+    subSettings,
+  } = pickDelegateMember(String(args?.toAgent || 'executor'), settings);
+  const type = String(args?.type || 'execute');
+  const instructions = String(args?.instructions || args?.goal || '').trim();
+  const timeoutMs = Number.isFinite(Number(args?.timeoutMs))
+    ? Math.max(5000, Math.min(300000, Number(args.timeoutMs)))
+    : DEFAULT_DELEGATE_TIMEOUT_MS;
+
+  // Load the sub-agent's OWN skill profile (model-family scoped) so it executes
+  // with its role's advanced skills. Use the "simple" variant for small/local
+  // models. The orchestrator may override via args.skills.
+  const subProfile = buildSkillProfile(subSettings?.ai_provider, subSettings?.ai_model);
+  const subModel = String(subSettings?.ai_model || '').toLowerCase();
+  const weakFamilies = ['gemma', 'phi', 'llama', 'mistral', 'mixtral', 'qwen'];
+  const skillVariant =
+    toAgent === 'scout' || weakFamilies.some((f) => subModel.includes(f)) ? 'simple' : 'default';
+  const skills =
+    args?.skills && typeof args.skills === 'object'
+      ? (args.skills as { load?: unknown; variant?: unknown })
+      : { load: [subProfile], variant: skillVariant };
+
+  const stp = buildSTP({
+    type,
+    goal: instructions,
+    scope: String(args?.scope || '').trim(),
+    constraints: Array.isArray(args?.constraints) ? args.constraints : [],
+    tools: {
+      available: Array.isArray(args?.tools) ? args.tools : [],
+      preferred: Array.isArray(args?.preferredTools) ? args.preferredTools : [],
+      forbidden: Array.isArray(args?.forbiddenTools) ? args.forbiddenTools : [],
+    },
+    outputSchema:
+      args?.outputSchema && typeof args.outputSchema === 'object' ? args.outputSchema : {},
+    context: args?.context && typeof args.context === 'object' ? args.context : {},
+    skills,
+    budget: {
+      maxSteps: Number.isFinite(Number(args?.maxSteps)) ? Number(args.maxSteps) : 12,
+      timeoutMs,
+      maxOutputChars: Number.isFinite(Number(args?.maxOutputChars))
+        ? Number(args.maxOutputChars)
+        : 6000,
+    },
+    priority: String(args?.priority || 'normal'),
+    toAgent,
+    agentIdentity: identity,
+  });
+
+  // Ensure the target agent loop is running with ITS role's provider/model
+  // (idempotent — a no-op if bootstrap already started it).
+  ensureSubAgentLoop(toAgent, subSettings);
+
+  // Optionally wait for agent availability before posting
+  if (args?.waitForIdle !== false) {
+    await awaitAgentAvailable(toAgent, 3000); // Short wait; fall through either way
+  }
+
+  const taskId = postTask(stp);
+
+  return {
+    taskId,
+    toAgent,
+    // The actual model behind the resolved member, so the UI can show "executor#2".
+    model: String(identity?.model || subSettings?.ai_model || ''),
+    summary: summariseSTP(stp),
+    status: 'posted',
+    postedAt: Date.now(),
+  };
+}
+
+/**
+ * agent.recall — Retrieve result for a delegated task.
+ * If waitMs is set, polls until done or timeout.
+ *
+ * @param {object} args - { taskId, waitMs }
+ * @returns {Promise<object>}
+ */
+export async function handleAgentRecall(args: RecallArgs): Promise<RecallResult> {
+  const taskId = String(args?.taskId || '').trim();
+  if (!taskId) throw new Error('taskId is required for agent.recall');
+
+  const waitMsParam = Number.isFinite(Number(args?.waitMs)) ? Number(args.waitMs) : 0;
+
+  if (waitMsParam > 0) {
+    try {
+      const result = await waitForTask(taskId, waitMsParam);
+      return {
+        taskId,
+        status: result.status,
+        result: result.result || null,
+        toolsUsed: result.toolsUsed || [],
+        stepsUsed: result.stepsUsed || 0,
+        tokensUsed: result.tokensUsed || 0,
+        satisfactionHint: result.satisfactionHint || '',
+        durationMs: result.durationMs || 0,
+      };
+    } catch (error: unknown) {
+      return {
+        taskId,
+        status: TASK_STATUS.TIMEOUT,
+        result: null,
+        toolsUsed: [],
+        stepsUsed: 0,
+        tokensUsed: 0,
+        satisfactionHint: errorMessage(error, 'Timed out waiting for result.'),
+        durationMs: waitMsParam,
+      };
+    }
+  }
+
+  // Non-blocking poll
+  const result = pollTaskResult(taskId);
+  return {
+    taskId,
+    status: result ? result.status : getTaskStatus(taskId),
+    result: result?.result || null,
+    toolsUsed: result?.toolsUsed || [],
+    stepsUsed: result?.stepsUsed || 0,
+    tokensUsed: result?.tokensUsed || 0,
+    satisfactionHint: result?.satisfactionHint || '',
+    durationMs: result?.durationMs || 0,
+    ready: Boolean(result),
+  };
+}
+
+/**
+ * agent.status — Lightweight task status check (no result data).
+ *
+ * @param {object} args - { taskId }
+ * @returns {object}
+ */
+export function handleAgentStatus(args: StatusArgs): {
+  taskId: string;
+  status: SubAgentTaskResult['status'] | 'unknown';
+} {
+  const taskId = String(args?.taskId || '').trim();
+  if (!taskId) throw new Error('taskId is required for agent.status');
+
+  const status = getTaskStatus(taskId);
+  return { taskId, status };
+}
+
+/**
+ * agent.roster — Return all registered agents and their status.
+ *
+ * @returns {object}
+ */
+export function handleAgentRoster(): { agents: SubAgentRosterEntry[] } {
+  return { agents: getAgentRoster() };
+}
+
+/**
+ * agent.broadcast — Push a context update to all queued tasks.
+ *
+ * @param {object} args - { message, contextUpdate }
+ * @returns {object}
+ */
+export function handleAgentBroadcast(args: BroadcastArgs): {
+  broadcasted: true;
+  message: string;
+} {
+  const message = String(args?.message || '').trim();
+  const contextUpdate =
+    args?.contextUpdate && typeof args.contextUpdate === 'object'
+      ? (args.contextUpdate as Record<string, unknown>)
+      : {};
+
+  broadcastToAgents(message, contextUpdate);
+  return { broadcasted: true, message };
+}
+
+/**
+ * agent.verify — Evaluate a sub-agent result against criteria.
+ * Returns verdict and optionally queues a fallback action.
+ *
+ * @param {object} args - { taskId, criteria, fallbackAction }
+ * @returns {Promise<object>}
+ */
+export async function handleAgentVerify(args: VerifyArgs): Promise<VerifyResult> {
+  const taskId = String(args?.taskId || '').trim();
+  if (!taskId) throw new Error('taskId is required for agent.verify');
+
+  const result = pollTaskResult(taskId);
+  if (!result) {
+    return { taskId, verdict: 'not_ready', message: 'Task result not yet available.' };
+  }
+
+  const criteria = String(args?.criteria || '').trim();
+
+  // Simple criteria check — Claude would supply richer logic via the AI loop
+  const { satisfied, reason, warning } = evaluateDelegationResult(
+    { output: { schema: {} }, budget: { maxSteps: 8 } },
+    result,
+  );
+
+  return {
+    taskId,
+    verdict: satisfied ? 'pass' : 'fail',
+    reason,
+    warning: warning || null,
+    criteria,
+    result: result.result || null,
+    satisfactionHint: result.satisfactionHint || '',
+  };
+}
+
+// ── Parallel delegation ───────────────────────────────────────────────────────
+
+/**
+ * Delegate multiple tasks in parallel and wait for all of them.
+ * Claude posts a burst; sub-agents work simultaneously; single resume point.
+ *
+ * @param {object[]} taskArgsList  - Array of agent.delegate args objects
+ * @param {object} settings
+ * @param {number} timeoutMs
+ * @returns {Promise<object[]>}
+ */
+export async function delegateParallel(
+  taskArgsList: DelegateArgs[],
+  settings: SubAgentSettings,
+  timeoutMs = 60000,
+): Promise<SubAgentTaskResult[]> {
+  if (!Array.isArray(taskArgsList)) throw new Error('Parallel tasks must be an array');
+  if (taskArgsList.length > MAX_PARALLEL_DELEGATIONS) {
+    throw new Error(`Parallel delegation exceeds the ${MAX_PARALLEL_DELEGATIONS}-task limit`);
+  }
+  // Post all tasks
+  const taskIds = await Promise.all(
+    taskArgsList.map((args) => handleAgentDelegate(args, settings).then((r) => r.taskId)),
+  );
+
+  // Wait for all to complete
+  const results = await waitForAllTasks(taskIds, timeoutMs);
+  return results;
+}
+
+// ── Sub-agent loop lifecycle ──────────────────────────────────────────────────
+
+// Each loop carries the IDENTITY HASH (provider|model|key|tier) of the member it runs, so a
+// settings change can restart a loop whose model/key/tier moved — instead of the old idempotent
+// map keeping a stale one-time snapshot (the "have to restart the app" bug).
+const activeLoops = new Map<string, { handle: SubAgentLoopHandle; hash: string }>();
+
+function memberHash(member: {
+  provider: string;
+  model: string;
+  keyId: string;
+  tier: number;
+}): string {
+  return `${member.provider}|${member.model}|${member.keyId}|${member.tier}`;
+}
+
+/**
+ * Ensure a sub-agent loop is running for the given agent. Idempotent on identity: a loop with the
+ * SAME hash is a no-op; if the member's identity changed (model/key/tier) the old loop is stopped
+ * and a fresh one starts with the new settings. Passing no hash keeps the legacy "start once"
+ * behavior for ad-hoc delegate calls.
+ */
+export function ensureSubAgentLoop(agentId: string, settings: SubAgentSettings, hash = ''): void {
+  const existing = activeLoops.get(agentId);
+  if (existing) {
+    if (!hash || existing.hash === hash) return;
+    existing.handle.stop();
+    activeLoops.delete(agentId);
+  }
+  if (activeLoops.size >= MAX_ACTIVE_SUB_AGENT_LOOPS) {
+    throw new Error('Active sub-agent loop limit reached');
+  }
+  const handle = startSubAgentLoop(agentId, settings);
+  activeLoops.set(agentId, { handle, hash });
+}
+
+/**
+ * Stop a sub-agent loop.
+ *
+ * @param {string} agentId
+ */
+export function stopSubAgentLoop(agentId: string): void {
+  const entry = activeLoops.get(agentId);
+  if (entry) {
+    entry.handle.stop();
+    activeLoops.delete(agentId);
+  }
+}
+
+/**
+ * Stop all running sub-agent loops.
+ */
+export function stopAllSubAgentLoops(): void {
+  for (const [agentId, entry] of activeLoops) {
+    entry.handle.stop();
+    activeLoops.delete(agentId);
+  }
+  standbyMembers.clear();
+}
+
+// ── Per-key standby pool (Workstream D / §2) ──────────────────────────────────
+// Every connectable roster member EXCEPT the orchestrator answerer (the main session loop) and
+// the one-shot Overwatcher is kept "on standby" — a worker loop bound to its OWN provider/model/
+// KEY, so concurrent agents never share one provider's rate limit and a delegation can be spread
+// across a role's keyed members. Keyed by member id (executor, executor#2, …).
+const standbyMembers = new Map<
+  string,
+  { member: RosterMember; settings: SubAgentSettings; hash: string }
+>();
+const roleRoundRobin = new Map<string, number>();
+let standbySubscribed = false;
+
+function resolveMemberSettings(member: RosterMember, settings: SubAgentSettings): SubAgentSettings {
+  return applyAgentIdentityToSettings(settings as never, {
+    role: member.role,
+    provider: member.provider,
+    model: member.model,
+    keyId: member.keyId || '1',
+    explicitlyAssigned: true,
+  }) as SubAgentSettings;
+}
+
+// A member can go on standby only when it has a model AND a usable key for its slot (local needs
+// none) — otherwise it would delegate straight into an auth failure.
+function isMemberConnectable(member: RosterMember): boolean {
+  if (!member.provider || !member.model) return false;
+  return member.provider === 'local' || Boolean(getKey(member.provider, member.keyId || '1'));
+}
+
+/** Why a configured member could not join the standby pool — surfaced so the drop isn't silent. */
+export interface DroppedMember {
+  member: RosterMember;
+  reason: string;
+}
+
+/**
+ * Partition the configured roster (excluding the Overwatcher and the primary orchestrator, which
+ * is the lead itself) into delegatable members that CAN connect and those that can't — with a
+ * human-readable reason for each drop, so a misconfigured key no longer silently removes a model.
+ */
+function standbyRoster(settings: SubAgentSettings): {
+  connected: RosterMember[];
+  dropped: DroppedMember[];
+} {
+  // Optional team-role allowlist: when set, only these roles may load onto the team (e.g. keep extra
+  // orchestrators out so the lead isn't consulting other orchestrators). null/empty/non-array = all
+  // delegatable roles allowed (default). Excluded roles are filtered out silently — it's a choice,
+  // not a misconfiguration, so they don't appear as "dropped".
+  const rawAllow = (settings as Record<string, unknown> | null)?.agent_team_roles;
+  const allowList =
+    Array.isArray(rawAllow) && rawAllow.length ? new Set(rawAllow.map((r) => String(r))) : null;
+  const delegatable = buildAgentRoster(settings as never).filter(
+    (member) =>
+      member.role !== 'overwatcher' &&
+      !(member.role === 'orchestrator' && member.primary) &&
+      (!allowList || allowList.has(member.role)),
+  );
+  const connected: RosterMember[] = [];
+  const dropped: DroppedMember[] = [];
+  for (const member of delegatable) {
+    if (!member.provider || !member.model) {
+      dropped.push({ member, reason: 'no provider/model set' });
+    } else if (isMemberConnectable(member)) {
+      connected.push(member);
+    } else {
+      dropped.push({
+        member,
+        reason:
+          member.provider === 'local'
+            ? 'local server has no key/endpoint resolved'
+            : `no API key saved for ${member.provider} Key ${member.keyId || '1'}`,
+      });
+    }
+  }
+  return { connected: connected.slice(0, MAX_ACTIVE_SUB_AGENT_LOOPS), dropped };
+}
+
+function standbyDesired(settings: SubAgentSettings): RosterMember[] {
+  return standbyRoster(settings).connected;
+}
+
+/**
+ * Reconcile the live standby pool with the configured roster. Starts a loop per desired member
+ * (eager mode) or just registers them for on-demand start (lazy mode), restarts any whose identity
+ * changed, and stops loops for members that were removed/re-keyed. Subscribes once so future
+ * settings writes re-sync WITHOUT an app restart. No-ops (and tears down) when multi-agent is off.
+ */
+export interface StandbyPoolState {
+  members: string[];
+  roles: string[];
+  connected: RosterMember[];
+  dropped: DroppedMember[];
+}
+
+export function syncStandbyPool(settings: SubAgentSettings): StandbyPoolState {
+  if (!standbySubscribed) {
+    standbySubscribed = true;
+    subscribeSettingsChanged((next) => {
+      try {
+        syncStandbyPool(next as SubAgentSettings);
+      } catch {
+        /* non-fatal */
+      }
+    });
+  }
+
+  if (settings?.agent_multi_enabled !== true) {
+    stopAllSubAgentLoops();
+    return { members: [], roles: [], connected: [], dropped: [] };
+  }
+
+  const eager = String(settings?.agent_standby_mode || 'eager').toLowerCase() !== 'lazy';
+  const roster = standbyRoster(settings);
+  const desired = roster.connected;
+  const desiredIds = new Set(desired.map((m) => m.id));
+
+  // Stop loops + registrations for members that no longer exist (removed / re-keyed / re-tiered).
+  for (const id of [...standbyMembers.keys()]) {
+    if (!desiredIds.has(id)) standbyMembers.delete(id);
+  }
+  for (const id of [...activeLoops.keys()]) {
+    if (!desiredIds.has(id)) stopSubAgentLoop(id);
+  }
+
+  for (const member of desired) {
+    const subSettings = resolveMemberSettings(member, settings);
+    const hash = memberHash(member);
+    standbyMembers.set(member.id, { member, settings: subSettings, hash });
+    const running = activeLoops.get(member.id);
+    // Eager → keep it warm; lazy → only (re)start to apply changed settings to an already-live loop.
+    if (eager || (running && running.hash !== hash)) {
+      try {
+        ensureSubAgentLoop(member.id, subSettings, hash);
+      } catch {
+        /* loop cap reached — extra members stay registered for on-demand use */
+      }
+    }
+  }
+
+  return {
+    members: desired.map((m) => m.id),
+    roles: Array.from(new Set(desired.map((m) => m.role))),
+    connected: desired,
+    dropped: roster.dropped,
+  };
+}
+
+/** Read-only roster partition for callers (e.g. the chat /plan gate) that need the same
+ *  connectable / dropped view without starting or tearing down any standby loops. */
+export function inspectStandbyRoster(settings: SubAgentSettings): {
+  connected: RosterMember[];
+  dropped: DroppedMember[];
+} {
+  if (settings?.agent_multi_enabled !== true) return { connected: [], dropped: [] };
+  return standbyRoster(settings);
+}
+
+/**
+ * Choose which member of a role a delegation goes to, spreading load across that role's keyed
+ * members (prefer an idle one; round-robin otherwise) so heavy delegated work doesn't pile onto
+ * Key 1. Falls back to the role's primary binding when no distinct members are pooled. Ensures the
+ * chosen member's loop is up (covers lazy mode) before the caller posts.
+ */
+export function pickDelegateMember(
+  target: string,
+  settings: SubAgentSettings,
+): {
+  agentId: string;
+  identity: { role: AgentRoleId; provider: string; model: string };
+  subSettings: SubAgentSettings;
+} {
+  const raw = String(target || '').trim();
+  const localOnly = settings?.agent_local_only_enforced === true;
+  // A SPECIFIC member id (e.g. "executor#2", a teamwork part owner) → target it directly rather
+  // than round-robining away from it. Plain role names fall through to load-distribution below.
+  if (raw.includes('#')) {
+    const exact = standbyMembers.get(raw);
+    if (exact && (!localOnly || exact.member.provider === 'local')) {
+      try {
+        ensureSubAgentLoop(exact.member.id, exact.settings, exact.hash);
+      } catch {
+        /* non-fatal */
+      }
+      return {
+        agentId: exact.member.id,
+        identity: {
+          role: exact.member.role,
+          provider: exact.member.provider,
+          model: exact.member.model,
+        },
+        subSettings: exact.settings,
+      };
+    }
+  }
+  const role = normalizeAgentRole(raw);
+  const candidates = [...standbyMembers.values()].filter(
+    (m) => m.member.role === role && (!localOnly || m.member.provider === 'local'),
+  );
+  if (!candidates.length) {
+    const resolved = resolveAgentRoleSettings(role, settings);
+    return { agentId: role, identity: resolved.identity, subSettings: resolved.settings };
+  }
+  const idle = candidates.filter((c) => isAgentAvailable(c.member.id));
+  const pool = idle.length ? idle : candidates;
+  const index = (roleRoundRobin.get(role) ?? 0) % pool.length;
+  roleRoundRobin.set(role, index + 1);
+  const chosen = pool[index];
+  try {
+    ensureSubAgentLoop(chosen.member.id, chosen.settings, chosen.hash);
+  } catch {
+    /* non-fatal — fall through to posting; the loop may already be at cap */
+  }
+  return {
+    agentId: chosen.member.id,
+    identity: { role, provider: chosen.member.provider, model: chosen.member.model },
+    subSettings: chosen.settings,
+  };
+}
+
+/**
+ * Teamwork fallback (§F4): a delegated part failed on `failedMemberId` — mark that member unhealthy
+ * and choose a DIFFERENT healthy teammate to take the part over, preferring the same role/tier and
+ * then any healthy worker. Returns the new member id (+ model/role) to re-delegate to, or null when
+ * no other healthy teammate can take it (the caller then re-plans or has the lead absorb it).
+ */
+export function reassignFailedPart(
+  failedMemberId: string,
+  settings: SubAgentSettings,
+): { memberId: string; model: string; role: AgentRoleId } | null {
+  const localOnly = settings?.agent_local_only_enforced === true;
+  const failed = standbyMembers.get(String(failedMemberId || ''));
+  if (failed) {
+    recordModelFailure(failed.member.provider, failed.member.model, failed.member.keyId, {
+      error: 'delegated teamwork part failed',
+    });
+  }
+  const failedRole = failed?.member.role || normalizeAgentRole(failedMemberId);
+  const healthy = [...standbyMembers.values()].filter(
+    (m) =>
+      m.member.id !== failedMemberId &&
+      (!localOnly || m.member.provider === 'local') &&
+      isModelHealthy(m.member.provider, m.member.model, m.member.keyId),
+  );
+  if (!healthy.length) return null;
+  // Prefer a healthy member of the SAME role/tier; else any healthy worker.
+  const pick = healthy.find((m) => m.member.role === failedRole) || healthy[0];
+  try {
+    ensureSubAgentLoop(pick.member.id, pick.settings, pick.hash);
+  } catch {
+    /* non-fatal */
+  }
+  return { memberId: pick.member.id, model: pick.member.model, role: pick.member.role };
+}
+
+export { resolveAgentId, subscribeSubAgentEvents, TASK_STATUS };
+
+/**
+ * Detect the current orchestration mode based on which agents are online.
+ * Returns 'full' | 'dual' | 'solo'
+ * - full: orchestrator + executor + scout all online
+ * - dual: orchestrator + one sub-agent online
+ * - solo: only orchestrator online (or no multi-agent configured)
+ *
+ * @returns {Promise<{mode: string, available: string[], offline: string[]}>}
+ */
+export async function detectOrchestrationMode(): Promise<OrchestrationModeResult> {
+  try {
+    const result = handleAgentRoster();
+    const roster = Array.isArray(result?.agents) ? result.agents : [];
+    const onlineRoles = roster
+      .filter((a) => a.status !== 'offline' && Date.now() - (a.lastSeen || 0) < 30000)
+      // Loops are keyed by member id (executor, executor#2, …); collapse to the role so a role with
+      // ANY online keyed member counts as connected.
+      .map((a) => String(normalizeAgentRole(String(a.role || a.id).split('#')[0])));
+    // The orchestrator is the current (calling) agent — always online.
+    if (!onlineRoles.includes('orchestrator')) onlineRoles.push('orchestrator');
+    const allRoles = ['orchestrator', 'executor', 'scout'];
+    const offline = allRoles.filter((r) => !onlineRoles.includes(r));
+
+    let mode: OrchestrationModeResult['mode'] = 'solo';
+    if (onlineRoles.includes('executor') && onlineRoles.includes('scout')) mode = 'full';
+    else if (onlineRoles.includes('executor') || onlineRoles.includes('scout')) mode = 'dual';
+
+    return { mode, available: onlineRoles, offline };
+  } catch {
+    return { mode: 'solo', available: ['orchestrator'], offline: ['executor', 'scout'] };
+  }
+}
+
+/**
+ * Resolve the current agent's role from settings.
+ * Returns 'orchestrator' | 'executor' | 'scout'
+ *
+ * @param {object} settings
+ * @returns {string}
+ */
+export function resolveCurrentRole(settings: SubAgentSettings): AgentRoleId {
+  return resolveCurrentAgentRole(settings);
+}

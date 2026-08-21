@@ -1,6 +1,6 @@
 # Code Editor
 
-A desktop Electron code editor with CodeMirror editing, persistent settings, local media viewers, a real integrated terminal, diagnostics, Markdown preview, and optional Ollama chat.
+A desktop Electron code editor with CodeMirror editing, persistent settings, local media viewers, a real integrated terminal, diagnostics, Markdown preview, and an integrated migrated IRIS agent/backend platform. The visible editor shell is intentionally still the Code Editor; agentic capabilities are being connected to its existing Chat, Search, Settings, Explorer, Browser, and Terminal surfaces in stages.
 
 ![Code Editor](./src/assets/screenshots/Screenshot_20260630_153119.png)
 
@@ -15,20 +15,39 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
-- Local Ollama chat with model selection, streaming responses, text/image attachments, and optional voice transcription
+- Existing local Ollama chat with model selection, streaming responses, text/image attachments, and optional voice transcription
+- Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, multi-agent orchestration, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio/vision/automation/launcher backends
+- OS-protected credential storage and encrypted local SQLite platform persistence
+- Authenticated loopback capability bridge with capability permissions and emergency-stop foundation
 
 System utilities such as Python, Git, compilers, and interpreters are not bundled. Commands entered in the terminal use programs available through the user's normal `PATH`.
 
+## IRIS backend migration
+
+This repository contains a bulk migration of the reusable IRIS platform/backend. IRIS presentation code such as the Orb/planet launcher, old panel shell, duplicate editor/file-manager UI, and old multi-window presentation is intentionally omitted. Existing Code Editor UI components remain the product frontend.
+
+The platform source is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some migrated systems are intentionally present before their Code Editor UI integration is complete.
+
+See:
+
+- [`docs/migration/MIGRATION_PLAN.md`](./docs/migration/MIGRATION_PLAN.md) — migration architecture and SDLC plan
+- [`IRIS_MIGRATION.md`](./IRIS_MIGRATION.md) — subsystem status and integration ledger
+- [`docs/migration/MIGRATED_FILES.md`](./docs/migration/MIGRATED_FILES.md) — one-by-one source/destination file map
+- [`docs/migration/UNWIRED_BACKEND.md`](./docs/migration/UNWIRED_BACKEND.md) — migrated functionality not yet surfaced by the editor UI
+- [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) — archive/hash/import/syntax validation and remaining dependency-aware checks
+
 ## Installation
 
-`node-pty` is a native Electron dependency. A normal install runs `@electron/rebuild`; the machine therefore needs the usual native Node build toolchain. On Arch Linux, that generally means `base-devel` and Python for `node-gyp`.
+`node-pty` is a native Electron dependency, and the migrated backend also uses SQLite and Sharp. A normal install runs `@electron/rebuild`; the machine therefore needs the usual native Node build toolchain. On Arch Linux, that generally means `base-devel` and Python for `node-gyp`.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Ollama is optional. When it is installed and running locally, the AI panel discovers models through `http://127.0.0.1:11434` by default.
+Ollama is optional for the existing compatibility chat and is also one of the migrated local-provider backends. Cloud/provider configuration from IRIS is present in the platform but is not yet exposed in the Code Editor Settings UI.
+
+The secure IRIS platform initializes before the renderer. On Linux, Electron must have a real OS secret-storage backend; the application intentionally refuses the insecure `basic_text` fallback.
 
 ## Verification
 

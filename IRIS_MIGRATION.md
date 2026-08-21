@@ -1,0 +1,319 @@
+# IRIS Backend Migration Ledger
+
+## Purpose
+
+This repository is the Code Editor application with the reusable IRIS platform migrated into it. The Code Editor remains the product shell. IRIS is treated as the implementation source for agentic/backend functionality rather than as a design reference to be reimplemented.
+
+The migration follows one rule above all others: **preserve working IRIS logic first, adapt only the integration boundaries required by the new application**. Files were reorganized where that made the permanent structure clearer, and imports were updated to match their new homes.
+
+The full migration plan is in [`docs/migration/MIGRATION_PLAN.md`](docs/migration/MIGRATION_PLAN.md). A one-by-one source/destination inventory is in [`docs/migration/MIGRATED_FILES.md`](docs/migration/MIGRATED_FILES.md). Backend code that is present but not yet connected to a Code Editor surface is listed in [`docs/migration/UNWIRED_BACKEND.md`](docs/migration/UNWIRED_BACKEND.md). Final pre-package validation is recorded in [`docs/migration/VALIDATION_REPORT.md`](docs/migration/VALIDATION_REPORT.md).
+
+## Status vocabulary
+
+- **CONNECTED** — migrated and actively used by the Code Editor runtime now.
+- **AVAILABLE** — migrated and callable/compilable in the new tree, but no Code Editor UI currently invokes it.
+- **PARTIAL** — part of the subsystem is connected; remaining integration is documented.
+- **ARCHIVED-TEST** — original IRIS test/benchmark code is preserved outside the default Code Editor test suite for staged re-enablement.
+- **OMITTED-UI** — deliberately not migrated because the file belongs to the old IRIS product presentation rather than reusable backend/platform behavior.
+
+## Migration totals
+
+The source IRIS archive contained 695 files and about 204,764 lines of text. The migration intentionally does not copy generated IRIS build output or the old IRIS UI shell. The new repository contains the principal reusable implementation areas below:
+
+| Destination | Files | Approx. lines | Status |
+| --- | ---: | ---: | --- |
+| `src/platform/` | 81 | 33,966 | AVAILABLE / PARTIAL |
+| `src/platform-context/` | 4 | 406 | AVAILABLE |
+| `src/platform-features/` | 26 | 5,921 | AVAILABLE |
+| `backend/` | 71 | 27,295 | CONNECTED foundation / AVAILABLE capabilities |
+| `electron/platform/` | 9 | 2,007 | CONNECTED |
+| `migrated-tests/iris/` | 143 | 19,724 | ARCHIVED-TEST |
+| `benchmarks/iris/` | 20 | 4,501 | ARCHIVED-TEST |
+| `docs/iris-reference/` | IRIS docs/reference | — | Reference |
+| `scripts/iris/` | 8 | 157 | Reference / maintenance |
+
+These figures deliberately distinguish the migrated reusable implementation from the old IRIS React shell, generated `server-dist/` / `electron/` output, and visual assets.
+
+## CONNECTED now
+
+### Secure storage bootstrap
+
+The existing Code Editor Electron main process now initializes IRIS's secure persistence foundation before creating the editor window:
+
+1. verify operating-system-backed Electron `safeStorage` is available;
+2. reject Linux `basic_text` secret storage;
+3. load or create the application master key;
+4. start the authenticated loopback bridge;
+5. zero the Electron-owned plaintext key buffer after bridge initialization;
+6. only then load the renderer.
+
+If secure persistence cannot initialize, startup fails closed rather than silently falling back to plaintext state.
+
+Files:
+- `electron/platform/storageKeyStore.cts`
+- `electron/platform/linuxPasswordStore.cts`
+- `electron/platform/localBridge.cts`
+- `electron/main.cts`
+
+### Encrypted local bridge
+
+The complete IRIS bridge/server implementation is migrated to `backend/`. Electron starts it on `127.0.0.1` using an ephemeral port and per-launch random bearer token. The port/token are supplied to the renderer at load time, matching IRIS's existing `desktopBridge` client contract.
+
+The bridge contains the migrated encrypted database, filesystem/network/process containment, semantic indexing, web services, tools, agent bus, launcher, automation and persistence routes.
+
+### Encrypted renderer-state hydration
+
+`src/main.tsx` now hydrates IRIS's encrypted durable-store facade before React mounts. Existing Code Editor React UI remains unchanged after hydration succeeds.
+
+Files:
+- `src/platform/localStorageStore.ts`
+- `src/main.tsx`
+
+### Provider credential vault
+
+IRIS provider credentials are registered in Electron using OS-backed `safeStorage`. A narrow `orbitDesktop.credentials` preload API exposes credential status/list/get/set/delete to migrated provider/settings code without exposing Node APIs to React.
+
+Files:
+- `electron/platform/credentialStore.cts`
+- `electron/preload.cts`
+
+### Bridge permission control
+
+Electron exposes narrow IPC for reading/updating bridge capability permissions. The renderer cannot grant itself authority by inserting permission flags into a normal bridge request.
+
+Files:
+- `electron/platform/localBridge.cts`
+- `electron/main.cts`
+- `electron/preload.cts`
+
+### Emergency stop foundation
+
+A global `CommandOrControl+Shift+Backspace` emergency stop now:
+- terminates editor terminal PTYs;
+- aborts active legacy Ollama requests;
+- revokes bridge terminal/launcher/automation/microphone permissions;
+- broadcasts `platform:emergency-stop` to renderers.
+
+This is the migrated foundation for later stopping full agent/sub-agent runs.
+
+### Screen-source access foundation
+
+The trusted Electron main process exposes screen-source enumeration to migrated vision code through a narrow IPC boundary. No old IRIS Vision panel was migrated.
+
+## PARTIAL integrations
+
+### AI Chat → full IRIS agent runtime
+
+**Backend status:** migrated.
+
+The following are present under `src/platform/`:
+- `runAgentSession` facade;
+- native tool-calling and structured-controller paths;
+- planning/TODO state;
+- capability policy;
+- tool broker;
+- safety and limit policies;
+- continuity/context handling;
+- verification/finalization;
+- skills;
+- provider routing;
+- health/failover;
+- multi-agent orchestration.
+
+**Current Code Editor UI status:** the existing `AI Chat` panel still uses its original direct Ollama path. It was deliberately not replaced during the bulk source migration because the current panel has no equivalent UI for IRIS approvals, long-run state, provider/key selection, TODO timeline, or autonomous-run authority. Silently auto-granting filesystem/terminal permissions merely to make the first migration look connected would weaken IRIS's security design.
+
+The runtime is therefore present and ready for the next integration stage without recreating it.
+
+### Search → semantic filesystem
+
+**Backend status:** migrated in full.
+
+`backend/desktopBridge/services/fileSemanticService.ts` and its text/document/PDF/image/video/concept/index-source workers are present, along with renderer bridge types/methods.
+
+**Current Code Editor UI status:** the existing Search activity has not yet been replaced or visually changed. Semantic search can be wired into that existing surface next. Indexed-directory authority remains separate from agent file-write authority, preserving the IRIS security model.
+
+### Settings → IRIS provider/agent configuration
+
+**Backend status:** migrated.
+
+IRIS settings normalization, provider configuration, discovered models, agent assignments, safety tiers, web/package policies, skills settings, model-routing options and credential storage are present.
+
+**Current Code Editor UI status:** the existing Settings modal remains visually unchanged. Provider/agent configuration has not yet been surfaced there.
+
+### Existing Code Editor native capabilities → agent tools
+
+The editor's human-facing filesystem, workspace, terminal, browser and diagnostics IPC remain intact. IRIS's broker/bridge tool infrastructure is migrated separately. Agent tools are not routed through the human terminal API or given unbrokered editor IPC authority.
+
+A future editor-aware file authority layer still needs to reconcile unsaved CodeMirror buffers with agent reads/writes so human and agent edits cannot silently overwrite each other.
+
+## AVAILABLE migrated subsystems
+
+The following code is present even where the editor does not yet expose a UI:
+
+### Agent runtime and tool system
+- canonical tool catalog and schemas;
+- capability tiers and role policies;
+- exact-operation approval machinery;
+- stateful native-tool loop;
+- structured controller fallback;
+- planning/TODO tracing;
+- tool repeat/limit handling;
+- finalization and open-TODO reconciliation;
+- self-correction/recovery support;
+- context continuity and summarization;
+- web/package guard policies;
+- usage metrics and execution metadata.
+
+### Providers and model routing
+- OpenAI;
+- Anthropic;
+- Gemini;
+- DeepSeek;
+- OpenRouter;
+- local/Ollama-compatible provider;
+- provider discovery/configuration;
+- model profiles/tags;
+- model routing;
+- model health monitoring/recovery/failover;
+- local model catalog and automatic setup logic;
+- shared cloud-usage policy.
+
+### Multi-agent system
+- sub-agent registry/runtime;
+- task bus;
+- delegation/status/result recall;
+- peer consultation;
+- mesh discovery/conductor;
+- role/task bounds;
+- orchestration client;
+- review/verification-related tool contracts;
+- encrypted sub-agent result persistence.
+
+### Skills
+- built-in skills from `backend/builtinSkills.ts`;
+- renderer skill engine;
+- skill Markdown parsing;
+- profiles;
+- rewards/metrics;
+- skills panel controller logic (without old IRIS panel UI).
+
+### Semantic filesystem and RAG
+- index-source discovery;
+- semantic filesystem index;
+- incremental indexing;
+- text embeddings;
+- document extraction;
+- PDF extraction;
+- image preparation/CLIP indexing;
+- image processing queues and worker pools;
+- video semantics;
+- concept math/clustering/pools/workers;
+- file browser and thumbnail services;
+- archive services;
+- RAG retrieval client;
+- filesystem exclusions and workload limits.
+
+### Web research
+- web research/search service;
+- DuckDuckGo browser-backed provider;
+- historical/direct provider support in IRIS backend;
+- source/network policy;
+- network-security and redirect controls;
+- web-search history persistence;
+- paid-provider/fallback policy surfaces;
+- progress-event controller logic.
+
+### Persistence, memory and artifacts
+- encrypted SQLite schema and migrations;
+- domain-separated AES-GCM/HKDF crypto;
+- chat/session store client;
+- notes store client;
+- agent run store;
+- artifacts and chunk persistence;
+- web-search history persistence;
+- skill persistence;
+- semantic index persistence;
+- launcher semantic persistence;
+- legacy cleanup helpers.
+
+### Audio
+- transcription service;
+- renderer transcription controller/configuration;
+- WAV encoding helpers;
+- microphone permission foundation.
+
+### Launcher / local-system services
+- launcher application/tool discovery;
+- launcher safety policy;
+- semantic launcher index;
+- development-environment management;
+- system/power service routes;
+- system-monitor renderer controller;
+- native file-dialog helper.
+
+### Automation and vision foundations
+- automation AI service/routes;
+- automation approval helpers;
+- screen-capture strategy/types;
+- screen-source permission infrastructure;
+- vision task runtime wrapper.
+
+## Deliberately omitted IRIS presentation code
+
+The migration does **not** copy the old IRIS product shell into the live Code Editor renderer. Examples include:
+
+- Floating Orb / particle planet UI and texture assets;
+- old Orb context composition whose purpose was switching between Orb/workspace windows;
+- old panel manager and duplicated IRIS panels;
+- IRIS File Manager presentation components;
+- IRIS Search presentation cards/sidebar;
+- old Launcher panel/icon presentation;
+- old Notes panel presentation;
+- old Vision panel presentation;
+- old Settings panel presentation;
+- old Skills/System Monitor panels;
+- login/register/password-reset/local-profile presentation;
+- old multi-window workspace shell;
+- duplicate IRIS editor window implementation;
+- old Orb Electron window/window-shape/window-visibility management.
+
+Where those UI files contained reusable controller/helper logic, the non-visual portions were migrated separately under `src/platform-features/`.
+
+The exact omitted source list is recorded in `docs/migration/MIGRATED_FILES.md`.
+
+## Existing Code Editor UI preservation
+
+The following original Code Editor directories remain byte-for-byte unchanged from the supplied Project 4 source at the end of the migration pass:
+
+- `src/components/`
+- `src/editor/`
+- `src/hooks/`
+- `src/workspace/`
+
+The visible editor shell therefore remains the Code Editor rather than becoming IRIS. Integration changes are concentrated in boot/config/native-boundary files plus newly added platform/backend directories.
+
+## Test and benchmark preservation
+
+The full original IRIS `tests/` tree is copied to `migrated-tests/iris/` and the IRIS benchmark suite is copied to `benchmarks/iris/`. They are intentionally outside the default Code Editor Vitest include path so the initial migration does not pretend UI-shell tests are valid against a different frontend.
+
+Backend/runtime suites should be re-enabled incrementally as their paths/configuration are adapted. Tests that explicitly inspect old Orb/panel/window source belong to the `OMITTED-UI` category and remain historical reference tests.
+
+## Dependency / lockfile note
+
+The Code Editor archive did not include `node_modules`, and package-registry access was unavailable in the migration environment. `package.json` was merged with the runtime dependencies actually imported by migrated IRIS code. `package-lock.json` was assembled from the existing Code Editor and IRIS lockfiles so the source archive remains self-contained, but a normal `npm install`/`npm ci` must be run in an environment with registry access and the resulting lockfile should be committed after npm validates the merged dependency graph.
+
+This is the main validation item that could not be completed in the migration environment.
+
+## Generated output
+
+Old `dist/` and `dist-electron/` output from the supplied Code Editor is not authoritative after migration and should be regenerated. IRIS `server-dist/` and generated Electron output were never treated as source. The migrated backend builds into `backend-dist/`.
+
+## Next integration priorities
+
+1. Connect the existing AI Chat panel to `runAgentSession` while adding the minimum approval/run-state UI required to preserve IRIS's safety contract.
+2. Surface IRIS provider credentials/model assignments/agent policy in the existing Settings modal.
+3. Connect semantic search/index controls to the existing Search activity and workspace watcher.
+4. Add editor-buffer-aware agent filesystem reads/writes for unsaved files.
+5. Add durable autonomous project-run state, checkpoints, TODO/timeline display and resume behavior.
+6. Enable multi-agent delegation/review with file write leases/collision prevention.
+7. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

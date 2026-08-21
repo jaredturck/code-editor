@@ -1,0 +1,20 @@
+/** Feature service surface for the corresponding desktop bridge routes. */
+export {
+  appendChatMessage,
+  createChatSession,
+  deleteChatSession,
+  deleteDurableStoreKey,
+  getChatSession,
+  readChatIndex,
+  readChatMemory,
+  readChatRecall,
+  readDurableStoreAll,
+  readJsonBody,
+  readSubagentOutput,
+  saveChatCompacted,
+  sendJson,
+  setChatTitle,
+  writeChatMemory,
+  writeDurableStoreKey,
+  writeSubagentOutput,
+} from './bridgeServiceRuntime.js';

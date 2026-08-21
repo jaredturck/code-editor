@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell, WebContentsView } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, net, protocol, safeStorage, session, shell, WebContentsView } from 'electron'
 import { open, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -36,6 +36,17 @@ import {
   resize_terminal,
   write_terminal,
 } from './terminal.cjs'
+import { createCredentialStore, registerCredentialIpc } from './platform/credentialStore.cjs'
+import { configureLinuxPasswordStore } from './platform/linuxPasswordStore.cjs'
+import {
+  closeLocalBridge,
+  ensureLocalBridge,
+  getLocalBridgeHandle,
+  getLocalBridgePermissions,
+  updateLocalBridgePermissions,
+  type BridgePermissionState,
+} from './platform/localBridge.cjs'
+import { loadOrCreateStorageKey, removeLegacyRendererStorage, type StorageKeyContext } from './platform/storageKeyStore.cjs'
 
 interface BrowserEntry {
   owner_id: number
@@ -44,11 +55,16 @@ interface BrowserEntry {
   fallback_url: string
 }
 
+const linux_password_store = configureLinuxPasswordStore({ app })
+const credential_store = createCredentialStore({ app, safeStorage })
+registerCredentialIpc({ ipcMain, BrowserWindow, store: credential_store })
+
 const browser_entries = new Map<string, BrowserEntry>()
 const ai_requests = new Map<string, AbortController>()
 const approved_close_windows = new Set<number>()
 let browser_session_ready = false
 let application_quit_requested = false
+let secure_storage_context: StorageKeyContext | null = null
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -244,6 +260,33 @@ async function write_existing_text(file_path: string, content: string) {
     await file_handle?.close()
   }
 }
+
+ipcMain.handle('platform:bridge-permissions-get', (event) => {
+  if (!BrowserWindow.fromWebContents(event.sender)) {
+    return { ok: false, error: 'bridge-permission-request-not-from-app-window' }
+  }
+
+  return { ok: true, permissions: getLocalBridgePermissions() }
+})
+
+ipcMain.handle('platform:bridge-permissions-update', (event, permissions: unknown) => {
+  if (!BrowserWindow.fromWebContents(event.sender)) {
+    return { ok: false, error: 'bridge-permission-request-not-from-app-window' }
+  }
+
+  return updateLocalBridgePermissions(
+    permissions && typeof permissions === 'object' ? (permissions as Partial<BridgePermissionState>) : {},
+  )
+})
+
+ipcMain.handle('platform:get-screen-sources', async (event) => {
+  if (!BrowserWindow.fromWebContents(event.sender)) {
+    return []
+  }
+
+  const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] })
+  return sources.map((source) => ({ id: source.id, name: source.name }))
+})
 
 ipcMain.on('window:minimize', (event) => {
   get_event_window(event.sender)?.minimize()
@@ -693,14 +736,62 @@ function create_window() {
     stop_workspace_watch(owner_id)
   })
 
+  const bridge = getLocalBridgeHandle()
+  const query = bridge ? { bridgePort: String(bridge.port), bridgeToken: bridge.token } : {}
+
   if (app.isPackaged) {
-    main_window.loadFile(join(__dirname, '../dist/index.html'))
+    main_window.loadFile(join(__dirname, '../dist/index.html'), { query })
   } else {
-    main_window.loadURL('http://localhost:5173')
+    const url = new URL('http://localhost:5173')
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value)
+    }
+    main_window.loadURL(url.toString())
   }
 }
 
-app.whenReady().then(() => {
+async function initialize_agent_platform() {
+  removeLegacyRendererStorage(app)
+  secure_storage_context = await loadOrCreateStorageKey({ app, safeStorage })
+  await ensureLocalBridge(app, secure_storage_context)
+  secure_storage_context.masterKey.fill(0)
+  secure_storage_context = null
+}
+
+function emergency_stop() {
+  kill_all_terminals()
+
+  for (const controller of ai_requests.values()) {
+    controller.abort()
+  }
+
+  ai_requests.clear()
+  updateLocalBridgePermissions({
+    terminal: false,
+    launcher: false,
+    automation: false,
+    microphone: false,
+  })
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send('platform:emergency-stop')
+  }
+}
+
+app.whenReady().then(async () => {
+  try {
+    await initialize_agent_platform()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    dialog.showErrorBox(
+      'Secure AI platform unavailable',
+      `The encrypted agent platform could not start. The editor will close instead of running with degraded persistence.\n\n${message}`,
+    )
+    app.quit()
+    return
+  }
+
+  void linux_password_store
   Menu.setApplicationMenu(null)
   protocol.handle('editor-file', (request) => {
     const resource_path = get_resource_path(request.url)
@@ -719,6 +810,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((web_contents, permission, callback) => {
     callback(permission === 'media' && BrowserWindow.fromWebContents(web_contents) !== null)
   })
+  globalShortcut.register('CommandOrControl+Shift+Backspace', emergency_stop)
   create_window()
 
   app.on('activate', () => {
@@ -739,6 +831,10 @@ app.on('before-quit', () => {
 })
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
+  void closeLocalBridge()
+  secure_storage_context?.masterKey.fill(0)
+  secure_storage_context = null
   kill_all_terminals()
 
   for (const controller of ai_requests.values()) {

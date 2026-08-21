@@ -4,22 +4,25 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm run build:electron && concurrently -k -s first \"npm:dev:renderer\" \"npm:dev:electron:watch\" \"npm:dev:electron:start\"",
+    "dev": "npm run build:backend && npm run build:electron && concurrently -k -s first \"npm:dev:renderer\" \"npm:dev:electron:watch\" \"npm:dev:electron:start\"",
     "dev:renderer": "vite",
     "dev:electron:watch": "tsc -p electron/tsconfig.json --watch --preserveWatchOutput",
     "dev:electron:start": "wait-on tcp:5173 && electron .",
     "build:electron": "tsc -p electron/tsconfig.json",
-    "typecheck": "tsc -b && tsc -p electron/tsconfig.json --noEmit",
-    "build": "npm run build:electron && tsc -b && vite build",
+    "typecheck": "tsc -b && tsc -p electron/tsconfig.json --noEmit && npm run typecheck:backend",
+    "build": "npm run build:backend && npm run build:electron && tsc -b && vite build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint src electron vite.config.ts",
-    "test": "npm run build:electron && vitest run",
+    "test": "npm run build:backend && npm run build:electron && vitest run",
     "test:watch": "vitest",
     "test:electron-runtime": "electron scripts/check-electron-runtime.cjs",
     "verify:full": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:electron-runtime && npm run build",
     "preview": "vite preview",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "build:backend": "tsc -p tsconfig.backend.json",
+    "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit",
+    "benchmark:iris": "vite-node benchmarks/iris/run.ts"
   },
   "dependencies": {
     "@astral-sh/ruff-wasm-nodejs": "^0.15.20",
@@ -52,7 +55,20 @@
     "stylelint": "^17.14.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "@huggingface/transformers": "3.8.1",
+    "@mozilla/readability": "^0.6.0",
+    "clsx": "^2.1.1",
+    "duck-duck-scrape": "^2.2.7",
+    "fflate": "^0.8.3",
+    "fuse.js": "^7.4.0",
+    "jsdom": "^29.1.1",
+    "saxes": "^6.0.0",
+    "sharp": "0.34.5",
+    "sqlite3": "^5.1.7",
+    "tailwind-merge": "^3.0.2",
+    "yauzl": "^2.10.0",
+    "lucide-react": "^0.475.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.6",
@@ -64,12 +80,13 @@
     "@vitejs/plugin-react": "^6.0.2",
     "concurrently": "^10.0.3",
     "electron": "^42.5.1",
-    "jsdom": "^29.1.1",
     "oxlint": "^1.69.0",
     "prettier": "3.9.4",
     "vite": "^8.1.0",
     "vitest": "^4.1.9",
-    "wait-on": "^9.0.10"
+    "wait-on": "^9.0.10",
+    "@types/yauzl": "^2.10.3",
+    "vite-node": "^3.2.4"
   },
   "main": "dist-electron/main.cjs"
 }
