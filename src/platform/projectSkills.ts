@@ -1,4 +1,5 @@
 import type { BridgeFileNode, BridgeSkillDefinition } from './desktopBridgeBase'
+import { listDirectory, readTextFile } from './desktopBridge'
 import { parseSkillMarkdown } from './skillMarkdown'
 
 const PROJECT_SKILL_DIRECTORY = '.iris/skills'
@@ -9,11 +10,6 @@ const MAX_PROJECT_SKILL_CHARS = 40000
 interface ProjectSkillOverride {
   enabled?: boolean
   priority?: number
-}
-
-export interface ProjectSkillIO {
-  listDirectory: (path: string, depth?: number) => Promise<{ rootPath: string; tree: BridgeFileNode }>
-  readTextFile: (path: string, options?: Record<string, unknown>) => Promise<{ content: string }>
 }
 
 interface ProjectSkillSettings {
@@ -66,9 +62,9 @@ function normalize_project_skill_settings(value: unknown): ProjectSkillSettings 
   }
 }
 
-async function read_project_skill_settings(workspace_root: string, io: ProjectSkillIO) {
+async function read_project_skill_settings(workspace_root: string) {
   try {
-    const result = await io.readTextFile(workspace_path(workspace_root, PROJECT_SKILL_SETTINGS), {
+    const result = await readTextFile(workspace_path(workspace_root, PROJECT_SKILL_SETTINGS), {
       startLine: 1,
       lineCount: 400,
     })
@@ -101,16 +97,16 @@ export function mergeProjectSkillDefinitions(
   return Array.from(by_id.values())
 }
 
-export async function loadProjectSkillDefinitions(workspace_root: string, io: ProjectSkillIO) {
+export async function loadProjectSkillDefinitions(workspace_root: string) {
   const root = String(workspace_root || '').trim()
   if (!root) return [] as BridgeSkillDefinition[]
 
-  const settings = await read_project_skill_settings(root, io)
+  const settings = await read_project_skill_settings(root)
   if (!settings.enabled) return [] as BridgeSkillDefinition[]
 
   let tree: BridgeFileNode
   try {
-    const listing = await io.listDirectory(workspace_path(root, PROJECT_SKILL_DIRECTORY), 3)
+    const listing = await listDirectory(workspace_path(root, PROJECT_SKILL_DIRECTORY), 3)
     tree = listing.tree
   } catch {
     return [] as BridgeSkillDefinition[]
@@ -121,7 +117,7 @@ export async function loadProjectSkillDefinitions(workspace_root: string, io: Pr
 
   for (const skill_path of paths) {
     try {
-      const result = await io.readTextFile(skill_path, { startLine: 1, lineCount: 1200 })
+      const result = await readTextFile(skill_path, { startLine: 1, lineCount: 1200 })
       const filename = skill_path.split(/[\\/]/).pop() || 'project-skill.md'
       const fallback_id = filename.replace(/\.md$/i, '') || 'project-skill'
       const parsed = parseSkillMarkdown(
