@@ -113,19 +113,21 @@ The trusted Electron main process exposes screen-source enumeration to migrated 
 
 The existing Code Editor `AI Chat` panel now executes through the migrated `runAgentSession` runtime instead of the legacy direct Ollama chat request path. The configured Orchestrator provider/model/key slot is resolved from Settings, cloud and local providers share the same agent path, native tool calling and structured-controller fallback remain available, and agent output streams into the existing Chat shell.
 
-This milestone also connects encrypted chat restoration/persistence, durable run history, warm TODO state, compact approval/question cards, cancellation, global emergency-stop handling and a bounded observable activity timeline. Raw model reasoning streams are deliberately excluded from the Code Editor transcript and persisted activity metadata. Long autonomous workspace runs now also carry an encrypted, bounded project working-context checkpoint across segments: verified tool actions, TODO state, runtime checkpoint metadata and the latest outcome are rolled forward automatically, while the existing `chat.remember` / `chat.recall` tools remain available for agent-authored durable facts. IRIS's stateful runtime continues to compact its live tool transcript under model-context pressure; the carried project checkpoint gives paused/resumed Code Editor runs a durable cross-segment handoff without persisting raw model reasoning.
+This integration includes encrypted chat restoration/persistence, durable run history, structured TODOs, long-running project execution, pause/resume checkpoints, approval/question cards, cancellation, global emergency-stop handling and a bounded observable activity timeline. Raw model reasoning streams are deliberately excluded from the Code Editor transcript and persisted activity metadata. Long autonomous workspace runs also carry an encrypted, bounded project working-context checkpoint across segments; the existing `chat.remember` / `chat.recall` tools preserve agent-authored durable facts, while `rag.retrieve` can repeatedly refresh project evidence through live editor-aware file reads.
 
-P006 intentionally exposes only a research/context tool scope: skills, current-chat memory/context controls, approvals/questions, TODO updates, trusted-source lookup and policy-governed web search/fetch. The security review found that enabling the migrated filesystem/search/RAG tools before the editor-aware authority layer would make the bridge's broader home-directory root part of the trust boundary, so direct workspace filesystem access is deliberately deferred rather than shipped with a weaker boundary.
+Workspace Agent Chat now has the editor-aware file/search/RAG/terminal capabilities already completed by their dedicated milestones. This batch also connects IRIS skills and artifacts to the same autonomous runtime. Built-in and encrypted user skills continue through the existing profile engine; `.iris/skills/*.md` project skills and optional `.iris/skills.json` settings are loaded only through the active workspace authority and merged as the most-specific layer. Capable agents receive the existing progressive skill cards and call `skills.load` only when detailed instructions are relevant.
 
-The per-session allowlist applies to **every** catalog tool, including tools marked `internal`; this blocks host process inspection, artifacts, cloud consultation, delegation, file operations, exact code search, RAG, terminal execution, screen/mouse control and other later-stage capabilities even if broader persistent permissions exist. Chat also refuses requests to persist machine permissions during P006. Those capabilities remain scheduled for their dedicated editor-awareness/safety milestones.
+For substantial durable outputs, persisted chat runs now expose the existing `artifact.create` tool. Research, test, architecture/design and migration reports can be written in bounded chunks to IRIS's encrypted artifact store and appended without flooding the chat context. Returned artifact references are attached to the final assistant reply and open through the Code Editor Markdown surface as decrypted in-memory snapshots; the encrypted backing records remain authoritative and are not materialized as plaintext temporary files.
+
+The per-session allowlist still applies to **every** catalog tool, including tools marked `internal`; later host, multi-agent, screen/mouse and automation capabilities remain unavailable until their dedicated policy/orchestration milestones. Chat also refuses requests to persist machine permissions from an agent run.
 
 ### Search → semantic filesystem
 
 **Status: CONNECTED (semantic file, document, media and concept indexing milestones).**
 
-The existing Search activity now exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show the indexed semantic summary/score, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
+The existing Search activity exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show indexed semantic summaries/scores, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
 
-The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor exposes the migrated bounded document/PDF/archive extraction path from Search and now also exposes the migrated CLIP media index as a dedicated Media mode. Image preparation continues through IRIS's bounded image worker queue, video indexing continues through frame extraction, and image/video embeddings remain persisted through the encrypted semantic stores. Search filters those persisted media results to the open workspace and preserves indexed video-frame timestamps. The Search activity also exposes the migrated persistent MiniLM/CLIP concept centroids and memberships through a dedicated Concepts mode. Agent Chat now exposes IRIS's `rag.retrieve` tool for workspace runs: semantic candidates are scoped to the active editor workspace before selection, evidence is re-read through the editor-aware file authority so unsaved buffers win over disk, and the existing temporary chunker/ranker assembles bounded passages with file and line provenance for repeated use throughout autonomous runs. Indexed-directory authority remains separate from agent file-write authority, preserving the IRIS security model.
+The workspace watcher schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. Search also exposes bounded document/PDF/archive extraction, the migrated CLIP media index with video-frame timestamps, and persistent MiniLM/CLIP semantic concepts. Agent Chat exposes IRIS's `rag.retrieve` tool for workspace runs: semantic candidates are scoped to the active Code Editor workspace before selection, evidence is re-read through the editor-aware file authority so unsaved buffers win over disk, and the existing temporary chunker/ranker assembles bounded passages with file and line provenance for repeated use throughout autonomous runs. Indexed-directory authority remains separate from agent file-write authority, preserving the IRIS security model.
 
 ### Settings → IRIS provider/agent configuration
 
@@ -137,9 +139,7 @@ Connected settings include secure provider credentials, explicit provider testin
 
 ### Existing Code Editor native capabilities → agent tools
 
-The editor's human-facing filesystem, workspace, terminal, browser and diagnostics IPC remain intact. IRIS's broker/bridge tool infrastructure is migrated separately. Agent tools are not routed through the human terminal API or given unbrokered editor IPC authority.
-
-A future editor-aware file authority layer still needs to reconcile unsaved CodeMirror buffers with agent reads/writes so human and agent edits cannot silently overwrite each other.
+The editor's human-facing filesystem, workspace, terminal, browser and diagnostics IPC remain intact. IRIS's broker/bridge tool infrastructure remains the privileged agent boundary rather than exposing unbrokered editor IPC. Workspace file tools route through the editor-aware authority layer so unsaved CodeMirror buffers are visible to agent reads and human/agent revision changes are checked before writes; terminal/build/test execution stays behind the brokered terminal policy.
 
 ## AVAILABLE migrated subsystems
 
@@ -380,11 +380,11 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Encrypted chats/messages
   - Agent runs, TODOs and checkpoints
   - Resume previous runs
-- [ ] **Skills system**
+- [x] **Skills system**
   - Built-in and user skills
   - Progressive skill loading
   - Project-specific skills and settings
-- [ ] **Artifacts and large outputs**
+- [x] **Artifacts and large outputs**
   - Artifact creation and chunked persistence
   - Research/test/architecture reports
   - Editor artifact viewing
@@ -458,6 +458,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect the skills system to autonomous Agent Chat with progressive and project-specific loading.
-2. Enable multi-agent delegation/review with file write leases/collision prevention.
-3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
+1. Connect web search and research end-to-end through the autonomous agent, preserving IRIS source/network safety and the untrusted-content boundary.
+2. Connect model routing, health/failover and hybrid local + cloud execution so long project runs can recover from provider/model failures without losing state.
+3. Enable multi-agent delegation/review with file write leases and agent-agent collision prevention.
+4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
