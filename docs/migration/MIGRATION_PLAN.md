@@ -213,17 +213,35 @@ The old Orb/window-management APIs are not exposed.
 
 Renderer startup hydrates IRIS's synchronous in-memory storage facade from the encrypted bridge before React mounts. Chat/agent settings and future migrated UI integrations can therefore use IRIS persistence without browser `localStorage`.
 
-### 6. Existing AI Chat integration
+
+### 6. AI Settings and provider configuration
+
+The existing Code Editor Settings modal now owns the migrated IRIS configuration surface. No old IRIS Settings presentation is imported. The AI tab provides Code Editor-native sub-sections for:
+
+- secure provider credentials and explicit connection/model discovery;
+- curated provider model lists;
+- Orchestrator, Executor, Scout and Reviewer assignments plus per-role permission tiers;
+- routing, native-tool, stateful-loop, failover and health policies;
+- autonomy permissions and web/package guards;
+- long-session/cloud/context/tool-repeat limits;
+- skill runtime limits;
+- semantic-index source/model/build/rescan/clear controls.
+
+Provider secrets remain exclusively in Electron `safeStorage`. Persistent privileged capability toggles are sent to the trusted bridge before the corresponding setting is persisted. Opening Settings never performs provider traffic automatically. Existing Ollama Chat and speech-model fields remain available until AI Chat is migrated to `runAgentSession`.
+
+Implementation/validation details are recorded in `AI_SETTINGS_PROVIDER_PLAN.md`.
+
+### 7. Existing AI Chat integration
 
 The current AI Chat visual surface is retained. Its backend is migrated from direct Ollama-only chat toward `runAgentSession` using the IRIS runtime. The current active-file attachment behavior is preserved, and the workspace root is supplied to the agent runtime so file/terminal activity can be scoped.
 
 Approvals and richer timeline presentation can be progressively surfaced without replacing the editor shell. If an approval UI is not fully exposed in this migration, the relevant runtime remains present and is documented in the ledger.
 
-### 7. Search integration
+### 8. Search integration
 
 The current Search activity remains the UI surface. Semantic filesystem backend functionality is migrated now. UI integration is staged: exact workspace search remains existing/current behavior while semantic-index/search APIs are available to be wired into the Search panel. This is tracked explicitly, not discarded.
 
-### 8. Existing editor native capabilities
+### 9. Existing editor native capabilities
 
 The current editor filesystem, workspace watcher, terminal, diagnostics, browser and media IPC remain intact. Agent privileged operations use the migrated IRIS broker/bridge rather than being given direct access to human-facing terminal APIs.
 
@@ -278,12 +296,11 @@ No migrated implementation is deleted merely because its original panel was not 
 
 ## Post-migration follow-up sequence
 
-1. Complete provider/settings UI using existing Settings modal.
-2. Promote AI Chat from compatibility integration to durable autonomous project-run UX.
-3. Wire semantic search into the existing Search activity and workspace watcher.
-4. Add resumable long-duration runs/checkpointing.
-5. Surface skills, plans/TODOs, timeline and approvals inside AI Chat.
-6. Enable multi-agent delegation/review and collision control.
-7. Integrate model/cache management and local runtime work from Projects 1 and 3.
-8. Re-enable/import compatible IRIS tests subsystem-by-subsystem.
-9. Refactor only after behavior is stable in the new application.
+1. Promote AI Chat from compatibility integration to durable autonomous project-run UX.
+2. Wire semantic search results into the existing Search activity and workspace watcher.
+3. Add resumable long-duration runs/checkpointing.
+4. Surface plans/TODOs, timeline and approvals inside AI Chat; skill configuration is already available in Settings.
+5. Enable multi-agent delegation/review and collision control.
+6. Integrate model/cache management and local runtime work from Projects 1 and 3.
+7. Re-enable/import compatible IRIS tests subsystem-by-subsystem.
+8. Refactor only after behavior is stable in the new application.

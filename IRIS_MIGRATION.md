@@ -134,11 +134,11 @@ The runtime is therefore present and ready for the next integration stage withou
 
 ### Settings → IRIS provider/agent configuration
 
-**Backend status:** migrated.
+**Status: CONNECTED.**
 
-IRIS settings normalization, provider configuration, discovered models, agent assignments, safety tiers, web/package policies, skills settings, model-routing options and credential storage are present.
+The existing VS Code-inspired Settings modal now exposes the migrated IRIS AI configuration without importing the old IRIS Settings UI. The AI tab is split into Providers, Models, Agents, Routing, Autonomy, Limits, Skills and Semantic Index sections.
 
-**Current Code Editor UI status:** the existing Settings modal remains visually unchanged. Provider/agent configuration has not yet been surfaced there.
+Connected settings include secure provider credentials, explicit provider testing/model discovery, model curation, Orchestrator/Executor/Scout/Reviewer assignments, per-role permission tiers, routing/failover policy, brokered capability permissions, web/package guards, long-run budgets, skill-runtime configuration and semantic-index maintenance. The original Code Editor Ollama Chat/speech settings remain available during the staged Chat migration.
 
 ### Existing Code Editor native capabilities → agent tools
 
@@ -324,7 +324,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Agent and editor integration
 
-- [ ] **AI settings and provider configuration**
+- [x] **AI settings and provider configuration**
   - API keys and provider accounts
   - Model discovery and selection
   - Orchestrator / Executor / Scout / Reviewer assignments
@@ -462,9 +462,8 @@ This checklist tracks the remaining product integration work. An unchecked item 
 ## Next integration priorities
 
 1. Connect the existing AI Chat panel to `runAgentSession` while adding the minimum approval/run-state UI required to preserve IRIS's safety contract.
-2. Surface IRIS provider credentials/model assignments/agent policy in the existing Settings modal.
-3. Connect semantic search/index controls to the existing Search activity and workspace watcher.
-4. Add editor-buffer-aware agent filesystem reads/writes for unsaved files.
-5. Add durable autonomous project-run state, checkpoints, TODO/timeline display and resume behavior.
-6. Enable multi-agent delegation/review with file write leases/collision prevention.
-7. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
+2. Connect semantic search results to the existing Search activity and workspace watcher; semantic-index configuration is already available in Settings.
+3. Add editor-buffer-aware agent filesystem reads/writes for unsaved files.
+4. Add durable autonomous project-run state, checkpoints, TODO/timeline display and resume behavior.
+5. Enable multi-agent delegation/review with file write leases/collision prevention.
+6. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

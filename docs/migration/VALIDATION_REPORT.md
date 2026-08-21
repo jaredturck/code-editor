@@ -149,3 +149,49 @@ The bulk migration is structurally complete for the scope documented in `MIGRATI
 - Secure platform/bootstrap integration has been added at the native/startup boundary.
 - Backend functionality without a current editor surface remains preserved and explicitly tracked in `UNWIRED_BACKEND.md`.
 - Full dependency-aware build/runtime verification remains pending solely because the dependency tree could not be installed in this environment.
+
+
+## AI Settings & Provider Configuration patch validation
+
+The first post-migration product-integration patch connects the existing Code Editor Settings modal to migrated IRIS provider/model/agent configuration while preserving the existing Settings shell.
+
+### Files introduced/changed by this patch
+
+- `src/components/SettingsModal.tsx`
+- `src/components/settings/AISettingsPanel.tsx`
+- `src/settings/aiSettings.ts`
+- `tests/AISettingsPanel.test.tsx`
+- `tests/aiSettings.test.ts`
+- `docs/migration/AI_SETTINGS_PROVIDER_PLAN.md`
+- migration/status documentation
+
+### Static validation
+
+- TypeScript-family files parsed across active `src/`, `backend/`, `electron/` and `tests/`: **265**
+- Physical lines parsed: **86,140**
+- Parser errors: **0**
+- Unresolved relative/`@/` local imports: **0**
+
+### Focused tests added
+
+- role-primary replacement preserves secondary mesh bindings and other roles;
+- clearing a role does not mutate unrelated roles;
+- curated model lists are normalized/deduplicated;
+- credential vs transient provider failures are classified separately;
+- numeric AI settings are bounded;
+- AI Settings navigation remains inside the existing Settings shell;
+- legacy local Chat/speech fields remain editable;
+- provider secrets are written through the secure credential store rather than settings state;
+- trusted bridge permission update succeeds before capability state is persisted.
+
+### Security review result
+
+No provider secret is added to Code Editor settings, persisted provider-validation metadata, search terms or migration documentation. Provider calls remain explicit user actions. Privileged permission grants/revocations fail closed if the trusted desktop permission bridge is unavailable or rejects the update. Indexed-location selection continues to grant discovery/index authority only, not agent write authority.
+
+### Dependency-aware validation
+
+The migration environment still does not contain the complete project dependency tree, so the new Vitest tests, project TypeScript typecheck, Prettier/Oxlint pass and production build cannot be executed truthfully here. The patch has passed syntax/import/static review; the next local verification command remains:
+
+```bash
+npm run verify:full
+```

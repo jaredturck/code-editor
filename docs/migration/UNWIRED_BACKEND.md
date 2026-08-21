@@ -16,13 +16,15 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 ## 2. Cloud/local provider registry and agent model assignments
 
-**Location:** `src/platform/providers/`, `src/platform/modelProfiles.ts`, `src/platform/autoSetup/`
+**Location:** `src/platform/providers/`, `src/platform/modelProfiles.ts`, `src/platform/autoSetup/`, `src/components/settings/AISettingsPanel.tsx`
 
-**Present:** OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter, local provider, provider discovery/configuration, model profiles, auto-setup.
+**Present:** OpenAI, Anthropic, Gemini, DeepSeek, OpenCode, OpenRouter, local provider, secure credential configuration, explicit discovery/testing, curated models, agent-role assignments, model profiles and auto-setup.
 
-**Why not connected yet:** existing Settings UI only exposes the old Ollama configuration.
+**Connected portion:** the existing Code Editor Settings modal now exposes provider credentials, model curation and Orchestrator/Executor/Scout/Reviewer assignments.
 
-**Planned Code Editor surface:** existing Settings modal + AI Chat model selector.
+**Still unwired:** AI Chat continues to use its original Ollama-only execution path, so these provider/agent assignments do not yet drive visible Chat execution.
+
+**Planned Code Editor surface:** existing AI Chat panel.
 
 ## 3. Agent permissions and approval flow
 
@@ -72,9 +74,11 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** built-in skills, progressive skill selection/loading, profiles, rewards/metrics and management controller.
 
-**Why not connected yet:** old Skills panel was UI-specific and omitted.
+**Connected portion:** Settings now exposes skill enablement, automatic/manual profile selection and prompt/relevance limits.
 
-**Planned surface:** Settings and agent-run details.
+**Still unwired:** the full skill-management/editor experience and per-run skill visibility are not yet surfaced.
+
+**Planned surface:** Settings plus future agent-run details.
 
 ## 8. Web research/search
 

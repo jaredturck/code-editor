@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import AISettingsPanel from './settings/AISettingsPanel'
+import type { AISettingsSection } from '../settings/aiSettings'
 import { language_options } from '../data/languages'
 import { editor_commands, format_shortcut, get_effective_keybinding } from '../editor/editorCommands'
 import { apply_editor_preset, clone_editor_settings, default_editor_settings } from '../editor/editorSettings'
@@ -18,6 +20,7 @@ interface SearchItem {
   tab: SettingsTab
   label: string
   description: string
+  ai_section?: AISettingsSection
 }
 
 const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
@@ -26,7 +29,7 @@ const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
   { id: 'appearance', label: 'Appearance', icon: '◐' },
   { id: 'suggestions', label: 'Suggestions', icon: '✦' },
   { id: 'diagnostics', label: 'Diagnostics', icon: '!' },
-  { id: 'ai', label: 'AI & Ollama', icon: '◇' },
+  { id: 'ai', label: 'AI', icon: '◇' },
   { id: 'shortcuts', label: 'Shortcuts', icon: '⌘' },
 ]
 
@@ -212,22 +215,137 @@ const search_items: SearchItem[] = [
     description: 'Enable Ruff, ESLint, TypeScript, and other analyzers.',
   },
   {
-    id: 'ollama-url',
+    id: 'provider-openai-status',
     tab: 'ai',
-    label: 'Ollama address',
-    description: 'Address of the local Ollama server.',
+    ai_section: 'providers',
+    label: 'AI providers and API keys',
+    description: 'Configure secure provider credentials and test provider connectivity.',
+  },
+  {
+    id: 'provider-local-url',
+    tab: 'ai',
+    ai_section: 'providers',
+    label: 'Local Ollama server',
+    description: 'Configure and test the local Ollama-compatible endpoint.',
+  },
+  {
+    id: 'model-provider',
+    tab: 'ai',
+    ai_section: 'models',
+    label: 'AI model catalog',
+    description: 'Discover and curate models that may be assigned to agents.',
+  },
+  {
+    id: 'agent-role-orchestrator',
+    tab: 'ai',
+    ai_section: 'agents',
+    label: 'Orchestrator model',
+    description: 'Assign the primary planning and coordination model.',
+  },
+  {
+    id: 'agent-role-executor',
+    tab: 'ai',
+    ai_section: 'agents',
+    label: 'Executor model',
+    description: 'Assign the implementation-focused worker model.',
+  },
+  {
+    id: 'agent-role-scout',
+    tab: 'ai',
+    ai_section: 'agents',
+    label: 'Scout model',
+    description: 'Assign the read-oriented repository and research model.',
+  },
+  {
+    id: 'agent-role-overwatcher',
+    tab: 'ai',
+    ai_section: 'agents',
+    label: 'Reviewer model',
+    description: 'Assign the independent review and supervision model.',
+  },
+  {
+    id: 'ai-execution-policy',
+    tab: 'ai',
+    ai_section: 'routing',
+    label: 'AI execution policy',
+    description: 'Choose hybrid, primary-only, or local-only execution.',
+  },
+  {
+    id: 'ai-model-routing',
+    tab: 'ai',
+    ai_section: 'routing',
+    label: 'Model routing',
+    description: 'Enable complexity-aware model routing and failover.',
+  },
+  {
+    id: 'ai-safety-profile',
+    tab: 'ai',
+    ai_section: 'autonomy',
+    label: 'Agent safety profile',
+    description: 'Configure agent safety and approval behavior.',
+  },
+  {
+    id: 'ai-permissions_file_read',
+    tab: 'ai',
+    ai_section: 'autonomy',
+    label: 'Agent file permissions',
+    description: 'Configure persistent brokered file access.',
+  },
+  {
+    id: 'ai-web-site-guard',
+    tab: 'ai',
+    ai_section: 'autonomy',
+    label: 'Web access guard',
+    description: 'Require approval before ingesting content from new sites.',
+  },
+  {
+    id: 'ai-package-guard',
+    tab: 'ai',
+    ai_section: 'autonomy',
+    label: 'Package installation guard',
+    description: 'Control dependency installation and virtual-environment policy.',
+  },
+  {
+    id: 'ai-session-minutes',
+    tab: 'ai',
+    ai_section: 'limits',
+    label: 'Agent session duration',
+    description: 'Configure the duration budget for long-running agent sessions.',
+  },
+  {
+    id: 'ai-cloud-budget',
+    tab: 'ai',
+    ai_section: 'limits',
+    label: 'Cloud request budget',
+    description: 'Limit remote inference calls across agents, retries and synthesis.',
   },
   {
     id: 'ollama-model',
     tab: 'ai',
-    label: 'Selected model',
-    description: 'Remember the selected local model.',
+    ai_section: 'models',
+    label: 'Current local Chat model',
+    description: 'Configure the model used by the existing Ollama Chat path.',
   },
   {
     id: 'speech-model',
     tab: 'ai',
-    label: 'Speech model',
-    description: 'Ollama model used for voice transcription.',
+    ai_section: 'models',
+    label: 'Speech transcription model',
+    description: 'Configure the existing Ollama voice-transcription model.',
+  },
+  {
+    id: 'ai-skills-enabled',
+    tab: 'ai',
+    ai_section: 'skills',
+    label: 'Agent skills',
+    description: 'Configure progressive skill loading and skill prompt budgets.',
+  },
+  {
+    id: 'ai-semantic-status',
+    tab: 'ai',
+    ai_section: 'semantic',
+    label: 'Semantic filesystem index',
+    description: 'Configure indexed locations, embedding models and index maintenance.',
   },
   {
     id: 'keyboard-shortcuts',
@@ -327,6 +445,7 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
   const [search_query, set_search_query] = useState('')
   const [highlighted_setting, set_highlighted_setting] = useState<string | null>(null)
   const [shortcut_filter, set_shortcut_filter] = useState('')
+  const [ai_section, set_ai_section] = useState<AISettingsSection>('providers')
   const [recording_command, set_recording_command] = useState<EditorCommandId | null>(null)
   const highlight_timer_ref = useRef<number | null>(null)
 
@@ -343,6 +462,7 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
 
   const open_search_result = (result: SearchItem) => {
     set_active_tab(result.tab)
+    if (result.ai_section) set_ai_section(result.ai_section)
     set_search_query('')
     set_highlighted_setting(result.id)
 
@@ -915,63 +1035,13 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
   )
 
   const render_ai = () => (
-    <Section title="Local Ollama">
-      {row(
-        'ollama-url',
-        'Ollama address',
-        'Usually the local Ollama service address.',
-        <input
-          className={`${input_class} w-64`}
-          onBlur={(event) =>
-            update({
-              ...settings,
-              ai: {
-                ...settings.ai,
-                ollama_url: event.target.value.trim() || default_editor_settings.ai.ollama_url,
-              },
-            })
-          }
-          onChange={(event) =>
-            update({
-              ...settings,
-              ai: { ...settings.ai, ollama_url: event.target.value },
-            })
-          }
-          value={settings.ai.ollama_url}
-        />,
-      )}
-      {row(
-        'ollama-model',
-        'Selected model',
-        'The AI panel fills this from models installed in Ollama.',
-        <input
-          className={`${input_class} w-64`}
-          onChange={(event) =>
-            update({
-              ...settings,
-              ai: { ...settings.ai, selected_model: event.target.value },
-            })
-          }
-          placeholder="Select in AI Chat"
-          value={settings.ai.selected_model}
-        />,
-      )}
-      {row(
-        'speech-model',
-        'Speech transcription model',
-        'Model installed through Ollama when voice input is enabled.',
-        <input
-          className={`${input_class} w-72`}
-          onChange={(event) =>
-            update({
-              ...settings,
-              ai: { ...settings.ai, speech_model: event.target.value },
-            })
-          }
-          value={settings.ai.speech_model}
-        />,
-      )}
-    </Section>
+    <AISettingsPanel
+      active_section={ai_section}
+      editor_ai={settings.ai}
+      highlighted_setting={highlighted_setting}
+      on_editor_ai_change={(ai) => update({ ...settings, ai })}
+      on_section_change={set_ai_section}
+    />
   )
 
   const shortcut_conflicts = useMemo(() => {
@@ -1190,13 +1260,17 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
           </main>
         </div>
         <footer className="flex h-14 shrink-0 items-center justify-between border-t border-[var(--border)] px-6">
-          <button
-            className="rounded-md px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-            onClick={reset_active_tab}
-            type="button"
-          >
-            Reset current tab
-          </button>
+          {active_tab === 'ai' ? (
+            <span className="text-[10px] text-[var(--muted)]">Provider credentials are managed separately from resettable editor preferences.</span>
+          ) : (
+            <button
+              className="rounded-md px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              onClick={reset_active_tab}
+              type="button"
+            >
+              Reset current tab
+            </button>
+          )}
           <span className="text-[10px] text-[var(--muted)]">Settings are saved automatically</span>
         </footer>
       </section>
