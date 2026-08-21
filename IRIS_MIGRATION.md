@@ -109,7 +109,7 @@ The trusted Electron main process exposes screen-source enumeration to migrated 
 
 The existing Code Editor `AI Chat` panel now executes through the migrated `runAgentSession` runtime instead of the legacy direct Ollama chat request path. The configured Orchestrator provider/model/key slot is resolved from Settings, cloud and local providers share the same agent path, native tool calling and structured-controller fallback remain available, and agent output streams into the existing Chat shell.
 
-This milestone also connects encrypted chat restoration/persistence, durable run history, warm TODO state, compact approval/question cards, cancellation, global emergency-stop handling and a bounded observable activity timeline. Raw model reasoning streams are deliberately excluded from the Code Editor transcript and persisted activity metadata.
+This milestone also connects encrypted chat restoration/persistence, durable run history, warm TODO state, compact approval/question cards, cancellation, global emergency-stop handling and a bounded observable activity timeline. Raw model reasoning streams are deliberately excluded from the Code Editor transcript and persisted activity metadata. Long autonomous workspace runs now also carry an encrypted, bounded project working-context checkpoint across segments: verified tool actions, TODO state, runtime checkpoint metadata and the latest outcome are rolled forward automatically, while the existing `chat.remember` / `chat.recall` tools remain available for agent-authored durable facts. IRIS's stateful runtime continues to compact its live tool transcript under model-context pressure; the carried project checkpoint gives paused/resumed Code Editor runs a durable cross-segment handoff without persisting raw model reasoning.
 
 P006 intentionally exposes only a research/context tool scope: skills, current-chat memory/context controls, approvals/questions, TODO updates, trusted-source lookup and policy-governed web search/fetch. The security review found that enabling the migrated filesystem/search/RAG tools before the editor-aware authority layer would make the bridge's broader home-directory root part of the trust boundary, so direct workspace filesystem access is deliberately deferred rather than shipped with a weaker boundary.
 
@@ -365,7 +365,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Semantic candidate retrieval
   - Live-file evidence reads
   - Context assembly and ranking
-- [ ] **Memory and context compaction**
+- [x] **Memory and context compaction**
   - Project working memory
   - Chat remember/recall
   - Long-run summarization and rolling compaction
@@ -454,6 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect memory and context compaction for long autonomous project runs.
+1. Connect encrypted conversation and run persistence end-to-end, including resumable run state.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.

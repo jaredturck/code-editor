@@ -148,11 +148,12 @@ export function build_project_run_seed_todos(goal: string, run_mode: ProjectRunM
 
 export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
   const clean_goal = String(goal || '').trim()
+  const continuity_guidance = `AUTONOMOUS CONTEXT CONTINUITY: Keep durable working state across long runs. Use chat.remember for concise decisions, assumptions, important file paths, and other facts that must survive context compaction or a later resume. Use chat.recall or context.summarize when earlier chat details are needed instead of guessing. Refresh project facts with rag.retrieve and live file reads after edits or when a stored checkpoint may be stale.`
   if (resume) {
-    return `Resume the durable project run for this goal:\n${clean_goal}\n\nContinue from the persisted TODO state and current chat context. Do not redo completed tasks. Reconcile blocked or stale TODOs as needed before continuing.`
+    return `Resume the durable project run for this goal:\n${clean_goal}\n\nContinue from the persisted TODO state, autonomous project checkpoint, and current chat context. Do not redo completed tasks. Reconcile blocked or stale TODOs as needed before continuing.\n\n${continuity_guidance}`
   }
-  if (run_mode !== 'plan_first') return clean_goal
-  return `PROJECT RUN MODE: PLAN FIRST. Before substantive execution, use todo.update to replace the planning placeholder with a concrete, task-specific TODO plan. Keep exactly one task in progress and revise the plan as new facts emerge. After the plan is concrete, call user.ask to show it to the user and ask for approval before continuing. If the user asks for revisions, update the TODO plan and ask again. Only begin substantive execution after approval.\n\nGoal:\n${clean_goal}`
+  if (run_mode !== 'plan_first') return `${clean_goal}\n\n${continuity_guidance}`
+  return `PROJECT RUN MODE: PLAN FIRST. Before substantive execution, use todo.update to replace the planning placeholder with a concrete, task-specific TODO plan. Keep exactly one task in progress and revise the plan as new facts emerge. After the plan is concrete, call user.ask to show it to the user and ask for approval before continuing. If the user asks for revisions, update the TODO plan and ask again. Only begin substantive execution after approval.\n\n${continuity_guidance}\n\nGoal:\n${clean_goal}`
 }
 
 export function to_agent_attachments(attachments: AIAttachment[]) {
