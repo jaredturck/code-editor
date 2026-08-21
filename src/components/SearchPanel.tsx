@@ -3,6 +3,7 @@ import {
   findSimilarFiles,
   getFileSemanticStatus,
   inspectDocumentFile,
+  openFileWithSystem,
   powerFd,
   powerRipgrep,
   searchFileSemanticIndex,
@@ -17,9 +18,11 @@ interface SearchResult {
   score?: number
   semantic?: boolean
   document?: boolean
+  semantic_type?: 'text' | 'image' | 'video'
+  timestamp_ms?: number
 }
 
-type SearchMode = 'text' | 'files' | 'semantic' | 'documents'
+type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media'
 
 const document_extensions = new Set([
   '.pdf',
@@ -59,6 +62,14 @@ function file_extension(file_path: string) {
 
 function is_document_path(file_path: string) {
   return document_extensions.has(file_extension(file_path))
+}
+
+function format_timestamp(value?: number) {
+  if (!Number.isFinite(value) || Number(value) < 0) return ''
+  const total_seconds = Math.floor(Number(value) / 1000)
+  const minutes = Math.floor(total_seconds / 60)
+  const seconds = total_seconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
 function SearchToggle({
@@ -101,11 +112,16 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   const [loading, set_loading] = useState(false)
   const [error, set_error] = useState('')
 
-  const semantic_results = (items: BridgeFileSemanticResult[], documents_only = false) => {
+  const semantic_results = (
+    items: BridgeFileSemanticResult[],
+    target: 'text' | 'media' = 'text',
+    documents_only = false,
+  ) => {
     if (!rootPath) return []
 
     return items
-      .filter((item) => item.semanticType === 'text' && path_is_in_workspace(rootPath, item.path))
+      .filter((item) => path_is_in_workspace(rootPath, item.path))
+      .filter((item) => target === 'media' ? item.semanticType === 'image' || item.semanticType === 'video' : item.semanticType === 'text')
       .filter((item) => !documents_only || is_document_path(item.path))
       .map((item) => ({
         path: item.path,
@@ -113,21 +129,30 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         content: item.summary,
         score: item.score,
         semantic: true,
-        document: is_document_path(item.path),
+        document: item.semanticType === 'text' && is_document_path(item.path),
+        semantic_type: item.semanticType,
+        timestamp_ms: item.timestampMs,
       }))
   }
 
-  const refresh_semantic_status = async () => {
+  const refresh_semantic_status = async (mode: SearchMode = search_mode) => {
     try {
       const status = await getFileSemanticStatus(false)
+      const media_mode = mode === 'media'
 
       if (status.indexStatus === 'ready') {
-        set_semantic_status(`${status.semanticCount.toLocaleString()} embedded files indexed`)
+        set_semantic_status(
+          media_mode
+            ? `${status.semanticCount.toLocaleString()} semantic records · CLIP ${status.imageModel}`
+            : `${status.semanticCount.toLocaleString()} embedded files indexed`,
+        )
       } else if (status.indexStatus === 'building') {
         set_semantic_status(status.stage ? `Indexing · ${status.stage}` : 'Semantic index is building')
-      } else if (!status.ollamaAvailable) {
+      } else if (media_mode && !status.imageModelInstalled) {
+        set_semantic_status(`Install ${status.imageModel} in Settings → AI → Semantic Index`)
+      } else if (!media_mode && !status.ollamaAvailable) {
         set_semantic_status('Semantic search requires the configured local Ollama service')
-      } else if (!status.embeddingModelInstalled) {
+      } else if (!media_mode && !status.embeddingModelInstalled) {
         set_semantic_status(`Install ${status.embeddingModel} in Settings → AI → Semantic Index`)
       } else {
         set_semantic_status('Build the semantic index in Settings → AI → Semantic Index')
@@ -148,8 +173,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     set_document_inspection(null)
     set_error('')
 
-    if (mode === 'semantic' || mode === 'documents') {
-      void refresh_semantic_status()
+    if (mode === 'semantic' || mode === 'documents' || mode === 'media') {
+      void refresh_semantic_status(mode)
     }
   }
 
@@ -187,8 +212,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         set_results(next_results)
         set_result_label('File-name matches')
         set_error(String(response.error || ''))
-      } else if (search_mode === 'semantic' || search_mode === 'documents') {
-        const status = await refresh_semantic_status()
+      } else if (search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media') {
+        const status = await refresh_semantic_status(search_mode)
 
         if (!status || status.indexStatus !== 'ready') {
           set_results([])
@@ -197,10 +222,29 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
           return
         }
 
-        const response = await searchFileSemanticIndex(search_query, 200, 'text')
-        const documents_only = search_mode === 'documents'
-        set_results(semantic_results(response, documents_only))
-        set_result_label(documents_only ? 'Indexed documents' : 'Semantic matches')
+        if (search_mode === 'media') {
+          if (!status.imageModelInstalled) {
+            set_results([])
+            set_result_label('')
+            set_error(`CLIP model ${status.imageModel} is not installed.`)
+            return
+          }
+
+          const [images, videos] = await Promise.all([
+            searchFileSemanticIndex(search_query, 100, 'image'),
+            searchFileSemanticIndex(search_query, 100, 'video'),
+          ])
+          const media = [...images, ...videos]
+            .sort((left, right) => right.score - left.score)
+            .slice(0, 200)
+          set_results(semantic_results(media, 'media'))
+          set_result_label('Image and video matches')
+        } else {
+          const response = await searchFileSemanticIndex(search_query, 200, 'text')
+          const documents_only = search_mode === 'documents'
+          set_results(semantic_results(response, 'text', documents_only))
+          set_result_label(documents_only ? 'Indexed documents' : 'Semantic matches')
+        }
       } else {
         const response = await powerRipgrep(search_query, {
           path: rootPath,
@@ -240,16 +284,17 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     }
   }
 
-  const find_similar = async (file_path: string) => {
+  const find_similar = async (result: SearchResult) => {
     if (!rootPath) return
 
-    set_search_mode('semantic')
+    const media = result.semantic_type === 'image' || result.semantic_type === 'video'
+    set_search_mode(media ? 'media' : 'semantic')
     set_loading(true)
     set_error('')
     set_document_inspection(null)
 
     try {
-      const status = await refresh_semantic_status()
+      const status = await refresh_semantic_status(media ? 'media' : 'semantic')
 
       if (!status || status.indexStatus !== 'ready') {
         set_results([])
@@ -258,9 +303,9 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         return
       }
 
-      const response = await findSimilarFiles(file_path, 200)
-      set_results(semantic_results(response))
-      set_result_label(`Similar to ${workspace_display_path(rootPath, file_path)}`)
+      const response = await findSimilarFiles(result.path, 200)
+      set_results(semantic_results(response, media ? 'media' : 'text'))
+      set_result_label(`Similar to ${workspace_display_path(rootPath, result.path)}`)
     } catch (search_error) {
       set_results([])
       set_result_label('')
@@ -285,11 +330,23 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     }
   }
 
+  const open_result = (result: SearchResult) => {
+    if (result.document) {
+      void inspect_document(result.path)
+      return
+    }
+    if (result.semantic_type === 'image' || result.semantic_type === 'video') {
+      void openFileWithSystem(result.path)
+      return
+    }
+    onOpenFile(result.path)
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
       <form className="shrink-0" onSubmit={(event) => void run_search(event)}>
-        <div className="mb-2 grid grid-cols-4 rounded border border-[var(--input-border)] bg-[var(--input-bg)] p-0.5 text-[10px]">
-          {(['text', 'files', 'semantic', 'documents'] as SearchMode[]).map((mode) => (
+        <div className="mb-2 grid grid-cols-5 rounded border border-[var(--input-border)] bg-[var(--input-bg)] p-0.5 text-[10px]">
+          {(['text', 'files', 'semantic', 'documents', 'media'] as SearchMode[]).map((mode) => (
             <button
               aria-pressed={search_mode === mode}
               className={`rounded px-1 py-1 ${search_mode === mode ? 'bg-[var(--selected)] text-[var(--text)]' : 'text-[var(--muted)]'}`}
@@ -297,7 +354,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               onClick={() => select_search_mode(mode)}
               type="button"
             >
-              {mode === 'text' ? 'Text' : mode === 'files' ? 'Files' : mode === 'semantic' ? 'Semantic' : 'Docs'}
+              {mode === 'text' ? 'Text' : mode === 'files' ? 'Files' : mode === 'semantic' ? 'Semantic' : mode === 'documents' ? 'Docs' : 'Media'}
             </button>
           ))}
         </div>
@@ -331,7 +388,9 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                       ? 'Describe the code or file'
                       : search_mode === 'documents'
                         ? 'Search indexed documents and PDFs'
-                        : 'Search'
+                        : search_mode === 'media'
+                          ? 'Describe an image or video'
+                          : 'Search'
                 }
                 type="text"
                 value={query}
@@ -358,9 +417,11 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               </div>
             )}
 
-            {(search_mode === 'semantic' || search_mode === 'documents') && (
+            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media') && (
               <div className="px-0.5 text-[10px] leading-4 text-[var(--muted)]">
-                {semantic_status || 'Uses the existing encrypted IRIS text-embedding index.'}
+                {semantic_status || (search_mode === 'media'
+                  ? 'Uses the existing encrypted IRIS CLIP image/video index.'
+                  : 'Uses the existing encrypted IRIS text-embedding index.')}
               </div>
             )}
           </div>
@@ -409,11 +470,11 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             {results.map((result, index) => (
               <div
                 className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]"
-                key={`${result.path}:${result.line ?? 0}:${index}`}
+                key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${index}`}
               >
                 <button
                   className="min-w-0 flex-1 px-1.5 py-1.5 text-left"
-                  onClick={() => result.document ? void inspect_document(result.path) : onOpenFile(result.path)}
+                  onClick={() => open_result(result)}
                   title={result.document ? `Inspect ${result.path}` : result.path}
                   type="button"
                 >
@@ -423,6 +484,11 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                       {result.line ? `:${result.line}` : ''}
                     </span>
                     {result.document && <span className="shrink-0 text-[9px] text-[var(--muted)]">DOC</span>}
+                    {result.semantic_type === 'image' && <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>}
+                    {result.semantic_type === 'video' && <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>}
+                    {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">{format_timestamp(result.timestamp_ms)}</span>
+                    )}
                     {typeof result.score === 'number' && (
                       <span className="shrink-0 text-[9px] text-[var(--muted)]">
                         {Math.max(0, Math.round(result.score * 100))}%
@@ -436,7 +502,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                 {result.semantic && (
                   <button
                     className="mr-1 mt-1.5 shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--muted)] opacity-70 hover:bg-[var(--selected)] hover:text-[var(--text)] group-hover:opacity-100"
-                    onClick={() => void find_similar(result.path)}
+                    onClick={() => void find_similar(result)}
                     title="Find semantically similar files"
                     type="button"
                   >

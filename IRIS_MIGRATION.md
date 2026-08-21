@@ -117,11 +117,11 @@ The per-session allowlist applies to **every** catalog tool, including tools mar
 
 ### Search → semantic filesystem
 
-**Status: CONNECTED (semantic file search and indexing milestone).**
+**Status: CONNECTED (semantic file, document and media indexing milestones).**
 
 The existing Search activity now exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show the indexed semantic summary/score, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
 
-The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor now also exposes the migrated bounded document/PDF/archive extraction path from Search: indexed Office/OpenDocument/PDF/ZIP hits can be retrieved as extracted text without unpacking archives to disk, including PDF page-count and archive-entry provenance when available. CLIP media search, semantic concepts and RAG remain separate checklist milestones. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
+The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor exposes the migrated bounded document/PDF/archive extraction path from Search and now also exposes the migrated CLIP media index as a dedicated Media mode. Image preparation continues through IRIS's bounded image worker queue, video indexing continues through frame extraction, and image/video embeddings remain persisted through the encrypted semantic stores. Search filters those persisted media results to the open workspace and preserves indexed video-frame timestamps. Semantic concepts and RAG remain separate checklist milestones. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
 
 ### Settings → IRIS provider/agent configuration
 
@@ -354,7 +354,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 - [x] **Document, PDF and archive intelligence**
   - Document/PDF extraction and indexing
   - Archive inspection and document retrieval
-- [ ] **Image and video semantic indexing**
+- [x] **Image and video semantic indexing**
   - CLIP image embeddings
   - Image/video semantic search
   - Media worker queues and persistence
@@ -454,6 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect image and video semantic indexing to the existing Search activity.
+1. Connect semantic concepts and concept-driven file discovery to the existing Search activity.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
