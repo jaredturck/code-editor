@@ -13,6 +13,10 @@ import {
 } from '@/platform/providers/providerConfiguration';
 import { AI_PROVIDER_DEFINITIONS } from '@/platform/providers/providerRegistry';
 import { chooseAutomaticLocalModel } from '@/platform/providers/localModelCatalog';
+import {
+  evaluateLocalRuntimeFit,
+  localRuntimeFitScore,
+} from '@/platform/providers/localRuntimePolicy';
 
 export interface AutomaticSetupResult {
   patch: Record<string, unknown>;
@@ -30,22 +34,37 @@ function classifyFailedTest(message: unknown): ProviderKeyValidationRecord['stat
     : 'unavailable';
 }
 
-function findSuitableInstalledLocalModel(models: string[]): string {
+function local_agent_score(candidate: ReturnType<typeof evaluateModel>) {
+  return (
+    candidate.roleScores.scout +
+    candidate.roleScores.executor +
+    candidate.roleScores.orchestrator
+  );
+}
+
+function findSuitableInstalledLocalModel(
+  models: string[],
+  hardware: Awaited<ReturnType<typeof systemStats>> | null,
+): string {
   const ranked = normalizeModelList(models)
     .filter(
       (model) =>
         !/(?:^|[-_:])(embed|embedding|minilm|clip|rerank|nomic|bge)(?:[-_:]|$)/i.test(model),
     )
-    .map((model) => evaluateModel({ provider: 'local', model, keyId: '1' }))
-    .filter((candidate) => !candidate.excluded)
-    .sort(
-      (left, right) =>
-        right.roleScores.scout +
-        right.roleScores.executor +
-        right.roleScores.orchestrator -
-        (left.roleScores.scout + left.roleScores.executor + left.roleScores.orchestrator),
-    );
-  return ranked[0]?.model || '';
+    .map((model) => ({
+      evaluation: evaluateModel({ provider: 'local', model, keyId: '1' }),
+      runtime: evaluateLocalRuntimeFit(model, hardware),
+    }))
+    .filter(({ evaluation }) => !evaluation.excluded);
+
+  const hardware_viable = ranked.filter(({ runtime }) => runtime.fit !== 'oversized');
+  const pool = hardware_viable.length ? hardware_viable : ranked;
+  pool.sort(
+    (left, right) =>
+      local_agent_score(right.evaluation) + localRuntimeFitScore(right.runtime) * 4 -
+      (local_agent_score(left.evaluation) + localRuntimeFitScore(left.runtime) * 4),
+  );
+  return pool[0]?.evaluation.model || '';
 }
 
 export async function runAutomaticSetup(
@@ -105,26 +124,32 @@ export async function runAutomaticSetup(
     servers[0];
 
   if (preferred) {
+    const hardware = await systemStats().catch(() => null);
     let localModels = normalizeModelList(preferred.models);
-    let selectedLocalModel = findSuitableInstalledLocalModel(localModels);
+    let selectedLocalModel = findSuitableInstalledLocalModel(localModels, hardware);
     if (!selectedLocalModel) {
       if (preferred.kind !== 'ollama') {
         throw new Error(
-          'No suitable local chat model was found. Add a model in LM Studio or connect Ollama so Auto Setup can install one.',
+          'No suitable local chat model was found. Add a model in LM Studio or the configured OpenAI-compatible runtime, or connect Ollama so Auto Setup can install one.',
         );
       }
-      const hardware = await systemStats().catch(() => null);
       selectedLocalModel = chooseAutomaticLocalModel(hardware);
       await pullLocalOllamaModel(preferred.url, selectedLocalModel);
       localModels = normalizeModelList([selectedLocalModel, ...localModels]);
       setupSummary.push(`Downloaded local worker: ${selectedLocalModel}`);
     }
 
+    const runtimeFit = evaluateLocalRuntimeFit(selectedLocalModel, hardware);
+    const fitDetail = runtimeFit.availableVramGb === null || runtimeFit.estimatedMemoryGb === null
+      ? ''
+      : ` (${runtimeFit.fit}; ~${runtimeFit.estimatedMemoryGb} GB model footprint / ${runtimeFit.availableVramGb} GB VRAM)`;
+    setupSummary.push(`Local runtime: ${preferred.kind} · ${selectedLocalModel}${fitDetail}`);
+
     const localId = providerCredentialId('local', '1');
     validations[localId] = {
       status: 'valid',
       testedAt: Date.now(),
-      message: `Connected to ${preferred.kind}. Local worker ${selectedLocalModel} is ready.`,
+      message: `Connected to ${preferred.kind}. Local worker ${selectedLocalModel} is ready${fitDetail}.`,
       models: localModels,
     };
     discovered.local = localModels;
