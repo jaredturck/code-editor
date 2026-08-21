@@ -52,6 +52,8 @@ interface SettingsLike {
   agent_execution_policy?: unknown;
   agent_primary_assignment_id?: unknown;
   agent_cloud_request_budget?: unknown;
+  agent_multi_enabled?: unknown;
+  agent_peer_consult_enabled?: unknown;
   agent_models?: unknown;
   provider_selected_models?: unknown;
   provider_key_validation?: unknown;
@@ -196,6 +198,7 @@ export function buildHybridExecutionPlan(settings: SettingsLike): HybridExecutio
 
   const localOrchestrator = makeLocalRoleEntry('orchestrator', localWorker);
   const roster = ensureLocalOrchestratorPrimary(readAgentModels(settings), localOrchestrator);
+  const multiEnabled = settings.agent_multi_enabled === true;
   const workingSettings = {
     ...settings,
     ai_provider: 'local',
@@ -204,8 +207,9 @@ export function buildHybridExecutionPlan(settings: SettingsLike): HybridExecutio
     ai_runtime_api_key: '',
     agent_models: roster,
     agent_primary_assignment_id: localOrchestrator.id,
-    agent_multi_enabled: true,
-    agent_peer_consult_enabled: true,
+    agent_multi_enabled: multiEnabled,
+    agent_peer_consult_enabled:
+      multiEnabled && settings.agent_peer_consult_enabled !== false,
   };
 
   return { workingSettings, finalResponder, localWorker, cloudCandidates };
