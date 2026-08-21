@@ -17,6 +17,10 @@ Completed integration milestones:
 - Conversation and run persistence
 - Skills system
 - Artifacts and large outputs
+- Web search and research
+- Model routing, health and failover
+- Hybrid local + cloud execution
+- Advanced local model runtime integration
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -28,12 +32,18 @@ The skills system is now part of autonomous Agent Chat rather than only a settin
 
 Artifacts are also connected to autonomous runs. Persisted chats receive IRIS's existing `artifact.create` tool for substantial research, test, architecture/design and migration reports; append mode keeps large deliverables chunked in encrypted artifact persistence instead of expanding the chat transcript. Final replies include stable artifact references, and the Code Editor Markdown surface can open those records in an in-app artifact viewer without writing plaintext temporary files.
 
+Autonomous research now uses the migrated `search.web`, `web.fetch` and trusted-source lookup path directly. The project-run contract tells the agent to discover candidate sources, fetch only evidence it needs, preserve source URLs, reconcile conflicting sources and treat fetched content as untrusted evidence rather than executable instructions. IRIS's existing per-site ingestion guard, network/redirect policy and untrusted-content marking remain the enforcement layer; ordinary HTTP links in chat and artifact Markdown continue through the Code Editor's external-link boundary.
+
+Code Editor no longer disables IRIS's configured model execution policy. Complexity-aware routing, adaptive health state, cooldown/recovery and bounded failover can now operate during autonomous runs while multi-agent execution remains explicitly disabled until its dedicated milestone. Hybrid runs may use a configured local worker for the working loop and reserve the selected cloud responder for synthesis; focused `cloud.consult` calls are exposed only when a persisted session actually has both a cloud responder and a local worker, and all remote inference shares the existing cloud request budget.
+
+Local execution continues through IRIS's provider-neutral Ollama and OpenAI-compatible/LM Studio adapters. Auto Setup now ranks installed chat models using both agent-role suitability and conservative parameter/quantization-aware VRAM fit before downloading a fallback, preserves unknown custom model names instead of rejecting them, and retains hardware-aware Ollama fallback selection. With multi-agent execution still off, autonomous Code Editor runs schedule one local working model at a time, avoiding concurrent local-agent VRAM contention until the multi-agent coordination milestone introduces explicit worker concurrency policy.
+
 ## Next milestone
 
-**Web Search and Research**
+**Multi-Agent Development**
 
-- search/fetch tools and source handling
-- network safety and untrusted-content boundary
-- browser/editor integration
+- Orchestrator, Executor, Scout and Reviewer/Overwatcher delegation and result recall
+- file ownership / write leases and agent-agent collision prevention
+- independent review, remediation and final acceptance gating
 
-Model routing/failover, hybrid execution, multi-agent development, additional IRIS capabilities and final validation remain later grouped batches.
+Audio/vision/automation, system/local-tool capabilities, autonomous-run security hardening and final validation remain later grouped batches.
