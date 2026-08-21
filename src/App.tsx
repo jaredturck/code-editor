@@ -44,7 +44,39 @@ function App() {
     onPathDeleted: editor.mark_document_paths_deleted,
     onNotice: editor.show_notice,
   })
-  const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path)
+  const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path, {
+    diagnostics: editor.diagnostics,
+    file_host: {
+      get_snapshot: (file_path) => {
+        const normalize_path = (value: string) => {
+          const normalized = value.replace(/\\/g, '/')
+          return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
+        }
+        const target = normalize_path(file_path)
+        const document = editor.documents.find((item) =>
+          item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
+        )
+        if (!document || document.kind !== 'text' || !document.file_path) return null
+        return { file_path: document.file_path, content: document.content, dirty: document.dirty }
+      },
+      apply_content: (file_path, content, saved) => {
+        const normalize_path = (value: string) => {
+          const normalized = value.replace(/\\/g, '/')
+          return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
+        }
+        const target = normalize_path(file_path)
+        const document = editor.documents.find((item) =>
+          item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
+        )
+        if (!document || document.kind !== 'text') return
+        if (saved) {
+          document.saved_content = content
+          document.deleted = false
+        }
+        editor.update_document(document.id, content)
+      },
+    },
+  })
   const panels = usePanelSizes(editor.ai_chat_open)
   const editor_ref = useRef<CodeEditorHandle>(null)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
