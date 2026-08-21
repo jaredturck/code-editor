@@ -2,6 +2,7 @@ import { resolveAgentIdentity, resolveAgentRoleSettings } from '@/platform/agent
 import { getToolPresentation } from '@/platform/agent/toolCatalog'
 import { hasKeyFor } from '@/platform/keyStore'
 import { findAIProvider } from '@/platform/providers/providerRegistry'
+import type { ProjectRunMode } from '@/chat/projectRunController'
 import { stripTerminalControlCharacters } from '@/platform/security'
 import type { OrbSettings } from '@/platform/settingsStorage'
 import type { AIAttachment, AgentActivityItem, AIChatMessage } from '@/types/editor'
@@ -83,7 +84,11 @@ export function resolve_agent_chat_descriptor(settings: OrbSettings): AgentChatD
   }
 }
 
-export function build_core_agent_settings(settings: OrbSettings, workspace_root: string | null) {
+export function build_core_agent_settings(
+  settings: OrbSettings,
+  workspace_root: string | null,
+  run_mode: ProjectRunMode = 'automatic',
+) {
   const bound = resolveAgentRoleSettings('orchestrator', settings).settings
 
   return {
@@ -96,6 +101,7 @@ export function build_core_agent_settings(settings: OrbSettings, workspace_root:
     agent_peer_review: 'off',
     agent_overwatch_continuous: false,
     agent_planning_mode: false,
+    agent_project_run_mode: run_mode,
     force_session_alive: false,
     agent_permission_tier_orchestrator: 1,
     permissions_file_read: false,
@@ -105,6 +111,27 @@ export function build_core_agent_settings(settings: OrbSettings, workspace_root:
     permissions_mouse_control: false,
     agent_tool_allowlist: get_core_agent_tool_allowlist(workspace_root),
   }
+}
+
+export function build_project_run_seed_todos(goal: string, run_mode: ProjectRunMode) {
+  if (run_mode !== 'plan_first') return []
+  const clean_goal = String(goal || '').replace(/\s+/g, ' ').trim()
+  return [
+    {
+      id: 1,
+      text: `Create a concrete execution plan for: ${clean_goal.slice(0, 160) || 'the current request'}`,
+      status: 'in_progress',
+    },
+  ]
+}
+
+export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
+  const clean_goal = String(goal || '').trim()
+  if (resume) {
+    return `Resume the durable project run for this goal:\n${clean_goal}\n\nContinue from the persisted TODO state and current chat context. Do not redo completed tasks. Reconcile blocked or stale TODOs as needed before continuing.`
+  }
+  if (run_mode !== 'plan_first') return clean_goal
+  return `PROJECT RUN MODE: PLAN FIRST. Before substantive execution, use todo.update to replace the planning placeholder with a concrete, task-specific TODO plan. Keep exactly one task in progress and revise the plan as new facts emerge. After the plan is concrete, call user.ask to show it to the user and ask for approval before continuing. If the user asks for revisions, update the TODO plan and ask again. Only begin substantive execution after approval.\n\nGoal:\n${clean_goal}`
 }
 
 export function to_agent_attachments(attachments: AIAttachment[]) {

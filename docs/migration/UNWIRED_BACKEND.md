@@ -4,13 +4,13 @@ This file is the deliberate "dead/unwired code" ledger requested for the migrati
 
 Nothing in this list should be deleted merely because the current UI does not call it yet.
 
-## 1. Agent-session extensions beyond the core Chat milestone
+## 1. Agent-session extensions beyond core Chat and durable runs
 
 **Location:** `src/platform/agent/runtime/`, `src/platform/agentRuntime.ts`
 
-**Connected now:** the existing AI Chat panel invokes `runAgentSession`, supports native tools/controller fallback, visible answer streaming, bounded observable activity, approvals/questions, cancellation and the configured Orchestrator.
+**Connected now:** the existing AI Chat panel invokes `runAgentSession`, supports native tools/controller fallback, visible answer streaming, bounded observable activity, approvals/questions, cancellation and the configured Orchestrator. P007 additionally provides durable automatic/plan-first project runs, structured TODO presentation, encrypted checkpoints, pause/resume, elapsed/budget visibility, completion reconciliation and restart recovery to an explicit interrupted state.
 
-**Still intentionally unwired:** direct workspace filesystem/search/RAG authority, multi-hour autonomous project-run checkpoints/resume, rich plan/TODO presentation, steering/force-session-alive UX, write/terminal authority and multi-agent execution. P006 session-scopes Chat to research/context tools until the dedicated workspace and process safety integrations are completed.
+**Still intentionally unwired:** direct workspace filesystem/search/RAG authority, steering/force-session-alive UX, write/terminal authority and multi-agent execution. P007 keeps the P006 research/context capability boundary unchanged until the dedicated workspace and process safety integrations are completed.
 
 **Planned Code Editor surface:** existing AI Chat panel and future run details within that surface.
 
@@ -34,7 +34,7 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Connected portion:** Electron bridge permission get/update, fail-closed defaults and Code Editor-native approval/question cards in AI Chat. Settings can still manage trusted bridge permissions explicitly.
 
-**Still intentionally unwired:** Chat-originated persistent machine-permission grants are denied in P006, and file/terminal/screen/mouse/host-inspection/multi-agent tools are session-blocked rather than merely hidden. They will be surfaced only with their dedicated editor/process authority milestones.
+**Still intentionally unwired:** Chat-originated persistent machine-permission grants remain denied, and file/terminal/screen/mouse/host-inspection/multi-agent tools are session-blocked rather than merely hidden. Durable P007 runs do not widen this authority; those tools will be surfaced only with their dedicated editor/process milestones.
 
 ## 4. Semantic filesystem / semantic file search
 
@@ -94,9 +94,9 @@ Nothing in this list should be deleted merely because the current UI does not ca
 
 **Present:** encrypted database, chats/messages, agent state, artifacts, sub-agent results, skills, semantic data, search history.
 
-**Connected portion:** secure key bootstrap, encrypted bridge, durable renderer store hydration, encrypted active-chat creation/restoration, user/assistant message persistence, warm TODO state and durable bounded agent-run history. Assistant completion is persisted before the UI marks it complete.
+**Connected portion:** secure key bootstrap, encrypted bridge, durable renderer store hydration, encrypted active-chat creation/restoration, user/assistant message persistence, warm TODO state, bounded agent-run history and P007 per-chat project-run checkpoints. Assistant completion is persisted before the UI marks it complete; nonterminal project runs persist lifecycle/TODO/elapsed state for pause or restart recovery.
 
-**Still unwired:** chat switcher/history management UI, resumable in-flight autonomous project runs and full checkpoint recovery.
+**Still unwired:** chat switcher/history management UI and richer checkpoint/history inspection beyond the current Project Run card. In-flight runs themselves are now resumable after an explicit pause or interrupted restart.
 
 **Planned surface:** existing AI Chat with richer conversation/project-run controls.
 

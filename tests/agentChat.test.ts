@@ -33,6 +33,8 @@ vi.mock('@/platform/security', () => ({
 
 import {
   build_core_agent_settings,
+  build_project_run_input,
+  build_project_run_seed_todos,
   get_core_agent_tool_allowlist,
   resolve_agent_chat_descriptor,
   normalize_persisted_attachment,
@@ -103,6 +105,30 @@ describe('core agent chat integration', () => {
     expect(settings.agent_tool_allowlist).not.toContain('terminal.exec')
     expect(settings.agent_tool_allowlist).not.toContain('agent.delegate')
     expect(settings.agent_tool_allowlist).not.toContain('system.processes')
+  })
+
+
+  it('supports plan-first runs without widening the core Chat capability boundary', () => {
+    key_state.keys.set('openai:2', 'secret-key')
+    const settings = build_core_agent_settings(agent_settings(), '/workspace', 'plan_first')
+    const todos = build_project_run_seed_todos('Implement durable project runs', 'plan_first')
+    const input = build_project_run_input('Implement durable project runs', 'plan_first')
+
+    expect(settings.agent_project_run_mode).toBe('plan_first')
+    expect(settings.agent_tool_allowlist).toContain('user.ask')
+    expect(settings.agent_tool_allowlist).not.toContain('files.write')
+    expect(settings.agent_tool_allowlist).not.toContain('terminal.exec')
+    expect(todos).toHaveLength(1)
+    expect(todos[0].status).toBe('in_progress')
+    expect(input).toContain('PLAN FIRST')
+    expect(input).toContain('ask for approval')
+  })
+
+  it('builds a resume instruction that preserves the original project goal', () => {
+    const input = build_project_run_input('Finish the migration', 'automatic', true)
+    expect(input).toContain('Finish the migration')
+    expect(input).toContain('persisted TODO state')
+    expect(input).toContain('Do not redo completed tasks')
   })
 
   it('keeps filesystem and host-inspection tools out of the core Chat scope even with a workspace open', () => {

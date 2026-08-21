@@ -15,7 +15,7 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
-- Existing local Ollama chat with model selection, streaming responses, text/image attachments, and optional voice transcription
+- IRIS Agent Chat with configured provider/model execution, streaming responses, encrypted history, durable project-run plans, pause/resume recovery, text/image attachments, and optional voice transcription
 - Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, multi-agent orchestration, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio/vision/automation/launcher backends
 - OS-protected credential storage and encrypted local SQLite platform persistence
 - Authenticated loopback capability bridge with capability permissions and emergency-stop foundation
@@ -45,7 +45,7 @@ npm install
 npm run dev
 ```
 
-Ollama is optional for the existing compatibility chat and is also one of the migrated local-provider backends. Cloud/provider configuration from IRIS is present in the platform but is not yet exposed in the Code Editor Settings UI.
+Ollama is optional and remains available through the migrated local-provider backend. Cloud/local provider credentials, model discovery, role assignments, routing, autonomy limits, skills, and semantic-index settings are exposed through the Code Editor's AI Settings UI.
 
 The secure IRIS platform initializes before the renderer. On Linux, Electron must have a real OS secret-storage backend; the application intentionally refuses the insecure `basic_text` fallback.
 

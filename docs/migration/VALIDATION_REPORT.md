@@ -260,3 +260,42 @@ npm run verify:full
 ```
 
 Any dependency-aware failure from that command should be treated as the first corrective item before the next feature milestone.
+
+## Planning and Autonomous Project Runs patch validation (P007)
+
+P007 adds durable Automatic/Plan-first project runs to Agent Chat while retaining the P006 research/context-only authority boundary. The implementation adds a module-owned lifecycle controller, encrypted per-chat checkpoints, structured TODO display, Pause/Resume/Cancel, restart recovery to an explicit interrupted state, elapsed/budget visibility and completion reconciliation.
+
+### Changed integration areas
+
+- `src/chat/projectRunController.ts`
+- `src/chat/agentChat.ts`
+- `src/hooks/useAIChat.ts`
+- `src/components/AIChatPanel.tsx`
+- `src/platform/chatSessionStore.ts`
+- focused Chat/agent/project-run tests
+- autonomous-run planning/review and migration documentation
+
+### Static validation
+
+- TypeScript-family files parsed across active `src/`, `backend/`, `electron/` and `tests/`: **271**
+- Physical lines parsed: **88,261**
+- Parser errors: **0**
+- Relative/`@/` imports inspected: **799**
+- Unresolved source imports: **0**
+- Changed-file trailing-whitespace errors: **0**
+- Changed text files missing a final newline: **0**
+
+A dependency-independent executable controller smoke test passed begin/checkpoint/pause/resume/cancel behavior, bounded checkpoint normalization and interrupted restart recovery.
+
+### Security and bug review result
+
+P007 does not widen agent authority: the P006 per-session tool allowlist and disabled file/terminal/screen permissions remain in force. Durable checkpoint payloads are bounded and normalized before encrypted persistence, provider credentials and raw hidden reasoning are excluded, persisted active runs never auto-resume after restart, and high-frequency stream events are not checkpointed. Review also added a concurrent-run guard, refreshed provider/model attribution on resume and changed unresolved completion state from terminal failure to resumable pause. Full details are in `AUTONOMOUS_PROJECT_RUNS_REVIEW.md`.
+
+### Dependency-aware validation
+
+`tsc -b --pretty false` was attempted in the recovery environment but stopped before source checking because the installed dependency tree is unavailable (`vite/client` and Node type definitions are missing). Vitest, Prettier, Oxlint, Electron/backend builds and the complete verification sequence must therefore be run on an installed checkout:
+
+```bash
+npm run verify:full
+```
+

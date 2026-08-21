@@ -59,6 +59,7 @@ export interface ChatSessionState {
   todos: Array<Record<string, unknown>>;
   primaryOrchestratorId: string;
   executionPolicy: 'hybrid' | 'local_only' | 'primary_only';
+  projectRun: Record<string, unknown> | null;
   updatedAt: number;
 }
 
@@ -77,6 +78,10 @@ export function getChatSessionState(id: string): ChatSessionState | null {
     executionPolicy: ['hybrid', 'local_only', 'primary_only'].includes(executionPolicy)
       ? (executionPolicy as ChatSessionState['executionPolicy'])
       : 'hybrid',
+    projectRun:
+      raw.projectRun && typeof raw.projectRun === 'object'
+        ? (raw.projectRun as Record<string, unknown>)
+        : null,
     updatedAt: Number(raw.updatedAt) || 0,
   };
 }
@@ -89,6 +94,7 @@ export function saveChatSessionState(
     todos?: unknown;
     primaryOrchestratorId?: unknown;
     executionPolicy?: unknown;
+    projectRun?: unknown;
   },
 ): void {
   if (!id) return;
@@ -100,12 +106,18 @@ export function saveChatSessionState(
   const executionPolicy = ['hybrid', 'local_only', 'primary_only'].includes(requestedPolicy)
     ? requestedPolicy
     : 'hybrid';
+  const projectRun = Object.prototype.hasOwnProperty.call(state || {}, 'projectRun')
+    ? state?.projectRun && typeof state.projectRun === 'object'
+      ? (state.projectRun as Record<string, unknown>)
+      : null
+    : current?.projectRun || null;
   writeStorageJson(`${SESSION_STATE_KEY_PREFIX}${id}`, {
     todos,
     primaryOrchestratorId: String(
       state?.primaryOrchestratorId ?? current?.primaryOrchestratorId ?? '',
     ),
     executionPolicy,
+    projectRun,
     updatedAt: Date.now(),
   });
 }

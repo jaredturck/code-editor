@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type useAIChat from '../hooks/useAIChat'
+import { project_run_progress } from '../chat/projectRunController'
+import type { ProjectRunState } from '../chat/projectRunController'
 import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
 
@@ -20,6 +22,111 @@ interface ApprovalCardProps {
 function format_seconds(seconds: number) {
   const minutes = Math.floor(seconds / 60)
   return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+interface ProjectRunCardProps {
+  state: ProjectRunState
+  elapsed_seconds: number
+  budget_minutes: number
+  generating: boolean
+  onPause: () => void
+  onResume: () => void
+  onCancel: () => void
+}
+
+function format_run_status(status: string) {
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function ProjectRunCard({
+  state,
+  elapsed_seconds,
+  budget_minutes,
+  generating,
+  onPause,
+  onResume,
+  onCancel,
+}: ProjectRunCardProps) {
+  const progress = project_run_progress(state.todos)
+  const resumable = state.status === 'paused' || state.status === 'interrupted'
+  const active = [
+    'starting',
+    'planning',
+    'running',
+    'waiting_for_approval',
+    'waiting_for_user',
+    'finalizing',
+  ].includes(state.status)
+
+  return (
+    <div className="border-b border-[var(--border)] bg-black/[0.04] px-3 py-2 text-[9px] text-[var(--muted)]">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-[var(--text)]">Project Run</span>
+            <span>{format_run_status(state.status)}</span>
+            <span>·</span>
+            <span>{format_seconds(elapsed_seconds)}</span>
+            <span>·</span>
+            <span>{budget_minutes}m budget</span>
+          </div>
+          {state.last_activity && <div className="mt-0.5 truncate">{state.last_activity}</div>}
+        </div>
+
+        {active && generating && (
+          <button
+            className="rounded border border-[var(--border)] px-2 py-1 hover:bg-[var(--hover)] hover:text-[var(--text)]"
+            onClick={onPause}
+            type="button"
+          >
+            Pause
+          </button>
+        )}
+        {resumable && (
+          <>
+            <button
+              className="rounded bg-sky-600 px-2 py-1 font-medium text-white hover:bg-sky-500"
+              onClick={onResume}
+              type="button"
+            >
+              Resume
+            </button>
+            <button
+              className="rounded border border-[var(--border)] px-2 py-1 hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              onClick={onCancel}
+              type="button"
+            >
+              Cancel run
+            </button>
+          </>
+        )}
+      </div>
+
+      {state.todos.length > 0 && (
+        <details className="mt-2 rounded border border-[var(--border)] bg-black/[0.04] px-2 py-1.5">
+          <summary className="cursor-pointer select-none font-medium text-[var(--text)]">
+            Plan · {progress.done}/{progress.total} done{progress.blocked ? ` · ${progress.blocked} blocked` : ''}
+          </summary>
+          <div className="mt-2 space-y-1">
+            {state.todos.map((todo) => (
+              <div className="flex gap-2" key={todo.id}>
+                <span aria-hidden="true">
+                  {todo.status === 'done'
+                    ? '✓'
+                    : todo.status === 'in_progress'
+                      ? '●'
+                      : todo.status === 'blocked'
+                        ? '×'
+                        : '○'}
+                </span>
+                <span className={todo.status === 'done' ? 'line-through opacity-60' : ''}>{todo.text}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
 }
 
 function ApprovalCard({ request, onDecision, onAnswer }: ApprovalCardProps) {
@@ -102,6 +209,8 @@ function ApprovalCard({ request, onDecision, onAnswer }: ApprovalCardProps) {
 
 function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
   const message_end_ref = useRef<HTMLDivElement>(null)
+  const project_run_needs_resolution =
+    chat.project_run?.status === 'paused' || chat.project_run?.status === 'interrupted'
 
   useEffect(() => {
     message_end_ref.current?.scrollIntoView({
@@ -187,6 +296,18 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
         </div>
         <span className="shrink-0 text-[9px] text-[var(--muted)]">Settings → AI</span>
       </div>
+
+      {chat.project_run && (
+        <ProjectRunCard
+          budget_minutes={chat.project_run_budget_minutes}
+          elapsed_seconds={chat.project_run_elapsed_seconds}
+          generating={chat.generating}
+          onCancel={chat.cancel_project_run}
+          onPause={chat.pause_project_run}
+          onResume={() => void chat.resume_project_run()}
+          state={chat.project_run}
+        />
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto px-3 py-4">
         {chat.messages.length === 0 ? (
@@ -330,10 +451,25 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
         )}
 
         <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-2 focus-within:border-sky-500">
+          <div className="mb-2 flex items-center justify-between gap-2 text-[9px] text-[var(--muted)]">
+            <span>Run mode</span>
+            <select
+              aria-label="Agent run mode"
+              className="rounded border border-[var(--input-border)] bg-[var(--surface-3)] px-2 py-1 text-[9px] text-[var(--text)] outline-none focus:border-sky-500"
+              disabled={chat.generating || chat.restoring_chat || project_run_needs_resolution}
+              onChange={(event) =>
+                chat.set_run_mode(event.target.value === 'plan_first' ? 'plan_first' : 'automatic')
+              }
+              value={chat.run_mode}
+            >
+              <option value="automatic">Automatic</option>
+              <option value="plan_first">Plan first</option>
+            </select>
+          </div>
           <textarea
             aria-label="AI chat prompt"
             className="h-20 w-full resize-none border-0 bg-transparent p-1 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-            disabled={chat.generating || chat.restoring_chat}
+            disabled={chat.generating || chat.restoring_chat || project_run_needs_resolution}
             onChange={(event) => chat.set_prompt(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
@@ -348,7 +484,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
           <div className="mt-1 flex items-center gap-1">
             <button
               className="rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-              disabled={chat.generating}
+              disabled={chat.generating || project_run_needs_resolution}
               onClick={chat.attach_active_file}
               title="Attach active file"
               type="button"
@@ -357,7 +493,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             </button>
             <button
               className="rounded px-2 py-1 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-              disabled={chat.generating}
+              disabled={chat.generating || project_run_needs_resolution}
               onClick={() => void chat.choose_attachment()}
               title="Choose attachment"
               type="button"
@@ -369,7 +505,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
               className={`rounded px-2 py-1 text-[10px] ${
                 chat.recording ? 'bg-red-500/15 text-red-300' : 'text-[var(--muted)] hover:bg-[var(--hover)]'
               }`}
-              disabled={chat.transcribing || chat.generating}
+              disabled={chat.transcribing || chat.generating || project_run_needs_resolution}
               onClick={() => (chat.recording ? chat.stop_recording() : void chat.begin_recording())}
               type="button"
             >
@@ -393,6 +529,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                 className="ml-auto rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={
                   chat.restoring_chat ||
+                  project_run_needs_resolution ||
                   !chat.agent_descriptor.ready ||
                   (!chat.prompt.trim() && chat.attachments.length === 0)
                 }
