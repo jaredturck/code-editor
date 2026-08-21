@@ -15,7 +15,7 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
-- IRIS Agent Chat with configured provider/model execution, streaming responses, encrypted history, durable project-run plans, pause/resume recovery, text/image attachments, and optional voice transcription
+- IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace file editing, text/image attachments, and optional voice transcription
 - Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, multi-agent orchestration, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio/vision/automation/launcher backends
 - OS-protected credential storage and encrypted local SQLite platform persistence
 - Authenticated loopback capability bridge with capability permissions and emergency-stop foundation

@@ -11,6 +11,31 @@ interface WorkspaceEntryResult {
 
 interface WorkspaceApi {
   read_directory: (root_path: string, directory_path: string) => Promise<WorkspaceEntryResult[]>
+  agent_read_file: (root_path: string, target_path: string) => Promise<{
+    path: string
+    content: string
+    revision: string
+    size: number
+    modified_time: number
+  }>
+  agent_write_file: (
+    root_path: string,
+    target_path: string,
+    content: string,
+    expected_revision: string | null,
+  ) => Promise<{ path: string; revision: string; size: number }>
+  agent_stat: (root_path: string, target_path: string) => Promise<{
+    path: string
+    name: string
+    type: 'file' | 'directory' | 'other'
+    size: number
+    modifiedTime: number
+  }>
+  agent_list: (
+    root_path: string,
+    target_path: string,
+    depth: number,
+  ) => Promise<{ rootPath: string; tree: { name: string; path: string; type: 'file' | 'directory'; children?: unknown[] }; truncated: boolean }>
   create_entry: (
     root_path: string,
     parent_path: string,

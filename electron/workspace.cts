@@ -1,7 +1,8 @@
 import { clipboard, shell, type WebContents } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
-import { access, cp, lstat, mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { createHash } from 'node:crypto'
 
 export type WorkspaceEntryKind = 'file' | 'directory'
 export type WorkspaceClipboardOperation = 'copy' | 'cut'
@@ -56,6 +57,174 @@ function ensure_workspace_path(root_path: string, target_path: string) {
   if (!path_is_inside(root_path, target_path)) {
     throw new Error('The requested path is outside the open workspace.')
   }
+}
+
+
+function resolve_workspace_target(root_path: string, target_path: string) {
+  return isAbsolute(target_path) ? resolve(target_path) : resolve(root_path, target_path)
+}
+
+async function canonical_workspace_root(root_path: string) {
+  const resolved_root = resolve(root_path)
+  const canonical_root = await realpath(resolved_root)
+  const root_stat = await stat(canonical_root)
+
+  if (!root_stat.isDirectory()) {
+    throw new Error('The open workspace root is not a directory.')
+  }
+
+  return canonical_root
+}
+
+async function nearest_existing_parent(target_path: string) {
+  let candidate = dirname(target_path)
+
+  while (!(await path_exists(candidate))) {
+    const parent = dirname(candidate)
+    if (parent === candidate) break
+    candidate = parent
+  }
+
+  return candidate
+}
+
+async function resolve_agent_workspace_target(root_path: string, target_path: string, allow_missing = false) {
+  const resolved_target = resolve_workspace_target(root_path, target_path)
+  ensure_workspace_path(root_path, resolved_target)
+  const canonical_root = await canonical_workspace_root(root_path)
+
+  if (await path_exists(resolved_target)) {
+    const canonical_target = await realpath(resolved_target)
+    if (!path_is_inside(canonical_root, canonical_target)) {
+      throw new Error('The requested path resolves outside the open workspace.')
+    }
+    return { path: resolved_target, canonical_path: canonical_target, exists: true }
+  }
+
+  if (!allow_missing) {
+    throw new Error(`${basename(resolved_target)} does not exist.`)
+  }
+
+  const existing_parent = await nearest_existing_parent(resolved_target)
+  const canonical_parent = await realpath(existing_parent)
+  if (!path_is_inside(canonical_root, canonical_parent)) {
+    throw new Error('The requested path would be created outside the open workspace.')
+  }
+
+  return { path: resolved_target, canonical_path: resolved_target, exists: false }
+}
+
+function text_revision(content: string) {
+  return createHash('sha256').update(content, 'utf8').digest('hex')
+}
+
+export async function read_agent_workspace_file(root_path: string, target_path: string) {
+  const target = await resolve_agent_workspace_target(root_path, target_path)
+  const target_stat = await stat(target.canonical_path)
+  if (!target_stat.isFile()) throw new Error(`${basename(target.path)} is not a file.`)
+  const content = await readFile(target.canonical_path, 'utf8')
+  return {
+    path: target.path,
+    content,
+    revision: text_revision(content),
+    size: Buffer.byteLength(content, 'utf8'),
+    modified_time: target_stat.mtimeMs,
+  }
+}
+
+export async function write_agent_workspace_file(
+  root_path: string,
+  target_path: string,
+  content: string,
+  expected_revision: string | null,
+) {
+  const target = await resolve_agent_workspace_target(root_path, target_path, true)
+
+  if (target.exists) {
+    const target_stat = await stat(target.canonical_path)
+    if (!target_stat.isFile()) throw new Error(`${basename(target.path)} is not a file.`)
+    const current_content = await readFile(target.canonical_path, 'utf8')
+    const current_revision = text_revision(current_content)
+    if (expected_revision && current_revision !== expected_revision) {
+      throw new Error(`Refusing to write ${basename(target.path)} because it changed after the agent read it.`)
+    }
+  } else {
+    await mkdir(dirname(target.path), { recursive: true })
+    await resolve_agent_workspace_target(root_path, dirname(target.path))
+  }
+
+  await writeFile(target.path, content, 'utf8')
+  return { path: target.path, revision: text_revision(content), size: Buffer.byteLength(content, 'utf8') }
+}
+
+export async function stat_agent_workspace_path(root_path: string, target_path: string) {
+  const target = await resolve_agent_workspace_target(root_path, target_path)
+  const target_stat = await stat(target.canonical_path)
+  return {
+    path: target.path,
+    name: basename(target.path),
+    type: target_stat.isDirectory() ? 'directory' : target_stat.isFile() ? 'file' : 'other',
+    size: target_stat.size,
+    modifiedTime: target_stat.mtimeMs,
+  }
+}
+
+export async function list_agent_workspace(root_path: string, target_path: string, depth = 3) {
+  const normalized_depth = Math.max(1, Math.min(6, Math.round(depth)))
+  const target = await resolve_agent_workspace_target(root_path, target_path)
+  const root_stat = await stat(target.canonical_path)
+  if (!root_stat.isDirectory()) throw new Error(`${basename(target.path)} is not a directory.`)
+
+  const tree = {
+    name: basename(target.path) || target.path,
+    path: target.path,
+    type: 'directory' as const,
+    children: [] as Array<Record<string, unknown>>,
+  }
+  const queue = [{ path: target.path, node: tree, level: 0 }]
+  let visited = 0
+
+  while (queue.length && visited < 500) {
+    const current = queue.shift()!
+    const current_target = await resolve_agent_workspace_target(root_path, current.path)
+    const entries = await readdir(current_target.canonical_path, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (visited >= 500) break
+      const entry_path = join(current.path, entry.name)
+      let safe_kind: 'file' | 'directory' = entry.isDirectory() ? 'directory' : 'file'
+
+      if (entry.isSymbolicLink()) {
+        try {
+          const resolved_entry = await resolve_agent_workspace_target(root_path, entry_path)
+          const resolved_stat = await stat(resolved_entry.canonical_path)
+          safe_kind = resolved_stat.isDirectory() ? 'directory' : 'file'
+        } catch {
+          visited += 1
+          continue
+        }
+      }
+
+      const child: Record<string, unknown> = {
+        name: entry.name,
+        path: entry_path,
+        type: safe_kind,
+        ...(safe_kind === 'directory' ? { children: [] } : {}),
+      }
+      current.node.children.push(child)
+      visited += 1
+
+      if (safe_kind === 'directory' && current.level + 1 < normalized_depth) {
+        queue.push({
+          path: entry_path,
+          node: child as typeof tree,
+          level: current.level + 1,
+        })
+      }
+    }
+  }
+
+  return { rootPath: target.path, tree, truncated: visited >= 500 }
 }
 
 function validate_workspace_name(name: string) {
