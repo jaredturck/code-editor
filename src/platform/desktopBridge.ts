@@ -2,16 +2,59 @@ export * from './desktopBridgeBase'
 export * from './documentBridge'
 
 import * as base from './desktopBridgeBase'
-import type { BridgeFileNode, BridgeOptions, BridgeRecord } from './desktopBridgeBase'
+import type {
+  BridgeFileNode,
+  BridgeFileSemanticResult,
+  BridgeFileSemanticSearchKind,
+  BridgeOptions,
+  BridgeRecord,
+} from './desktopBridgeBase'
 
 export interface EditorFileAuthority {
   execute: (tool_name: string, args?: BridgeRecord) => Promise<unknown>
 }
 
 let editor_file_authority: EditorFileAuthority | null = null
+let editor_workspace_root: Promise<string> | null = null
+
+function normalize_workspace_path(file_path: string) {
+  const normalized = String(file_path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  const windows = typeof window !== 'undefined' && window.editor_api?.platform === 'win32'
+  return windows ? normalized.toLowerCase() : normalized
+}
+
+function path_is_in_workspace(root_path: string, file_path: string) {
+  const root = normalize_workspace_path(root_path)
+  const target = normalize_workspace_path(file_path)
+  return Boolean(root) && (target === root || target.startsWith(`${root}/`))
+}
 
 export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
   editor_file_authority = authority
+  editor_workspace_root = authority
+    ? authority.execute('files.list', { path: '', depth: 1 })
+        .then((result) => {
+          const record = result && typeof result === 'object' ? result as BridgeRecord : {}
+          return String(record.rootPath || '')
+        })
+        .catch(() => '')
+    : null
+}
+
+export async function searchFileSemanticIndex(
+  query: string,
+  limit = 30,
+  kind: BridgeFileSemanticSearchKind = 'all',
+): Promise<BridgeFileSemanticResult[]> {
+  const requested_limit = Math.max(1, Math.min(100, Math.round(Number(limit) || 30)))
+  const workspace_root = editor_workspace_root ? await editor_workspace_root : ''
+  const search_limit = workspace_root ? Math.min(100, requested_limit * 3) : requested_limit
+  const results = await base.searchFileSemanticIndex(query, search_limit, kind)
+
+  if (!workspace_root) return results.slice(0, requested_limit)
+  return results
+    .filter((result) => path_is_in_workspace(workspace_root, result.path))
+    .slice(0, requested_limit)
 }
 
 export async function listDirectory(

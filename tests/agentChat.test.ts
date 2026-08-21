@@ -102,6 +102,7 @@ describe('core agent chat integration', () => {
     expect(settings.agent_tool_allowlist).toContain('todo.update')
     expect(settings.agent_tool_allowlist).toContain('files.read')
     expect(settings.agent_tool_allowlist).toContain('files.write')
+    expect(settings.agent_tool_allowlist).toContain('rag.retrieve')
     expect(settings.agent_tool_allowlist).toContain('terminal.exec')
     expect(settings.agent_tool_allowlist).not.toContain('agent.delegate')
     expect(settings.agent_tool_allowlist).not.toContain('system.processes')
@@ -116,6 +117,7 @@ describe('core agent chat integration', () => {
     expect(settings.agent_project_run_mode).toBe('plan_first')
     expect(settings.agent_tool_allowlist).toContain('user.ask')
     expect(settings.agent_tool_allowlist).toContain('files.write')
+    expect(settings.agent_tool_allowlist).toContain('rag.retrieve')
     expect(settings.agent_tool_allowlist).toContain('terminal.exec')
     expect(todos).toHaveLength(1)
     expect(todos[0].status).toBe('in_progress')
@@ -130,17 +132,27 @@ describe('core agent chat integration', () => {
     expect(input).toContain('Do not redo completed tasks')
   })
 
-  it('enables editor filesystem tools while keeping host-inspection tools out of Agent Chat', () => {
+  it('enables workspace search and RAG while keeping host-inspection tools out of Agent Chat', () => {
     const tools = get_core_agent_tool_allowlist('/workspace')
     expect(tools).toContain('search.web')
     expect(tools).toContain('chat.recall')
     expect(tools).toContain('files.read')
     expect(tools).toContain('files.edit')
     expect(tools).toContain('files.patch')
-    expect(tools).not.toContain('search.ripgrep')
+    expect(tools).toContain('search.ripgrep')
+    expect(tools).toContain('search.find')
+    expect(tools).toContain('search.fd')
+    expect(tools).toContain('rag.retrieve')
     expect(tools).not.toContain('memory.query')
     expect(tools).not.toContain('system.stats')
     expect(tools).not.toContain('artifact.create')
+  })
+
+  it('keeps workspace RAG unavailable when no workspace is open', () => {
+    const tools = get_core_agent_tool_allowlist(null)
+    expect(tools).not.toContain('rag.retrieve')
+    expect(tools).not.toContain('files.read')
+    expect(tools).not.toContain('search.ripgrep')
   })
 
   it('refuses persistent machine-permission grants from the core Chat runtime', () => {

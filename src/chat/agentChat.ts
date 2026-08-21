@@ -45,6 +45,7 @@ const editor_workspace_tools = [
   'search.ripgrep',
   'search.find',
   'search.fd',
+  'rag.retrieve',
 ]
 
 const agent_terminal_tools = ['terminal.exec']
@@ -132,7 +133,6 @@ export function build_core_agent_settings(
     agent_tool_allowlist: get_core_agent_tool_allowlist(workspace_root, Boolean(workspace_root && bound.permissions_terminal === true)),
   }
 }
-
 
 export function build_project_run_seed_todos(goal: string, run_mode: ProjectRunMode) {
   if (run_mode !== 'plan_first') return []

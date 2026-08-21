@@ -12,15 +12,16 @@ Completed integration milestones:
 - Document, PDF and archive intelligence
 - Image and video semantic indexing
 - Semantic concepts
+- RAG and project context engine
 
-The Code Editor now uses the migrated IRIS semantic filesystem index from the existing Search activity for text, documents, images, videos and concept-driven discovery. The Concepts mode searches the persistent MiniLM and CLIP concept centroids, resolves their stored memberships, filters member files to the open workspace, and preserves document/media handling already connected by the previous milestones. IRIS's existing clustering workers, centroid generation and encrypted membership persistence remain the implementation source.
+Agent Chat now exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
 ## Next milestone
 
-**RAG and Project Context Engine**
+**Memory and Context Compaction**
 
-- semantic candidate retrieval
-- live-file evidence reads
-- context assembly and ranking
+- project working memory
+- chat remember/recall
+- long-run summarization and rolling compaction
 
-Memory/context compaction, persistence infrastructure, multi-agent work, additional IRIS capabilities and final validation remain later milestones.
+Persistence infrastructure, multi-agent work, additional IRIS capabilities and final validation remain later milestones.

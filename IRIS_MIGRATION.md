@@ -121,7 +121,7 @@ The per-session allowlist applies to **every** catalog tool, including tools mar
 
 The existing Search activity now exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show the indexed semantic summary/score, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
 
-The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor exposes the migrated bounded document/PDF/archive extraction path from Search and now also exposes the migrated CLIP media index as a dedicated Media mode. Image preparation continues through IRIS's bounded image worker queue, video indexing continues through frame extraction, and image/video embeddings remain persisted through the encrypted semantic stores. Search filters those persisted media results to the open workspace and preserves indexed video-frame timestamps. The Search activity now also exposes the migrated persistent MiniLM/CLIP concept centroids and memberships through a dedicated Concepts mode; concept queries return the strongest concept groups and workspace-visible member files without re-embedding or reopening source files. RAG remains a separate checklist milestone. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
+The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. The Code Editor exposes the migrated bounded document/PDF/archive extraction path from Search and now also exposes the migrated CLIP media index as a dedicated Media mode. Image preparation continues through IRIS's bounded image worker queue, video indexing continues through frame extraction, and image/video embeddings remain persisted through the encrypted semantic stores. Search filters those persisted media results to the open workspace and preserves indexed video-frame timestamps. The Search activity also exposes the migrated persistent MiniLM/CLIP concept centroids and memberships through a dedicated Concepts mode. Agent Chat now exposes IRIS's `rag.retrieve` tool for workspace runs: semantic candidates are scoped to the active editor workspace before selection, evidence is re-read through the editor-aware file authority so unsaved buffers win over disk, and the existing temporary chunker/ranker assembles bounded passages with file and line provenance for repeated use throughout autonomous runs. Indexed-directory authority remains separate from agent file-write authority, preserving the IRIS security model.
 
 ### Settings → IRIS provider/agent configuration
 
@@ -361,7 +361,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 - [x] **Semantic concepts**
   - Concept clustering, centroids and membership
   - Concept-driven file discovery
-- [ ] **RAG and project context engine**
+- [x] **RAG and project context engine**
   - Semantic candidate retrieval
   - Live-file evidence reads
   - Context assembly and ranking
@@ -454,6 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect the RAG and project context engine to Agent Chat and editor context assembly.
+1. Connect memory and context compaction for long autonomous project runs.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
