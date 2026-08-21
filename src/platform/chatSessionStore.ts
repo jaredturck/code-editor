@@ -13,7 +13,12 @@ import {
   chatsDelete,
   chatsReadMemory,
 } from '@/platform/desktopBridge';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
+import {
+  hydrateStorageValues,
+  readStorageJson,
+  writeStorageJson,
+} from '@/platform/localStorageStore';
+import { durableStoreGetMany } from '@/platform/secureDurableStore';
 
 const ACTIVE_CHAT_KEY = 'iris_active_chat_id';
 
@@ -63,7 +68,15 @@ export interface ChatSessionState {
   updatedAt: number;
 }
 
-// Returns the warm session state persisted for one chat, or null when none/disabled.
+// Decrypts one chat's persisted run/TODO state on demand before that chat is restored.
+export async function hydrateChatSessionState(id: string): Promise<void> {
+  if (!id) return;
+  const key = `${SESSION_STATE_KEY_PREFIX}${id}`;
+  const values = await durableStoreGetMany([key]);
+  hydrateStorageValues(values);
+}
+
+// Returns the already-loaded warm session state for one chat, or null when none/disabled.
 export function getChatSessionState(id: string): ChatSessionState | null {
   if (!id) return null;
   const raw = readStorageJson<Partial<ChatSessionState> | null>(
@@ -192,7 +205,8 @@ export async function appendChatMessage(
 // Loads chat and applies the normalization or fallback behavior expected by callers.
 export async function loadChat(id: string) {
   if (!id) return null;
-  return chatsGet(id);
+  const [chat] = await Promise.all([chatsGet(id), hydrateChatSessionState(id)]);
+  return chat;
 }
 
 // Saves compacted so it remains available to later operations or sessions.

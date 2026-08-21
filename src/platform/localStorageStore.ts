@@ -4,7 +4,8 @@
  * Chromium localStorage is never used as application persistence.
  */
 
-import { durableStoreDelete, durableStoreGetAll, durableStoreSet } from '@/platform/desktopBridge';
+import { durableStoreDelete, durableStoreSet } from '@/platform/desktopBridge';
+import { durableStoreGetBootstrap } from '@/platform/secureDurableStore';
 
 const memoryStore = new Map<string, string>();
 const writeQueues = new Map<string, Promise<unknown>>();
@@ -82,13 +83,13 @@ function queueWrite(key: string, operation: () => Promise<unknown>): void {
   });
 }
 
-/** Loads every encrypted renderer value before React mounts. */
+/** Loads only bootstrap-safe encrypted renderer values before React mounts. */
 export async function hydrateDurableStore(): Promise<number> {
   if (hydrated) return memoryStore.size;
   clearLegacyBrowserStorage();
 
   try {
-    const values = await durableStoreGetAll();
+    const values = await durableStoreGetBootstrap();
     memoryStore.clear();
     for (const [key, raw] of Object.entries(values)) {
       if (typeof raw === 'string') memoryStore.set(key, raw);
@@ -158,6 +159,14 @@ export function initializeStorageForTests(values: Record<string, string> = {}): 
   memoryStore.clear();
   writeQueues.clear();
   for (const [key, value] of Object.entries(values)) memoryStore.set(key, String(value));
+}
+
+
+export function hydrateStorageValues(values: Record<string, string>): void {
+  assertHydrated();
+  for (const [key, raw] of Object.entries(values)) {
+    if (typeof raw === 'string') memoryStore.set(key, raw);
+  }
 }
 
 export function getStorageFatalError(): string {

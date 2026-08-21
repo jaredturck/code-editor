@@ -4,7 +4,8 @@
  */
 
 import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
-import { durableStoreSet, durableStoreGetAll } from '@/platform/desktopBridge';
+import { durableStoreSet } from '@/platform/desktopBridge';
+import { durableStoreGetMany } from '@/platform/secureDurableStore';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -444,11 +445,11 @@ export function clearAgentRuns(): AgentRun[] {
  */
 export async function readAgentRunsDurable(): Promise<AgentRun[]> {
   try {
-    const values = await durableStoreGetAll();
-    const raw = values?.[AGENT_RUNS_FULL_KEY];
+    const values = await durableStoreGetMany([AGENT_RUNS_FULL_KEY, AGENT_RUNS_STORAGE_KEY]);
+    const raw = values?.[AGENT_RUNS_FULL_KEY] || values?.[AGENT_RUNS_STORAGE_KEY];
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length)
+      if (Array.isArray(parsed))
         return normalizeRunsWithLimit(parsed, MAX_RUNS_DURABLE_LIMIT);
     }
   } catch {
@@ -462,11 +463,11 @@ export async function readAgentRunsDurable(): Promise<AgentRun[]> {
  * bridge history. Returns the compact list for an immediate UI update.
  */
 export async function appendAgentRunDurable(run: unknown, maxRuns = 40): Promise<AgentRun[]> {
-  const capped = appendAgentRun(run, maxRuns);
+  const normalizedRun = normalizeRun(run, 0);
+  let fullList = [normalizedRun];
   try {
-    const normalizedRun = normalizeRun(run, 0);
     const existingFull = await readAgentRunsDurable();
-    const fullList = [
+    fullList = [
       normalizedRun,
       ...existingFull.filter((item) => item.id !== normalizedRun.id),
     ].slice(0, MAX_RUNS_DURABLE_LIMIT);
@@ -474,7 +475,14 @@ export async function appendAgentRunDurable(run: unknown, maxRuns = 40): Promise
   } catch {
     /* best-effort durable write */
   }
-  return capped;
+  const cap = clampNumber(maxRuns, 5, MAX_RUNS_HARD_LIMIT);
+  return writeAgentRuns(fullList.slice(0, cap));
+}
+
+export async function hydrateAgentRunHistory(maxRuns = MAX_RUNS_HARD_LIMIT): Promise<AgentRun[]> {
+  const durable = await readAgentRunsDurable();
+  const cap = clampNumber(maxRuns, 5, MAX_RUNS_HARD_LIMIT);
+  return writeAgentRuns(durable.slice(0, cap));
 }
 
 // Formats event label for stable display or serialization without changing its underlying meaning.

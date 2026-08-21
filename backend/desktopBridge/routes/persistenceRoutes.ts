@@ -13,7 +13,6 @@ import {
   readChatIndex,
   readChatMemory,
   readChatRecall,
-  readDurableStoreAll,
   readJsonBody,
   readSubagentOutput,
   saveChatCompacted,
@@ -23,6 +22,10 @@ import {
   writeDurableStoreKey,
   writeSubagentOutput,
 } from '../services/persistenceService.js';
+import {
+  readRendererBootstrapStore,
+  readRequestedDurableStoreKeys,
+} from '../services/persistenceSecurityService.js';
 
 /**
  * Processes persistence routes within the bridge route dispatch, including the side effects
@@ -36,10 +39,25 @@ export async function handlePersistenceRoutes(
   requestUrl: URL,
   pathname: string,
 ): Promise<boolean> {
-  // Encrypted renderer state store — authoritative durable state behind the in-memory facade.
+  // Legacy startup route now returns the same bootstrap-safe subset. Sensitive per-chat/run
+  // records must be requested explicitly through /store/get-many.
   if (pathname === '/api/local/store/get-all' && req.method === 'GET') {
-    const values = await readDurableStoreAll();
-    sendJson(res, 200, { values });
+    sendJson(res, 200, { values: await readRendererBootstrapStore() });
+    return true;
+  }
+
+  // Bootstrap excludes per-chat checkpoints and extended run history so Chromium does not
+  // decrypt unrelated sensitive state simply because the application started.
+  if (pathname === '/api/local/store/bootstrap' && req.method === 'GET') {
+    sendJson(res, 200, { values: await readRendererBootstrapStore() });
+    return true;
+  }
+
+  // Targeted reads are used when a chat/run is actually opened. The bridge returns only the
+  // requested sensitive records and never exposes unrelated durable-state values to Chromium.
+  if (pathname === '/api/local/store/get-many' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    sendJson(res, 200, { values: await readRequestedDurableStoreKeys(body?.keys) });
     return true;
   }
 

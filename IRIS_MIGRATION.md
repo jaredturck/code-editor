@@ -49,6 +49,10 @@ The existing Code Editor Electron main process now initializes IRIS's secure per
 
 If secure persistence cannot initialize, startup fails closed rather than silently falling back to plaintext state.
 
+The persistence cipher contract is now explicitly enforced for conversation/run data: a 32-byte random application master key is wrapped with Electron `safeStorage` (Keychain/DPAPI/Secret Service as provided by the OS; Linux `basic_text` is rejected), while HKDF-SHA256 derives domain-separated 256-bit record keys. Sensitive records are authenticated-encrypted with AES-256-GCM using a fresh 96-bit random nonce, a 128-bit authentication tag, and AAD bound to the application/version/domain/record/field. Chat display data, complete message payloads (including attachments and bounded run metadata), chat memory/compacted context, autonomous-run/TODO checkpoints and extended run history are encrypted before SQLite receives them. SQLite keeps only ciphertext plus the structural metadata needed to address records (for example UUIDs, indices, counts and timestamps).
+
+Renderer exposure is also bounded: startup hydration no longer decrypts per-chat checkpoints or agent-run history into Chromium. Per-chat run state is fetched only when that chat is loaded, and run history uses exact-key encrypted-store reads. The legacy bulk store route is restricted to the same bootstrap-safe subset. Plaintext necessarily exists transiently in trusted process memory while a message is displayed, sent to a configured model, or actively processed; the persistence boundary guarantees authenticated encryption at rest and fails closed rather than creating plaintext fallbacks.
+
 Files:
 - `electron/platform/storageKeyStore.cts`
 - `electron/platform/linuxPasswordStore.cts`
@@ -372,7 +376,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Persistence and reusable agent infrastructure
 
-- [ ] **Conversation and run persistence**
+- [x] **Conversation and run persistence**
   - Encrypted chats/messages
   - Agent runs, TODOs and checkpoints
   - Resume previous runs
@@ -454,6 +458,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect encrypted conversation and run persistence end-to-end, including resumable run state.
+1. Connect the skills system to autonomous Agent Chat with progressive and project-specific loading.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
