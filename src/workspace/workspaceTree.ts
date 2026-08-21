@@ -1,4 +1,29 @@
+import { getFileSemanticStatus, rescanFileSemanticIndex } from '../platform/desktopBridge'
 import type { WorkspaceNode } from '../types/workspace'
+
+let semantic_rescan_timeout: number | null = null
+
+function queue_semantic_workspace_rescan() {
+  if (semantic_rescan_timeout !== null) {
+    window.clearTimeout(semantic_rescan_timeout)
+  }
+
+  semantic_rescan_timeout = window.setTimeout(() => {
+    semantic_rescan_timeout = null
+
+    void (async () => {
+      try {
+        const status = await getFileSemanticStatus(false)
+
+        if (status.indexStatus === 'ready') {
+          await rescanFileSemanticIndex()
+        }
+      } catch {
+        // Semantic indexing remains optional until it has been prepared in AI Settings.
+      }
+    })()
+  }, 900)
+}
 
 function normalize_path(file_path: string) {
   const normalized = file_path.replace(/\\/g, '/').replace(/\/$/, '')
@@ -65,6 +90,7 @@ export function replace_workspace_children(
     })
   }
 
+  queue_semantic_workspace_rescan()
   return next_nodes
 }
 

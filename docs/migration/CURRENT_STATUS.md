@@ -8,16 +8,16 @@ Completed integration milestones:
 - Editor-aware workspace filesystem tools
 - Brokered terminal/build/test/diagnostics tools
 - Exact code search
+- Semantic file search and indexing
 
-The agent can now plan durable work, read and edit workspace files through live CodeMirror-aware authority, execute opt-in terminal commands through the IRIS broker, receive bounded workspace diagnostics, and run workspace-scoped ripgrep/find/fd exact searches from Agent Chat and the existing Search activity. File authority remains workspace-contained with symlink and revision collision checks; terminal authority remains explicitly controlled by AI Settings.
+The Code Editor now uses the migrated IRIS semantic filesystem index directly from the existing Search activity. Semantic text searches are filtered to the open workspace, indexed summaries and scores are surfaced without importing the old IRIS Search UI, and results can pivot into the existing similar-file lookup. The workspace refresh pipeline schedules debounced incremental IRIS rescans whenever the semantic index is ready, while model installation and full index lifecycle controls remain in AI Settings.
 
 ## Next milestone
 
-**Semantic File Search and Indexing**
+**Document, PDF and Archive Intelligence**
 
-- semantic filesystem index
-- incremental workspace indexing
-- text embeddings and similar-file search
-- Search-panel semantic mode
+- document/PDF extraction and indexing
+- archive inspection
+- indexed document retrieval
 
-Document/media intelligence, RAG, multi-agent delegation, vision, automation, and broader system authority remain later milestones.
+Image/video semantic search, concepts, RAG, multi-agent delegation, vision, automation, and broader system authority remain later milestones.

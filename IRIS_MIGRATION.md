@@ -117,11 +117,11 @@ The per-session allowlist applies to **every** catalog tool, including tools mar
 
 ### Search → semantic filesystem
 
-**Backend status:** migrated in full.
+**Status: CONNECTED (semantic file search and indexing milestone).**
 
-`backend/desktopBridge/services/fileSemanticService.ts` and its text/document/PDF/image/video/concept/index-source workers are present, along with renderer bridge types/methods.
+The existing Search activity now exposes the migrated IRIS MiniLM text-embedding index as a dedicated Semantic mode without importing the old IRIS Search presentation. Results are filtered to the open workspace, show the indexed semantic summary/score, open directly in the Code Editor, and can pivot into the migrated similar-file lookup.
 
-**Current Code Editor UI status:** the existing Search activity has not yet been replaced or visually changed. Semantic search can be wired into that existing surface next. Indexed-directory authority remains separate from agent file-write authority, preserving the IRIS security model.
+The existing workspace watcher now schedules debounced IRIS incremental rescans when an encrypted semantic index is already ready. Index creation, model installation and broader source selection remain managed by the existing AI Settings semantic-index controls. Document/PDF/archive extraction, CLIP media search, semantic concepts and RAG remain separate checklist milestones. Indexed-directory authority also remains separate from agent file-write authority, preserving the IRIS security model.
 
 ### Settings → IRIS provider/agent configuration
 
@@ -346,7 +346,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 - [x] **Exact code search**
   - Ripgrep / find / fd / filename search
   - Search-panel and agent-tool integration
-- [ ] **Semantic file search and indexing**
+- [x] **Semantic file search and indexing**
   - Semantic filesystem index
   - Incremental workspace indexing
   - Text embeddings and similar-file search
@@ -454,6 +454,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect semantic file search and indexing to the existing Search activity and workspace watcher.
+1. Connect document, PDF and archive intelligence to project indexing and retrieval.
 2. Enable multi-agent delegation/review with file write leases/collision prevention.
 3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem.
