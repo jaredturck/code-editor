@@ -737,7 +737,7 @@ function create_window() {
   })
 
   const bridge = getLocalBridgeHandle()
-  const query = bridge ? { bridgePort: String(bridge.port), bridgeToken: bridge.token } : {}
+  const query: Record<string, string> = bridge ? { bridgePort: String(bridge.port), bridgeToken: bridge.token } : {}
 
   if (app.isPackaged) {
     main_window.loadFile(join(__dirname, '../dist/index.html'), { query })

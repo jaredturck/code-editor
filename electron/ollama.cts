@@ -169,7 +169,8 @@ export async function install_speech_model(base_url: string, speech_model: strin
 export async function transcribe_audio(base_url: string, speech_model: string, audio: Uint8Array) {
   const form = new FormData()
   form.append('model', speech_model)
-  form.append('file', new Blob([audio], { type: 'audio/wav' }), 'recording.wav')
+  const audio_data = new Uint8Array(audio)
+  form.append('file', new Blob([audio_data], { type: 'audio/wav' }), 'recording.wav')
   const response = await fetch(`${normalize_ollama_url(base_url)}/v1/audio/transcriptions`, {
     method: 'POST',
     body: form,
