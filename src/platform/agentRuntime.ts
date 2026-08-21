@@ -41,6 +41,8 @@ const PROJECT_CONTEXT_MAX_CHARS = 12000;
 const PROJECT_CONTEXT_PRIOR_CHARS = 4000;
 const PROJECT_CONTEXT_OUTCOME_CHARS = 2400;
 const PROJECT_CONTEXT_ACTIONS = 24;
+const ARTIFACT_TOOL = 'artifact.create';
+const ARTIFACT_GUIDANCE = `DURABLE ARTIFACTS: For large outputs that should survive the chat transcript—especially research reports, test reports, architecture/design reports, migration notes, or other long structured results—use artifact.create instead of flooding chat. Use a meaningful filename and summary. If the output exceeds one tool call, append additional chunks to the same artifact. Keep the chat response concise; durable artifact links are attached automatically after the run.`;
 
 function cleanLine(value: unknown, maxChars = 500) {
   const clean = String(value || '').replace(/\s+/g, ' ').trim();
@@ -56,6 +58,52 @@ function projectChatId(input: AgentSessionInput) {
 
 function isWorkspaceProjectRun(input: AgentSessionInput) {
   return Boolean(projectChatId(input) && String(input.settings?.agent_working_dir || '').trim());
+}
+
+export function withAutonomousArtifactCapability(input: AgentSessionInput): AgentSessionInput {
+  if (!projectChatId(input)) return input;
+
+  const configured = Array.isArray(input.settings?.agent_tool_allowlist)
+    ? input.settings.agent_tool_allowlist.map((tool) => String(tool || '').trim()).filter(Boolean)
+    : [];
+  const allowlist = configured.includes(ARTIFACT_TOOL) ? configured : [...configured, ARTIFACT_TOOL];
+  const userInput = String(input.userInput || '');
+
+  return {
+    ...input,
+    userInput: userInput.includes(ARTIFACT_GUIDANCE)
+      ? userInput
+      : `${userInput}\n\n${ARTIFACT_GUIDANCE}`,
+    settings: {
+      ...input.settings,
+      agent_tool_allowlist: allowlist,
+    },
+  };
+}
+
+function artifactLink(record: Record<string, unknown>) {
+  const id = String(record.artifactId || record.id || '').trim();
+  const ref = String(record.artifactRef || record.path || '').trim();
+  const filename = cleanLine(record.filename || record.name || 'Artifact', 160) || 'Artifact';
+  const href = id ? `artifact:${encodeURIComponent(id)}` : ref.startsWith('/artifacts/') ? ref : '';
+  return href ? `- [${filename}](${href})` : '';
+}
+
+export function appendArtifactLinks(
+  reply: string,
+  artifacts: Array<Record<string, unknown>>,
+) {
+  const links = artifacts.map(artifactLink).filter(Boolean);
+  if (!links.length) return reply;
+  const unique = [...new Set(links)].filter((link) => !reply.includes(link));
+  if (!unique.length) return reply;
+  return `${reply.trim()}\n\n### Durable artifacts\n${unique.join('\n')}`.trim();
+}
+
+function decorateArtifacts(result: AgentSessionResult): AgentSessionResult {
+  const artifacts = Array.isArray(result.artifacts) ? result.artifacts : [];
+  const reply = appendArtifactLinks(String(result.reply || ''), artifacts);
+  return reply === result.reply ? result : { ...result, reply };
 }
 
 export function isProjectWorkingContext(value: unknown) {
@@ -173,16 +221,17 @@ async function persistProjectWorkingContext(
 // Runs one complete agent session, including model calls, tool execution, approvals, limits,
 // persistence, and finalization.
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
+  const artifactInput = withAutonomousArtifactCapability(input);
   let priorCompacted = '';
-  let sessionInput = input;
+  let sessionInput = artifactInput;
 
-  if (isWorkspaceProjectRun(input)) {
+  if (isWorkspaceProjectRun(artifactInput)) {
     try {
-      priorCompacted = await loadProjectWorkingContext(input);
+      priorCompacted = await loadProjectWorkingContext(artifactInput);
       if (isProjectWorkingContext(priorCompacted)) {
         sessionInput = {
-          ...input,
-          conversation: injectProjectWorkingContext(input.conversation || [], priorCompacted),
+          ...artifactInput,
+          conversation: injectProjectWorkingContext(artifactInput.conversation || [], priorCompacted),
         };
       }
     } catch (error) {
@@ -195,12 +244,12 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     }
   }
 
-  const result = await (runAgentSessionImpl as RunAgentSessionImplementation)(sessionInput);
+  const result = decorateArtifacts(await (runAgentSessionImpl as RunAgentSessionImplementation)(sessionInput));
 
-  if (!isWorkspaceProjectRun(input)) return result;
+  if (!isWorkspaceProjectRun(artifactInput)) return result;
 
   try {
-    const contextCompaction = await persistProjectWorkingContext(input, result, priorCompacted);
+    const contextCompaction = await persistProjectWorkingContext(artifactInput, result, priorCompacted);
     return contextCompaction ? { ...result, contextCompaction } : result;
   } catch (error) {
     input.onEvent?.({
