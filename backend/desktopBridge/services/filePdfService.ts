@@ -31,7 +31,6 @@ class FileRangeTransport extends PDFDataRangeTransport {
   constructor(fileHandle: fs.FileHandle, fileSize: number, initialData: Uint8Array) {
     super(fileSize, initialData, true);
     this.fileHandle = fileHandle;
-    this.transportReady();
   }
 
   requestDataRange(begin: number, end: number): void {
@@ -130,7 +129,6 @@ export async function extractPdfText(
       disableAutoFetch: true,
       rangeChunkSize: PDF_RANGE_CHUNK_BYTES,
       useWorkerFetch: false,
-      isEvalSupported: false,
       stopAtErrors: false,
       verbosity: 0,
     });
