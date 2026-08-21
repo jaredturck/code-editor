@@ -5,6 +5,7 @@
  */
 
 import { getToolDefinitions } from '@/platform/agent/toolCatalog';
+import { startModelHealthMonitor } from '@/platform/agent/modelHealthMonitor';
 import { runAgentSession as runAgentSessionImpl } from '@/platform/agent/runtime/sessionRunner';
 import { loadChatContext, saveCompacted } from '@/platform/chatSessionStore';
 
@@ -42,7 +43,9 @@ const PROJECT_CONTEXT_PRIOR_CHARS = 4000;
 const PROJECT_CONTEXT_OUTCOME_CHARS = 2400;
 const PROJECT_CONTEXT_ACTIONS = 24;
 const ARTIFACT_TOOL = 'artifact.create';
+const CLOUD_CONSULT_TOOL = 'cloud.consult';
 const ARTIFACT_GUIDANCE = `DURABLE ARTIFACTS: For large outputs that should survive the chat transcript—especially research reports, test reports, architecture/design reports, migration notes, or other long structured results—use artifact.create instead of flooding chat. Use a meaningful filename and summary. If the output exceeds one tool call, append additional chunks to the same artifact. Keep the chat response concise; durable artifact links are attached automatically after the run.`;
+const HYBRID_GUIDANCE = `HYBRID MODEL EXECUTION: A local model may perform the working loop while the configured cloud responder is reserved for synthesis. Use cloud.consult only for a focused second opinion that materially improves the task; send the minimum relevant evidence, never the entire workspace by default, and stay within the shared cloud request budget. Model routing and failover may switch providers/models during the run; continue from verified tool/RAG state rather than restarting completed work.`;
 
 function cleanLine(value: unknown, maxChars = 500) {
   const clean = String(value || '').replace(/\s+/g, ' ').trim();
@@ -58,6 +61,51 @@ function projectChatId(input: AgentSessionInput) {
 
 function isWorkspaceProjectRun(input: AgentSessionInput) {
   return Boolean(projectChatId(input) && String(input.settings?.agent_working_dir || '').trim());
+}
+
+function hasHybridLocalWorker(settings: Record<string, unknown>) {
+  if (String(settings.agent_execution_policy || '').toLowerCase() !== 'hybrid') return false;
+  if (String(settings.ai_provider || '').toLowerCase() === 'local') return false;
+  const models = Array.isArray(settings.agent_models) ? settings.agent_models : [];
+  return models.some((entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    const model = entry as Record<string, unknown>;
+    return String(model.provider || '').toLowerCase() === 'local' && Boolean(String(model.model || '').trim());
+  });
+}
+
+export function withAutonomousModelExecution(input: AgentSessionInput): AgentSessionInput {
+  if (!projectChatId(input) || !hasHybridLocalWorker(input.settings)) return input;
+
+  const configured = Array.isArray(input.settings?.agent_tool_allowlist)
+    ? input.settings.agent_tool_allowlist.map((tool) => String(tool || '').trim()).filter(Boolean)
+    : [];
+  const allowlist = configured.includes(CLOUD_CONSULT_TOOL)
+    ? configured
+    : [...configured, CLOUD_CONSULT_TOOL];
+  const userInput = String(input.userInput || '');
+
+  return {
+    ...input,
+    userInput: userInput.includes(HYBRID_GUIDANCE)
+      ? userInput
+      : `${userInput}\n\n${HYBRID_GUIDANCE}`,
+    settings: {
+      ...input.settings,
+      agent_tool_allowlist: allowlist,
+    },
+  };
+}
+
+function startAutonomousModelHealth(input: AgentSessionInput) {
+  const failover = String(input.settings?.agent_failover_mode || 'limited').toLowerCase();
+  const routing = String(input.settings?.agent_model_routing || 'off').toLowerCase();
+  if (failover === 'off' && routing !== 'on') return;
+  try {
+    startModelHealthMonitor(input.settings);
+  } catch {
+    // Health telemetry is advisory; a session must still start if monitoring is unavailable.
+  }
 }
 
 export function withAutonomousArtifactCapability(input: AgentSessionInput): AgentSessionInput {
@@ -221,7 +269,9 @@ async function persistProjectWorkingContext(
 // Runs one complete agent session, including model calls, tool execution, approvals, limits,
 // persistence, and finalization.
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
-  const artifactInput = withAutonomousArtifactCapability(input);
+  const executionInput = withAutonomousModelExecution(input);
+  const artifactInput = withAutonomousArtifactCapability(executionInput);
+  startAutonomousModelHealth(artifactInput);
   let priorCompacted = '';
   let sessionInput = artifactInput;
 
