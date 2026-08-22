@@ -121,6 +121,7 @@ export function buildControllerSystemPrompt({
     );
   }
   acting.push(
+    '- For software development, inspect the current project and toolchain before substantive changes. Preserve existing conventions; when environment or dependency setup is missing, establish only the normal project-local setup for the ecosystem you actually observe. After changes, choose appropriate real-world verification, and if it fails, diagnose the exact failure, fix it, and verify again before finishing.',
     '- For questions about the user’s projects or files, use `rag.retrieve` first when semantic context could help; it returns evidence from the original files with line ranges. Refine with files.read or search.ripgrep when needed.',
     '- For current, public, or externally verifiable information, use search.web and web.fetch rather than guessing from stale knowledge.',
     '- Never call a tool that is not listed. Never invent tool output — wait for the result before ' +
@@ -248,7 +249,8 @@ function _fmtRecentSteps(steps: unknown) {
     .slice(-6)
     .map((s) => {
       const status = s?.ok ? 'ok' : `error: ${String(s?.error || '').slice(0, 120)}`;
-      return `- ${String(s?.tool || '?')}: ${status} — ${String(s?.summary || '').slice(0, 200)}`;
+      const reflex = String(s?.reflexGuidance || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      return `- ${String(s?.tool || '?')}: ${status} — ${String(s?.summary || '').slice(0, 200)}${reflex ? ` — recovery guidance: ${reflex}` : ''}`;
     })
     .join('\n');
 }
