@@ -47,7 +47,7 @@ describe('verification evidence', () => {
       state,
       'agent.review',
       { focus: 'final implementation review' },
-      { reviewed: true, overallVerdict: 'approved', findings: [] },
+      { reviewed: true, overallVerdict: 'approved', reviews: [{ verdict: 'approved' }], findings: [] },
     )!
     recordVerificationEvidence(state, 'independent-review', review.id)
     expect(evaluateVerificationGate(state).passed).toBe(true)
@@ -56,6 +56,28 @@ describe('verification evidence', () => {
     const gate = evaluateVerificationGate(state)
     expect(gate.passed).toBe(false)
     expect(gate.requirements[0].status).toBe('stale')
+  })
+
+  it('does not accept an approved aggregate when every peer reviewer errored', () => {
+    const state = createVerificationState('review-errors', true)
+    declareVerificationRequirements(state, ['independent-review'])
+
+    const review = addVerificationCandidate(
+      state,
+      'agent.review',
+      { focus: 'final implementation review' },
+      {
+        reviewed: true,
+        overallVerdict: 'approved',
+        reviews: [{ verdict: 'errored' }, { verdict: 'errored' }],
+        findings: [],
+      },
+    )!
+    recordVerificationEvidence(state, 'independent-review', review.id)
+
+    const gate = evaluateVerificationGate(state)
+    expect(gate.passed).toBe(false)
+    expect(gate.requirements[0].status).toBe('unknown')
   })
 
   it('never treats missing terminal exit codes or unsupported diagnostics as passing evidence', () => {

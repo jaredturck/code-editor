@@ -94,8 +94,15 @@ function evaluateCandidateStatus(toolName: string, result: Record<string, unknow
 
   if (toolName === 'agent.review') {
     if (result.reviewed !== true) return 'unknown' as const
+    const reviews = Array.isArray(result.reviews) ? result.reviews : []
+    const reviewerVerdicts = reviews
+      .filter((review) => review && typeof review === 'object')
+      .map((review) => String((review as Record<string, unknown>).verdict || '').trim().toLowerCase())
+    const substantive = reviewerVerdicts.filter((verdict) => ['approved', 'changes_requested'].includes(verdict))
+    if (!substantive.length) return 'unknown' as const
+    if (substantive.includes('changes_requested')) return 'failed' as const
     const verdict = String(result.overallVerdict || '').trim().toLowerCase()
-    if (verdict === 'approved') return 'passed' as const
+    if (verdict === 'approved' && substantive.includes('approved')) return 'passed' as const
     if (verdict === 'changes_requested' || verdict === 'mixed' || verdict === 'rejected') return 'failed' as const
     return 'unknown' as const
   }
