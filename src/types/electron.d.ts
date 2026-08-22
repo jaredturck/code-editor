@@ -1,4 +1,5 @@
 import type { AIModel, EditorSettings } from './editor'
+import type { GitAgentCommitResult, GitCommitSummary, GitDiffResult, GitRepositoryStatus } from './git'
 import type { WorkspaceNodeKind, WorkspacePasteResult } from './workspace'
 
 interface WorkspaceEntryResult {
@@ -144,6 +145,28 @@ interface EditApi {
   paste: () => void
 }
 
+interface GitApi {
+  ensure_repository: (root_path: string) => Promise<{
+    root_path: string
+    initialized: boolean
+    nested_repositories: string[]
+  }>
+  status: (root_path: string) => Promise<GitRepositoryStatus>
+  history: (root_path: string, limit?: number) => Promise<GitCommitSummary[]>
+  diff: (root_path: string, file_path: string) => Promise<GitDiffResult>
+  stage: (root_path: string, file_paths: string[]) => Promise<GitRepositoryStatus>
+  unstage: (root_path: string, file_paths: string[]) => Promise<GitRepositoryStatus>
+  commit: (root_path: string, message: string) => Promise<{ hash: string | null; status: GitRepositoryStatus }>
+  remove_nested_repository: (root_path: string, git_path: string) => Promise<GitRepositoryStatus>
+  prepare_agent_run: (root_path: string, run_id: string) => Promise<{
+    root_path: string
+    baseline_commit: string | null
+    head: string | null
+  }>
+  commit_agent_changes: (root_path: string, run_id: string, goal: string) => Promise<GitAgentCommitResult>
+  abandon_agent_run: (run_id: string) => void
+}
+
 interface SettingsApi {
   get: () => Promise<EditorSettings>
   update: (settings: Partial<EditorSettings>) => Promise<EditorSettings>
@@ -242,6 +265,7 @@ interface EditorApi {
   dialog: DialogApi
   edit: EditApi
   file: FileApi
+  git: GitApi
   settings: SettingsApi
   terminal: TerminalApi
   workspace: WorkspaceApi
