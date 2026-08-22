@@ -2,6 +2,7 @@ import type { AgentWriteLease } from '@/platform/agent/writeLease'
 
 export interface AutonomousAcceptanceInput {
   multi_agent_enabled: boolean
+  require_independent_review?: boolean
   todos: Array<Record<string, unknown>>
   step_history: Array<Record<string, unknown>>
   timeline: Array<Record<string, unknown>>
@@ -109,7 +110,8 @@ export function evaluateAutonomousAcceptance(
     (step) => MUTATION_TOOLS.has(step_tool(step)) && is_successful_step(step),
   )
   const timeline_mutation_index = latest_timeline_mutation_index(input.timeline)
-  const requires_review = direct_mutation_index >= 0 || timeline_mutation_index >= 0
+  const mutation_present = direct_mutation_index >= 0 || timeline_mutation_index >= 0
+  const requires_review = mutation_present && input.require_independent_review !== false
   let latest_review: AutonomousAcceptanceResult['latest_review'] = 'missing'
 
   if (requires_review) {
@@ -156,5 +158,8 @@ export function evaluateAutonomousAcceptance(
 
 export function buildAcceptanceRemediationPrompt(result: AutonomousAcceptanceResult) {
   const blockers = result.blockers.map((blocker) => `- ${blocker}`).join('\n')
-  return `AUTONOMOUS ACCEPTANCE GATE: The project is not ready to finish yet. Continue working without asking the user unless a genuine product decision or permission is required.\n\nBlocking conditions:\n${blockers}\n\nUse agent.roster/status/recall as needed to await active work, resolve stale/lease conflicts through coordination and fresh live-file reads, finish or explicitly resolve TODOs, and if code changed obtain an independent agent.review. If review requests changes, fix them, rerun relevant verification, then review the corrected state again. Do not declare completion until the gate can pass.`
+  const review_guidance = result.requires_review
+    ? ' If code changed, obtain an independent agent.review. If review requests changes, fix them, rerun relevant verification, then review the corrected state again.'
+    : ''
+  return `AUTONOMOUS ACCEPTANCE GATE: The project is not ready to finish yet. Continue working without asking the user unless a genuine product decision or permission is required.\n\nBlocking conditions:\n${blockers}\n\nUse agent.roster/status/recall as needed to await active work, resolve stale/lease conflicts through coordination and fresh live-file reads, and finish or explicitly resolve TODOs.${review_guidance} Do not declare completion until the gate can pass.`
 }
