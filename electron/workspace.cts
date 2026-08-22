@@ -101,20 +101,9 @@ async function nearest_existing_parent(target_path: string) {
   return candidate
 }
 
-function path_targets_git_metadata(root_path: string, target_path: string) {
-  const path_difference = relative(resolve(root_path), resolve(target_path))
-  return path_difference
-    .split(sep)
-    .filter(Boolean)
-    .some((segment) => normalize_case(segment) === normalize_case('.git'))
-}
-
 async function resolve_agent_workspace_target(root_path: string, target_path: string, allow_missing = false) {
   const resolved_target = resolve_workspace_target(root_path, target_path)
   ensure_workspace_path(root_path, resolved_target)
-  if (path_targets_git_metadata(root_path, resolved_target)) {
-    throw new Error('Git metadata is managed by Source Control and is not available through agent file tools.')
-  }
   const canonical_root = await canonical_workspace_root(root_path)
 
   if (await path_exists(resolved_target)) {
@@ -210,10 +199,399 @@ export async function list_agent_workspace(root_path: string, target_path: strin
 
   while (queue.length && visited < 500) {
     const current = queue.shift()!
-    const current_target = await resolve_agent_workspace_target(r²È="25½¥¸¡Á…É•¹Ñ}Á…Ñ °•Ñ}­••Á}‰½Ñ¡}¹…µ”¡Í½ÕÉ•}Á…Ñ °…ÑÑ•µÁÐ°¥Í}‘¥É•Ñ½Éä¤¤((€€€¥˜€ „¡…Ý…¥ÐÁ…Ñ¡}•á¥ÍÑÌ¡…¹‘¥‘…Ñ•}Á…Ñ ¤¤¤ì(€€€€€É•ÑÕÉ¸…¹‘¥‘…Ñ•}Á…Ñ (€€€ô((€€€…ÑÑ•µÁÐ€¬ô€Ä(€ô)ô()…Íå¹Œ™Õ¹Ñ¥½¸½Áå}Ý½É­ÍÁ…•}Á…Ñ ¡Í½ÕÉ•}Á…Ñ èÍÑÉ¥¹œ°‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ èÍÑÉ¥¹œ¤ì(€…Ý…¥ÐÀ¡Í½ÕÉ•}Á…Ñ °‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ °ì(€€€É•ÕÉÍ¥Ù”èÑÉÕ”°(€€€•ÉÉ½É=¹á¥ÍÐèÑÉÕ”°(€€€™½É”è™…±Í”°(€€€ÁÉ•Í•ÉÙ•Q¥µ•ÍÑ…µÁÌèÑÉÕ”°(€ô¤)ô()…Íå¹Œ™Õ¹Ñ¥½¸µ½Ù•}Ý½É­ÍÁ…•}Á…Ñ ¡Í½ÕÉ•}Á…Ñ èÍÑÉ¥¹œ°‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ èÍÑÉ¥¹œ¤ì(€ÑÉäì(€€€…Ý…¥ÐÉ•¹…µ”¡Í½ÕÉ•}Á…Ñ °‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤(€ô…Ñ €¡•ÉÉ½È¤ì(€€€¥˜€¡ÑåÁ•½˜•ÉÉ½È€„ôô€½‰©•Ðœñð•ÉÉ½È€ôôô¹Õ±°ñð€„ ½‘”œ¥¸•ÉÉ½È¤ñð•ÉÉ½È¹½‘”€„ôô€aXœ¤ì(€€€€€Ñ¡É½Ü•ÉÉ½È(€€€ô((€€€…Ý…¥Ð½Áå}Ý½É­ÍÁ…•}Á…Ñ ¡Í½ÕÉ•}Á…Ñ °‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤(€€€…Ý…¥ÐÉ´¡Í½ÕÉ•}Á…Ñ °ìÉ•ÕÉÍ¥Ù”èÑÉÕ”ô¤(€ô)ô()•áÁ½ÉÐ…Íå¹Œ™Õ¹Ñ¥½¸Á…ÍÑ•}Ý½É­ÍÁ…•}•¹ÑÉä (€É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°(€Í½ÕÉ•}Á…Ñ èÍÑÉ¥¹œ°(€Ñ…É•Ñ}‘¥É•Ñ½ÉäèÍÑÉ¥¹œ°(€½Á•É…Ñ¥½¸è]½É­ÍÁ…•±¥Á‰½…É‘=Á•É…Ñ¥½¸°(€½¹™±¥Ñ}µ½‘”è]½É­ÍÁ…•½¹™±¥Ñ5½‘”°(¤èAÉ½µ¥Í”ñ]½É­ÍÁ…•5ÕÑ…Ñ¥½¹I•ÍÕ±Ðøì(€•¹ÍÕÉ•}Ý½É­ÍÁ…•}Á…Ñ ¡É½½Ñ}Á…Ñ °Í½ÕÉ•}Á…Ñ ¤(€•¹ÍÕÉ•}Ý½É­ÍÁ…•}Á…Ñ ¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}‘¥É•Ñ½Éä¤(€½¹ÍÐÍ½ÕÉ•}ÍÑ…Ð€ô…Ý…¥ÐÍÑ…Ð¡Í½ÕÉ•}Á…Ñ ¤(€½¹ÍÐÍ½ÕÉ•}¥Í}‘¥É•Ñ½Éä€ôÍ½ÕÉ•}ÍÑ…Ð¹¥Í¥É•Ñ½Éä ¤(€±•Ð‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ €ô©½¥¸¡Ñ…É•Ñ}‘¥É•Ñ½Éä°‰…Í•¹…µ”¡Í½ÕÉ•}Á…Ñ ¤¤((€¥˜€¡¹½Éµ…±¥é•}…Í”¡É•Í½±Ù”¡Í½ÕÉ•}Á…Ñ ¤¤€ôôô¹½Éµ…±¥é•}…Í”¡É•Í½±Ù”¡‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤¤¤ì(€€€¥˜€¡½Á•É…Ñ¥½¸€ôôô€ÕÐœ¤ì(€€€€€É•ÑÕÉ¸ì(€€€€€€€ÍÑ…ÑÕÌè€½¬œ°(€€€€€€€Á…Ñ èÍ½ÕÉ•}Á…Ñ °(€€€€€€€½±‘}Á…Ñ èÍ½ÕÉ•}Á…Ñ °(€€€€€€€­¥¹èÍ½ÕÉ•}¥Í}‘¥É•Ñ½Éä€ü€‘¥É•Ñ½Éäœ€è€™¥±”œ°(€€€€€ô(€€€ô((€€€‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ €ô…Ý…¥Ð•Ñ}­••Á}‰½Ñ¡}Á…Ñ ¡Ñ…É•Ñ}‘¥É•Ñ½Éä°Í½ÕÉ•}Á…Ñ °Í½ÕÉ•}¥Í}‘¥É•Ñ½Éä¤(€ô((€¥˜€¡Í½ÕÉ•}¥Í}‘¥É•Ñ½Éä€˜˜Á…Ñ¡}¥Í}¥¹Í¥‘”¡Í½ÕÉ•}Á…Ñ °Ñ…É•Ñ}‘¥É•Ñ½Éä¤¤ì(€€€Ñ¡É½Ü¹•ÜÉÉ½È ™½±‘•È…¹¹½Ð‰”µ½Ù•½È½Á¥•¥¹Ñ¼¥ÑÍ•±˜¸œ¤(€ô((€¥˜€¡…Ý…¥ÐÁ…Ñ¡}•á¥ÍÑÌ¡‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤¤ì(€€€¥˜€¡½¹™±¥Ñ}µ½‘”€ôôô€…Í¬œ¤ì(€€€€€É•ÑÕÉ¸ì(€€€€€€€ÍÑ…ÑÕÌè€½¹™±¥Ðœ°(€€€€€€€Í½ÕÉ•}Á…Ñ °(€€€€€€€‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ °(€€€€€€€½Á•É…Ñ¥½¸°(€€€€€ô(€€€ô((€€€¥˜€¡½¹™±¥Ñ}µ½‘”€ôôô€­••Á}‰½Ñ œ¤ì(€€€€€‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ €ô…Ý…¥Ð•Ñ}­••Á}‰½Ñ¡}Á…Ñ ¡Ñ…É•Ñ}‘¥É•Ñ½Éä°Í½ÕÉ•}Á…Ñ °Í½ÕÉ•}¥Í}‘¥É•Ñ½Éä¤(€€€ô•±Í”ì(€€€€€…Ý…¥ÐÍ¡•±°¹ÑÉ…Í¡%Ñ•´¡‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤(€€€ô(€ô((€¥˜€¡½Á•É…Ñ¥½¸€ôôô€½Áäœ¤ì(€€€…Ý…¥Ð½Áå}Ý½É­ÍÁ…•}Á…Ñ ¡Í½ÕÉ•}Á…Ñ °‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤(€ô•±Í”ì(€€€…Ý…¥Ðµ½Ù•}Ý½É­ÍÁ…•}Á…Ñ ¡Í½ÕÉ•}Á…Ñ °‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ ¤(€ô((€É•ÑÕÉ¸ì(€€€ÍÑ…ÑÕÌè€½¬œ°(€€€Á…Ñ è‘•ÍÑ¥¹…Ñ¥½¹}Á…Ñ °(€€€½±‘}Á…Ñ è½Á•É…Ñ¥½¸€ôôô€ÕÐœ€üÍ½ÕÉ•}Á…Ñ €èÕ¹‘•™¥¹•°(€€€­¥¹èÍ½ÕÉ•}¥Í}‘¥É•Ñ½Éä€ü€‘¥É•Ñ½Éäœ€è€™¥±”œ°(€ô)ô()•áÁ½ÉÐ…Íå¹Œ™Õ¹Ñ¥½¸ÑÉ…Í¡}Ý½É­ÍÁ…•}•¹ÑÉä¡É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ¤ì(€•¹ÍÕÉ•}Ý½É­ÍÁ…•}Á…Ñ ¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ ¤((€¥˜€¡¹½Éµ…±¥é•}…Í”¡É•Í½±Ù”¡É½½Ñ}Á…Ñ ¤¤€ôôô¹½Éµ…±¥é•}…Í”¡É•Í½±Ù”¡Ñ…É•Ñ}Á…Ñ ¤¤¤ì(€€€Ñ¡É½Ü¹•ÜÉÉ½È Q¡”Ý½É­ÍÁ…”É½½Ð…¹¹½Ð‰”‘•±•Ñ•™É½´Ñ¡”áÁ±½É•È¸œ¤(€ô((€½¹ÍÐÑ…É•Ñ}ÍÑ…Ð€ô…Ý…¥ÐÍÑ…Ð¡Ñ…É•Ñ}Á…Ñ ¤(€…Ý…¥ÐÍ¡•±°¹ÑÉ…Í¡%Ñ•´¡Ñ…É•Ñ}Á…Ñ ¤((€É•ÑÕÉ¸ì(€€€Á…Ñ èÑ…É•Ñ}Á…Ñ °(€€€­¥¹èÑ…É•Ñ}ÍÑ…Ð¹¥Í¥É•Ñ½Éä ¤€ü€ ‘¥É•Ñ½Éäœ…Ì½¹ÍÐ¤€è€ ™¥±”œ…Ì½¹ÍÐ¤°(€ô)ô()•áÁ½ÉÐ™Õ¹Ñ¥½¸É•Ù•…±}Ý½É­ÍÁ…•}•¹ÑÉä¡É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ¤ì(€•¹ÍÕÉ•}Ý½É­ÍÁ…•}Á…Ñ ¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ ¤(€Í¡•±°¹Í¡½Ý%Ñ•µ%¹½±‘•È¡Ñ…É•Ñ}Á…Ñ ¤)ô()•áÁ½ÉÐ™Õ¹Ñ¥½¸½Áå}Ý½É­ÍÁ…•}Ñ•áÐ¡Ù…±Õ”èÍÑÉ¥¹œ¤ì(€±¥Á‰½…É¹ÝÉ¥Ñ•Q•áÐ¡Ù…±Õ”¤)ô()•áÁ½ÉÐ™Õ¹Ñ¥½¸Ý…Ñ¡}Ý½É­ÍÁ…”¡Í•¹‘•Èè]•‰½¹Ñ•¹ÑÌ°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ¤ì(€ÍÑ½Á}Ý½É­ÍÁ…•}Ý…Ñ ¡Í•¹‘•È¹¥¤(€½¹ÍÐÉ•Í½±Ù•‘}É½½Ð€ôÉ•Í½±Ù”¡É½½Ñ}Á…Ñ ¤(€½¹ÍÐÍ•¹‘}¡…¹”€ô€¡•Ù•¹Ñ}ÑåÁ”èÍÑÉ¥¹œ°™¥±•}¹…µ”èÍÑÉ¥¹œð	Õ™™•Èð¹Õ±°¤€ôøì(€€€¥˜€¡Í•¹‘•È¹¥Í•ÍÑÉ½å• ¤¤ì(€€€€€É•ÑÕÉ¸(€€€ô((€€€½¹ÍÐ¡…¹•‘}Á…Ñ €ô™¥±•}¹…µ”€üÉ•Í½±Ù”¡É•Í½±Ù•‘}É½½Ð°™¥±•}¹…µ”¹Ñ½MÑÉ¥¹œ ¤¤€èÉ•Í½±Ù•‘}É½½Ð(€€€Í•¹‘•È¹Í•¹ Ý½É­ÍÁ…”é¡…¹•œ°ì(€€€€€É½½Ñ}Á…Ñ èÉ•Í½±Ù•‘}É½½Ð°(€€€€€•Ù•¹Ñ}ÑåÁ”°(€€€€€™¥±•}Á…Ñ è¡…¹•‘}Á…Ñ °(€€€ô¤(€ô(€±•ÐÝ…Ñ¡•ÈèM]…Ñ¡•È((€ÑÉäì(€€€Ý…Ñ¡•È€ôÝ…Ñ ¡É•Í½±Ù•‘}É½½Ð°ìÉ•ÕÉÍ¥Ù”èÑÉÕ”ô°Í•¹‘}¡…¹”¤(€ô…Ñ ì(€€€Ý…Ñ¡•È€ôÝ…Ñ ¡É•Í½±Ù•‘}É½½Ð°Í•¹‘}¡…¹”¤(€ô((€Ý…Ñ¡•È¹½¸ •ÉÉ½Èœ°€¡•ÉÉ½È¤€ôøì(€€€¥˜€ …Í•¹‘•È¹¥Í•ÍÑÉ½å• ¤¤ì(€€€€€Í•¹‘•È¹Í•¹ Ý½É­ÍÁ…”éÝ…Ñ µ•ÉÉ½Èœ°ì(€€€€€€€É½½Ñ}Á…Ñ èÉ•Í½±Ù•‘}É½½Ð°(€€€€€€€µ•ÍÍ…”è•ÉÉ½È¹µ•ÍÍ…”°(€€€€€ô¤(€€€ô(€ô¤((€Ý½É­ÍÁ…•}Ý…Ñ¡•ÉÌ¹Í•Ð¡Í•¹‘•È¹¥°ì(€€€½Ý¹•É}¥èÍ•¹‘•È¹¥°(€€€É½½Ñ}Á…Ñ èÉ•Í½±Ù•‘}É½½Ð°(€€€Ý…Ñ¡•È°(€ô¤((€É•ÑÕÉ¸ÑÉÕ”)ô()•áÁ½ÉÐ™Õ¹Ñ¥½¸ÍÑ½Á}Ý½É­ÍÁ…•}Ý…Ñ ¡½Ý¹•É}¥è¹Õµ‰•È¤ì(€½¹ÍÐ•¹ÑÉä€ôÝ½É­ÍÁ…•}Ý…Ñ¡•ÉÌ¹•Ð¡½Ý¹•É}¥¤((€¥˜€ …•¹ÑÉä¤ì(€€€É•ÑÕÉ¸(€ô((€Ý½É­ÍÁ…•}Ý…Ñ¡•ÉÌ¹‘•±•Ñ”¡½Ý¹•É}¥¤(€•¹ÑÉä¹Ý…Ñ¡•È¹±½Í” ¤)ô(((¼¼•¹Ð™¥±”…ÕÑ¡½É¥Ñä¥Ì•áÁ½Í•Ñ¡É½Õ ‘•‘¥…Ñ•%A¡…¹¹•±ÌÍ¼É•¹‘•É•ÈµÍ¥‘”…ÕÑ½¹½µ½ÕÌ(¼¼Ñ½½±ÌÉ•Ñ…¥¸Ñ¡”Í…µ”…¹½¹¥…°Ý½É­ÍÁ…”½Íåµ±¥¹¬‰½Õ¹‘…Éä…Ì‘¥É•ÐÝ½É­ÍÁ…”½Á•É…Ñ¥½¹Ì¸)¥˜€¡¥Á5…¥¸ü¹¡…¹‘±”¤ì(€¥Á5…¥¸¹¡…¹‘±” Ý½É­ÍÁ…”é…•¹ÐµÉ•…µ™¥±”œ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ¤€ôøì(€€€É•ÑÕÉ¸É•…‘}…•¹Ñ}Ý½É­ÍÁ…•}™¥±”¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ ¤(€ô¤((€¥Á5…¥¸¹¡…¹‘±” (€€€€Ý½É­ÍÁ…”é…•¹ÐµÝÉ¥Ñ”µ™¥±”œ°(€€€…Íå¹Œ€¡•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ°½¹Ñ•¹ÐèÍÑÉ¥¹œ°•áÁ•Ñ•‘}É•Ù¥Í¥½¸èÍÑÉ¥¹œð¹Õ±°¤€ôøì(€€€€€½¹ÍÐÉ•ÍÕ±Ð€ô…Ý…¥ÐÝÉ¥Ñ•}…•¹Ñ}Ý½É­ÍÁ…•}™¥±”¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ °½¹Ñ•¹Ð°•áÁ•Ñ•‘}É•Ù¥Í¥½¸¤(€€€€€¥˜€ …•Ù•¹Ð¹Í•¹‘•È¹¥Í•ÍÑÉ½å• ¤¤ì(€€€€€€€•Ù•¹Ð¹Í•¹‘•È¹Í•¹ Ý½É­ÍÁ…”é¡…¹•œ°ì(€€€€€€€€€É½½Ñ}Á…Ñ èÉ•Í½±Ù”¡É½½Ñ}Á…Ñ ¤°(€€€€€€€€€•Ù•¹Ñ}ÑåÁ”è€¡…¹”œ°(€€€€€€€€€™¥±•}Á…Ñ èÉ•ÍÕ±Ð¹Á…Ñ °(€€€€€€€ô¤(€€€€€ô(€€€€€É•ÑÕÉ¸É•ÍÕ±Ð(€€€ô°(€€¤((€¥Á5…¥¸¹¡…¹‘±” Ý½É­ÍÁ…”é…•¹ÐµÍÑ…Ðœ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ¤€ôøì(€€€É•ÑÕÉ¸ÍÑ…Ñ}…•¹Ñ}Ý½É­ÍÁ…•}Á…Ñ ¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ ¤(€ô¤((€¥Á5…¥¸¹¡…¹‘±” (€€€€Ý½É­ÍÁ…”é…•¹Ðµ±¥ÍÐœ°(€€€…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°Ñ…É•Ñ}Á…Ñ èÍÑÉ¥¹œ°‘•ÁÑ è¹Õµ‰•È¤€ôøì(€€€€€É•ÑÕÉ¸±¥ÍÑ}…•¹Ñ}Ý½É­ÍÁ…”¡É½½Ñ}Á…Ñ °Ñ…É•Ñ}Á…Ñ °‘•ÁÑ ¤(€€€ô°(€€¤)ô(((¼¼¥Ð¥ÌÉ½½Ñ•Ñ¼Ñ¡”½Á•¸Ý½É­ÍÁ…”…¹•áÁ½Í•…ÌÍÑÉÕÑÕÉ•%AÍ¼¹•¥Ñ¡•ÈÑ¡”É•¹‘•É•È(¼¼¹½È…¸…•¹Ð¹••‘ÌÑ¼½¹ÍÑÉÕÐ…É‰¥ÑÉ…Éä¥ÐÍ¡•±°½µµ…¹‘Ì™½ÈÍ½ÕÉ”µ½¹ÑÉ½°½Á•É…Ñ¥½¹Ì¸)¥˜€¡¥Á5…¥¸ü¹¡…¹‘±”¤ì(€¥Á5…¥¸¹¡…¹‘±” ¥Ðé•¹ÍÕÉ”µÉ•Á½Í¥Ñ½Éäœ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ¤€ôø•¹ÍÕÉ•}Ý½É­ÍÁ…•}É•Á½Í¥Ñ½Éä¡É½½Ñ}Á…Ñ ¤¤(€¥Á5…¥¸¹¡…¹‘±” ¥ÐéÍÑ…ÑÕÌœ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ¤€ôø•Ñ}¥Ñ}ÍÑ…ÑÕÌ¡É½½Ñ}Á…Ñ ¤¤(€¥Á5…¥¸¹¡…¹‘±” ¥Ðé¡¥ÍÑ½Éäœ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°±¥µ¥Ðè¹Õµ‰•È¤€ôø•Ñ}¥Ñ}¡¥ÍÑ½Éä¡É½½Ñ}Á…Ñ °±¥µ¥Ð¤¤(€¥Á5…¥¸¹¡…¹‘±” ¥Ðé‘¥™˜œ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°™¥±•}Á…Ñ èÍÑÉ¥¹œ¤€ôø•Ñ}¥Ñ}‘¥™˜¡É½½Ñ}Á…Ñ °™¥±•}Á…Ñ ¤¤(€¥Á5…¥¸¹¡…¹‘±” ¥ÐéÍÑ…”œ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°™¥±•}Á…Ñ¡ÌèÍÑÉ¥¹mt¤€ôøÍÑ…•}¥Ñ}Á…Ñ¡Ì¡É½½Ñ}Á…Ñ °™¥±•}Á…Ñ¡Ì¤¤(€¥Á5…¥¸¹¡…¹‘±” ¥ÐéÕ¹ÍÑ…”œ°…Íå¹Œ€¡}•Ù•¹Ð°É½½Ñ}Á…Ñ èÍÑÉ¥¹œ°‚â•êZ¶ˆÝš[™Ö×JHOˆ[œÝYÙWÙÚ]Ü]Ê›ÛÝÜ]š[WÜ]ÊJBˆ\ÓXZ[‹š[™J	ÙÚ]˜ÛÛ[Z]	Ë\Þ[˜È
-Ù]™[›ÛÝÜ]ˆÝš[™ËY\ÜØYÙNˆÝš[™ÊHOˆÛÛ[Z]ÜÝYÙYØÚ[™Ù\Ê›ÛÝÜ]Y\ÜØYÙJJBˆ\ÓXZ[‹š[™J	ÙÚ]œ™[[Ý™K[™\ÝY\™\ÜÚ]ÜžIË\Þ[˜È
-Ù]™[›ÛÝÜ]ˆÝš[™ËÚ]Ü]ˆÝš[™ÊHOˆ™[[Ý™WÛ™\ÝYÜ™\ÜÚ]ÜžJ›ÛÝÜ]Ú]Ü]
-JBˆ\ÓXZ[‹š[™J	ÙÚ]œ™\\™KXYÙ[\[‰Ë\Þ[˜È
-Ù]™[›ÛÝÜ]ˆÝš[™Ë[—ÚYˆÝš[™ÊHOˆ™\\™WØYÙ[ÙÚ]Ü[Š›ÛÝÜ][—ÚY
-JBˆ\ÓXZ[‹š[™J	ÙÚ]˜ÛÛ[Z]XYÙ[XÚ[™Ù\ÉË\Þ[˜È
-Ù]™[›ÛÝÜ]ˆÝš[™Ë'Våö–C¢7G&–ærÂvöÃ¢7G&–ær’Óâ6öÖÖ—EövVçEö6†ævW2‡&ö÷E÷F‚Â'Våö–BÂvöÂ’¢—4Ö–âæöâ‚vv—C¦&æFöâÖvVçB×'VârÂ…öWfVçBÂ'Våö–C¢7G&–ær’Óâ&æFöåövVçEöv—E÷'Vâ‡'Våö–B’§Ð
+    const current_target = await resolve_agent_workspace_target(root_path, current.path)
+    const entries = await readdir(current_target.canonical_path, { withFileTypes: true })
+
+    for (const entry of entries) {
+      if (visited >= 500) break
+      const entry_path = join(current.path, entry.name)
+      let safe_kind: 'file' | 'directory' = entry.isDirectory() ? 'directory' : 'file'
+
+      if (entry.isSymbolicLink()) {
+        try {
+          const resolved_entry = await resolve_agent_workspace_target(root_path, entry_path)
+          const resolved_stat = await stat(resolved_entry.canonical_path)
+          safe_kind = resolved_stat.isDirectory() ? 'directory' : 'file'
+        } catch {
+          visited += 1
+          continue
+        }
+      }
+
+      const child: Record<string, unknown> = {
+        name: entry.name,
+        path: entry_path,
+        type: safe_kind,
+        ...(safe_kind === 'directory' ? { children: [] } : {}),
+      }
+      current.node.children.push(child)
+      visited += 1
+
+      if (safe_kind === 'directory' && current.level + 1 < normalized_depth) {
+        queue.push({
+          path: entry_path,
+          node: child as typeof tree,
+          level: current.level + 1,
+        })
+      }
+    }
+  }
+
+  return { rootPath: target.path, tree, truncated: visited >= 500 }
+}
+
+function validate_workspace_name(name: string) {
+  const trimmed_name = name.trim()
+
+  if (!trimmed_name) {
+    throw new Error('A file or folder name is required.')
+  }
+
+  if (
+    trimmed_name === '.' ||
+    trimmed_name === '..' ||
+    /[<>:"/\\|?*]/.test(trimmed_name) ||
+    trimmed_name.includes('\0')
+  ) {
+    throw new Error('The name contains characters that are not allowed.')
+  }
+
+  if (/[. ]$/.test(trimmed_name)) {
+    throw new Error('A file or folder name cannot end with a period or space.')
+  }
+
+  return trimmed_name
+}
+
+async function path_exists(file_path: string) {
+  return access(file_path)
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function get_entry(file_path: string, parent_path: string | null): Promise<WorkspaceEntry> {
+  const entry_stat = await lstat(file_path)
+  let kind: WorkspaceEntryKind = entry_stat.isDirectory() ? 'directory' : 'file'
+
+  if (entry_stat.isSymbolicLink()) {
+    const followed_stat = await stat(file_path).catch(() => null)
+
+    if (followed_stat?.isDirectory()) {
+      kind = 'directory'
+    }
+  }
+
+  return {
+    path: file_path,
+    parent_path,
+    name: basename(file_path),
+    kind,
+    is_symlink: entry_stat.isSymbolicLink(),
+  }
+}
+
+function sort_entries(entries: WorkspaceEntry[]) {
+  return entries.sort((first_entry, second_entry) => {
+    if (first_entry.kind !== second_entry.kind) {
+      return first_entry.kind === 'directory' ? -1 : 1
+    }
+
+    return first_entry.name.localeCompare(second_entry.name, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    })
+  })
+}
+
+export async function read_workspace_directory(root_path: string, directory_path: string) {
+  ensure_workspace_path(root_path, directory_path)
+  const directory_stat = await stat(directory_path)
+
+  if (!directory_stat.isDirectory()) {
+    throw new Error(`${basename(directory_path)} is not a folder.`)
+  }
+
+  const entries = await readdir(directory_path, { withFileTypes: true })
+  const workspace_entries = await Promise.all(
+    entries.map((entry) => get_entry(join(directory_path, entry.name), directory_path)),
+  )
+
+  return sort_entries(workspace_entries)
+}
+
+export async function create_workspace_entry(
+  root_path: string,
+  parent_path: string,
+  name: string,
+  kind: WorkspaceEntryKind,
+) {
+  ensure_workspace_path(root_path, parent_path)
+  const normalized_name = validate_workspace_name(name)
+  const new_path = join(parent_path, normalized_name)
+  ensure_workspace_path(root_path, new_path)
+
+  if (await path_exists(new_path)) {
+    throw new Error(`${normalized_name} already exists.`)
+  }
+
+  if (kind === 'directory') {
+    await mkdir(new_path)
+  } else {
+    await writeFile(new_path, '', { encoding: 'utf8', flag: 'wx' })
+  }
+
+  return get_entry(new_path, parent_path)
+}
+
+export async function rename_workspace_entry(root_path: string, source_path: string, name: string) {
+  ensure_workspace_path(root_path, source_path)
+  const normalized_name = validate_workspace_name(name)
+  const destination_path = join(dirname(source_path), normalized_name)
+  ensure_workspace_path(root_path, destination_path)
+
+  if (normalize_case(resolve(source_path)) === normalize_case(resolve(destination_path))) {
+    return get_entry(source_path, dirname(source_path))
+  }
+
+  if (await path_exists(destination_path)) {
+    throw new Error(`${normalized_name} already exists.`)
+  }
+
+  await rename(source_path, destination_path)
+  return get_entry(destination_path, dirname(destination_path))
+}
+
+function get_keep_both_name(source_path: string, attempt: number, is_directory: boolean) {
+  const source_name = basename(source_path)
+  const extension = is_directory ? '' : extname(source_name)
+  const base_name = extension ? source_name.slice(0, -extension.length) : source_name
+  const suffix = attempt === 1 ? ' copy' : ` copy ${attempt}`
+
+  return `${base_name}${suffix}${extension}`
+}
+
+async function get_keep_both_path(parent_path: string, source_path: string, is_directory: boolean) {
+  let attempt = 1
+
+  while (true) {
+    const candidate_path = join(parent_path, get_keep_both_name(source_path, attempt, is_directory))
+
+    if (!(await path_exists(candidate_path))) {
+      return candidate_path
+    }
+
+    attempt += 1
+  }
+}
+
+async function copy_workspace_path(source_path: string, destination_path: string) {
+  await cp(source_path, destination_path, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+    preserveTimestamps: true,
+  })
+}
+
+async function move_workspace_path(source_path: string, destination_path: string) {
+  try {
+    await rename(source_path, destination_path)
+  } catch (error) {
+    if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'EXDEV') {
+      throw error
+    }
+
+    await copy_workspace_path(source_path, destination_path)
+    await rm(source_path, { recursive: true })
+  }
+}
+
+export async function paste_workspace_entry(
+  root_path: string,
+  source_path: string,
+  target_directory: string,
+  operation: WorkspaceClipboardOperation,
+  conflict_mode: WorkspaceConflictMode,
+): Promise<WorkspaceMutationResult> {
+  ensure_workspace_path(root_path, source_path)
+  ensure_workspace_path(root_path, target_directory)
+  const source_stat = await stat(source_path)
+  const source_is_directory = source_stat.isDirectory()
+  let destination_path = join(target_directory, basename(source_path))
+
+  if (normalize_case(resolve(source_path)) === normalize_case(resolve(destination_path))) {
+    if (operation === 'cut') {
+      return {
+        status: 'ok',
+        path: source_path,
+        old_path: source_path,
+        kind: source_is_directory ? 'directory' : 'file',
+      }
+    }
+
+    destination_path = await get_keep_both_path(target_directory, source_path, source_is_directory)
+  }
+
+  if (source_is_directory && path_is_inside(source_path, target_directory)) {
+    throw new Error('A folder cannot be moved or copied into itself.')
+  }
+
+  if (await path_exists(destination_path)) {
+    if (conflict_mode === 'ask') {
+      return {
+        status: 'conflict',
+        source_path,
+        destination_path,
+        operation,
+      }
+    }
+
+    if (conflict_mode === 'keep_both') {
+      destination_path = await get_keep_both_path(target_directory, source_path, source_is_directory)
+    } else {
+      await shell.trashItem(destination_path)
+    }
+  }
+
+  if (operation === 'copy') {
+    await copy_workspace_path(source_path, destination_path)
+  } else {
+    await move_workspace_path(source_path, destination_path)
+  }
+
+  return {
+    status: 'ok',
+    path: destination_path,
+    old_path: operation === 'cut' ? source_path : undefined,
+    kind: source_is_directory ? 'directory' : 'file',
+  }
+}
+
+export async function trash_workspace_entry(root_path: string, target_path: string) {
+  ensure_workspace_path(root_path, target_path)
+
+  if (normalize_case(resolve(root_path)) === normalize_case(resolve(target_path))) {
+    throw new Error('The workspace root cannot be deleted from the Explorer.')
+  }
+
+  const target_stat = await stat(target_path)
+  await shell.trashItem(target_path)
+
+  return {
+    path: target_path,
+    kind: target_stat.isDirectory() ? ('directory' as const) : ('file' as const),
+  }
+}
+
+export function reveal_workspace_entry(root_path: string, target_path: string) {
+  ensure_workspace_path(root_path, target_path)
+  shell.showItemInFolder(target_path)
+}
+
+export function copy_workspace_text(value: string) {
+  clipboard.writeText(value)
+}
+
+export function watch_workspace(sender: WebContents, root_path: string) {
+  stop_workspace_watch(sender.id)
+  const resolved_root = resolve(root_path)
+  const send_change = (event_type: string, file_name: string | Buffer | null) => {
+    if (sender.isDestroyed()) {
+      return
+    }
+
+    const changed_path = file_name ? resolve(resolved_root, file_name.toString()) : resolved_root
+    sender.send('workspace:changed', {
+      root_path: resolved_root,
+      event_type,
+      file_path: changed_path,
+    })
+  }
+  let watcher: FSWatcher
+
+  try {
+    watcher = watch(resolved_root, { recursive: true }, send_change)
+  } catch {
+    watcher = watch(resolved_root, send_change)
+  }
+
+  watcher.on('error', (error) => {
+    if (!sender.isDestroyed()) {
+      sender.send('workspace:watch-error', {
+        root_path: resolved_root,
+        message: error.message,
+      })
+    }
+  })
+
+  workspace_watchers.set(sender.id, {
+    owner_id: sender.id,
+    root_path: resolved_root,
+    watcher,
+  })
+
+  return true
+}
+
+export function stop_workspace_watch(owner_id: number) {
+  const entry = workspace_watchers.get(owner_id)
+
+  if (!entry) {
+    return
+  }
+
+  workspace_watchers.delete(owner_id)
+  entry.watcher.close()
+}
+
+
+// Agent file authority is exposed through dedicated IPC channels so renderer-side autonomous
+// tools retain the same canonical workspace/symlink boundary as direct workspace operations.
+if (ipcMain?.handle) {
+  ipcMain.handle('workspace:agent-read-file', async (_event, root_path: string, target_path: string) => {
+    return read_agent_workspace_file(root_path, target_path)
+  })
+
+  ipcMain.handle(
+    'workspace:agent-write-file',
+    async (event, root_path: string, target_path: string, content: string, expected_revision: string | null) => {
+      const result = await write_agent_workspace_file(root_path, target_path, content, expected_revision)
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('workspace:changed', {
+          root_path: resolve(root_path),
+          event_type: 'change',
+          file_path: result.path,
+        })
+      }
+      return result
+    },
+  )
+
+  ipcMain.handle('workspace:agent-stat', async (_event, root_path: string, target_path: string) => {
+    return stat_agent_workspace_path(root_path, target_path)
+  })
+
+  ipcMain.handle(
+    'workspace:agent-list',
+    async (_event, root_path: string, target_path: string, depth: number) => {
+      return list_agent_workspace(root_path, target_path, depth)
+    },
+  )
+}
+
+
+// Git is rooted to the open workspace and exposed as structured IPC so neither the renderer
+// nor an agent needs to construct arbitrary Git shell commands for source-control operations.
+if (ipcMain?.handle) {
+  ipcMain.handle('git:ensure-repository', async (_event, root_path: string) => ensure_workspace_repository(root_path))
+  ipcMain.handle('git:status', async (_event, root_path: string) => get_git_status(root_path))
+  ipcMain.handle('git:history', async (_event, root_path: string, limit: number) => get_git_history(root_path, limit))
+  ipcMain.handle('git:diff', async (_event, root_path: string, file_path: string) => get_git_diff(root_path, file_path))
+  ipcMain.handle('git:stage', async (_event, root_path: string, file_paths: string[]) => stage_git_paths(root_path, file_paths))
+  ipcMain.handle('git:unstage', async (_event, root_path: string, file_paths: string[]) => unstage_git_paths(root_path, file_paths))
+  ipcMain.handle('git:commit', async (_event, root_path: string, message: string) => commit_staged_changes(root_path, message))
+  ipcMain.handle('git:remove-nested-repository', async (_event, root_path: string, git_path: string) => remove_nested_repository(root_path, git_path))
+  ipcMain.handle('git:prepare-agent-run', async (_event, root_path: string, run_id: string) => prepare_agent_git_run(root_path, run_id))
+  ipcMain.handle('git:commit-agent-changes', async (_event, root_path: string, run_id: string, goal: string) => commit_agent_changes(root_path, run_id, goal))
+  ipcMain.handle('git:abandon-agent-run', async (_event, run_id: string) => abandon_agent_git_run(run_id))
+}
