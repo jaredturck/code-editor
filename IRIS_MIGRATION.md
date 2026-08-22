@@ -457,11 +457,13 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Canonical `npm run benchmark` entry point restored; `benchmark:iris` retained as a compatibility alias
   - 19 benchmark source files audited against migrated production paths and exports
 - [x] **Add Code Editor + agent integration tests**
-- [ ] **Add long-running run/recovery tests**
+- [x] **Add long-running run/recovery tests**
+  - Multi-hour pause/resume accounting excludes paused wall-clock time
+  - Durable interruption restore preserves checkpointed TODO/step/usage state
+  - Rolling project context and acceptance-remediation continuation coverage
 - [ ] **Add multi-agent collision tests**
 
 ## Next integration priorities
 
-1. Add dedicated long-running run/recovery validation.
-2. Expand multi-agent collision coverage.
-3. Run the final dependency-aware verification and packaging audit once dependencies are installed.
+1. Expand multi-agent collision coverage.
+2. Run the final dependency-aware verification and packaging audit once dependencies are installed.
