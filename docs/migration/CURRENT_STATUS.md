@@ -32,6 +32,7 @@ Completed integration milestones:
 - Security and autonomous-run policy
 - Re-enabled compatible migrated IRIS runtime tests
 - Re-enabled local IRIS benchmark suite
+- Dedicated long-running run/recovery validation
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -83,10 +84,11 @@ Compatible migrated IRIS runtime tests are now re-enabled through a dedicated `v
 
 The preserved IRIS benchmark harness is now re-enabled through the canonical `npm run benchmark` entry point, with `npm run benchmark:iris` retained as a compatibility alias. All 19 benchmark source files already target the migrated Code Editor production paths, and a static source/API audit found no unresolved relative imports or missing imported exports. The suite remains intentionally separate from `verify:full` because it exercises performance workloads, persistent benchmark history, local CLIP runtime state, and configured loopback Ollama models rather than serving as a deterministic correctness gate. The supplied source snapshot does not contain `node_modules`, so this continuation does not claim an executed benchmark result.
 
+Dedicated long-running recovery coverage now exercises the autonomous lifecycle without waiting for real hours to pass. Fake-clock cases verify that active execution time accumulates across multiple multi-hour segments while paused wall-clock time is excluded; a deep-cloned persistence mock verifies that process interruption restores only the last durable checkpoint, preserves run identity/TODO/step/usage state, and resumes under the newly resolved provider/model without counting uncheckpointed work. Additional runtime-facade cases verify that bounded project context rolls forward across repeated segments and that an unfinished multi-agent acceptance gate automatically launches a remediation continuation before returning a completed result. Dependency lookup timed out in the supplied Linux snapshot, which still has no `node_modules`, and `main` has no CI status attached, so this continuation does not claim an executed Vitest result.
+
 ## Next milestone
 
 **Validation and hardening**
 
-- add dedicated long-running run/recovery tests
 - expand multi-agent collision validation
 - run the final repository-wide dependency-aware verification once the environment has installed dependencies
