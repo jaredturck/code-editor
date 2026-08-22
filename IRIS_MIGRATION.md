@@ -449,9 +449,10 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Validation and hardening
 
-- [ ] **Re-enable migrated IRIS tests**
+- [x] **Re-enable migrated IRIS tests**
   - Backend, agent, broker/security and provider suites
   - Semantic-index and multi-agent suites
+  - 90 compatible migrated runtime/backend files wired through `npm test`; obsolete IRIS presentation tests remain archived
 - [ ] **Re-enable benchmarks**
 - [x] **Add Code Editor + agent integration tests**
 - [ ] **Add long-running run/recovery tests**
@@ -459,6 +460,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
-2. Add dedicated long-running recovery/stability validation.
+1. Re-enable benchmark commands that remain meaningful in the Code Editor product shell.
+2. Add dedicated long-running run/recovery validation and expand multi-agent collision coverage.
 3. Run the final dependency-aware verification and packaging audit once dependencies are installed.
