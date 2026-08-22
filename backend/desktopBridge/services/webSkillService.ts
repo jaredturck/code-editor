@@ -1,3 +1,4 @@
+import '../../developmentSkillRegistry.js';
 /** Feature service surface for the corresponding desktop bridge routes. */
 export {
   deleteSkillFromProfile,
