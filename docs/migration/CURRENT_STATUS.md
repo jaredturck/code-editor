@@ -27,6 +27,7 @@ Completed integration milestones:
 - Audio and voice
 - Vision and screen capabilities
 - Permissioned desktop automation
+- System monitoring and runtime visibility
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -60,12 +61,19 @@ The migrated desktop Automation path is now connected through the same existing 
 
 Focused Vision and Automation regressions cover capture authorization, local-only Vision, fresh-screen Agent Chat exposure, GUI permission gating, exact-plan approval binding and single-use consumption. The supplied source snapshot does not include `node_modules`, so the focused Vitest command could not be executed in this continuation; no test failure was observed.
 
+System/runtime visibility is now surfaced directly inside the existing Agent Chat shell rather than reviving the old IRIS System Monitor panel. The compact Runtime view reuses the migrated `useSystemMonitor` controller for CPU, load average, RAM, GPU/VRAM and bounded top-process snapshots, and independently polls the existing multi-agent roster for active/queued task state and health. Monitoring failures remain isolated to the view and do not interrupt an autonomous run.
+
+IRIS's existing run-summary telemetry now survives into the encrypted project-run checkpoint instead of being flattened away by the Code Editor adapter. The Runtime view exposes provider/model routing cost tier plus model request count, prompt/completion tokens, context-window use and remaining capacity, and prompt-cache hit ratio. It deliberately does not expose raw chain-of-thought, raw token streams, credentials or environment-variable values, and it does not fabricate dollar costs where provider pricing is not available from the runtime.
+
+Autonomous sessions can now call the existing read-only `system.stats`, `system.processes` and `launcher.list` tools without requesting a new privileged capability. The project-run guidance tells the Orchestrator to inspect current machine pressure and verified launcher/tool availability rather than guessing. `launch.run` is admitted only when the existing workspace terminal/local-execution permission is already enabled, preserving the current broker/launcher safety and approval boundary. Managed development-environment start/stop remains a separate local-system integration item and is not claimed complete here.
+
+Focused runtime-visibility regressions cover the read-only discovery allowlist, permission-gated local launching, monitor/roster/usage wiring, durable usage extraction and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
+
 ## Next milestone
 
-**System Monitoring and Runtime Visibility**
+**Launcher/local-system completion and autonomous policy hardening**
 
-- surface the migrated CPU/RAM/GPU/process monitoring in the Code Editor
-- expose model, agent, token and cost visibility for long autonomous runs
-- preserve the existing editor shell and reuse IRIS monitor/controller services
-
-Launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
+- connect the existing managed development-environment start/stop lifecycle to the autonomous local-system surface without bypassing launcher approvals
+- finish sanitized developer-tool discovery where the current launcher menu is insufficient
+- harden the final workspace/network/package/vision/automation autonomous-run authority and exact-operation approval boundaries
+- then move into staged migrated-test/benchmark re-enablement and long-run recovery validation
