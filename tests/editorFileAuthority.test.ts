@@ -63,6 +63,19 @@ describe('editor-aware agent filesystem', () => {
     ).rejects.toThrow(/changed after the agent last read/i)
   })
 
+  it('creates missing parent directories for a new nested agent file', async () => {
+    const { read_agent_workspace_file, write_agent_workspace_file } = await import('../electron/workspace.cts')
+    const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
+    const target = join(root, 'templates', 'index.html')
+    const content = '<h1>Home</h1>\n'
+
+    await write_agent_workspace_file(root, target, content, null)
+    const saved = await read_agent_workspace_file(root, target)
+
+    expect(saved.path).toBe(target)
+    expect(saved.content).toBe(content)
+  })
+
   it('blocks a workspace symlink that resolves outside the workspace', async () => {
     const { read_agent_workspace_file } = await import('../electron/workspace.cts')
     const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
