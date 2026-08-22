@@ -364,6 +364,28 @@ export function buildControllerPayload({
   capabilitySnapshot,
   toolset = 'structured',
 }) {
+  const recentSteps = stepHistory.slice(-8);
+  const latestStep = recentSteps[recentSteps.length - 1] || null;
+  const recoveryContext = latestStep?.ok === false
+    ? {
+        status: 'action_failed',
+        original_goal: userInput,
+        failed_action: {
+          tool: String(latestStep.tool || latestStep.requestedTool || ''),
+          error: String(latestStep.error || 'Tool execution failed.'),
+        },
+        recent_evidence: recentSteps.slice(-6).map((item) => ({
+          tool: String(item.tool || item.requestedTool || ''),
+          ok: item.ok !== false,
+          result: item.ok === false
+            ? String(item.error || '')
+            : String(item.summary || ''),
+        })),
+        instruction:
+          'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
+      }
+    : null;
+
   return {
     user_request: userInput,
     // No step counter is surfaced to the model (it confuses pacing); the runtime owns
@@ -373,7 +395,8 @@ export function buildControllerPayload({
       content: trimMessageContent(message.content),
     })),
     todos,
-    previous_steps: stepHistory.slice(-8),
+    previous_steps: recentSteps,
+    ...(recoveryContext ? { recovery_context: recoveryContext } : {}),
     // Advertise tools that are immediately available plus tools whose only missing
     // requirement is a user permission grant. The broker still enforces the role tier and
     // pauses requestable tools for the persistent permission popup before execution.
