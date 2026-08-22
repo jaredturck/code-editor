@@ -438,10 +438,10 @@ This checklist tracks the remaining product integration work. An unchecked item 
 - [x] **System monitoring and runtime visibility**
   - CPU/RAM/GPU/process monitoring
   - Model, agent, token and cost visibility
-- [ ] **Launcher and local-system capabilities**
-  - [x] Installed application/tool discovery
-  - [ ] Development-environment management
-  - [x] Agent discovery of verified local launcher/tool availability
+- [x] **Launcher and local-system capabilities**
+  - Installed application/tool discovery
+  - Development-environment management
+  - Agent discovery of verified local launcher/tool availability
 - [ ] **Security and autonomous-run policy**
   - Workspace-scoped autonomous authority
   - Exact-operation approvals and capability tokens
@@ -459,7 +459,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Complete launcher/local-system integration by wiring the existing managed development-environment lifecycle into autonomous runs while preserving launcher approvals and execution permissions.
-2. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
-3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
-4. Add dedicated long-running recovery/stability validation after the remaining product integration is closed.
+1. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
+2. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
+3. Add dedicated long-running recovery/stability validation after the remaining product integration is closed.
