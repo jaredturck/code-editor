@@ -29,6 +29,7 @@ Completed integration milestones:
 - Permissioned desktop automation
 - System monitoring and runtime visibility
 - Launcher and local-system capabilities
+- Security and autonomous-run policy
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -70,13 +71,17 @@ Autonomous sessions can now call the existing read-only `system.stats`, `system.
 
 The remaining migrated launcher/local-system lifecycle is also surfaced without importing the old IRIS Launcher panel. Runtime polls the existing managed development-environment status for the configured working directory and provides explicit Start/Stop controls. Those actions call the existing `startDevEnvironment` / `stopDevEnvironment` bridge clients; the privileged routes continue to require the bridge-owned `launcher` capability, which is synchronized from the existing terminal/local-execution setting. Autonomous coding agents can still start ordinary project commands through their already-brokered terminal path, while the GUI now exposes IRIS's managed-process lifecycle for observation and direct user control.
 
-Focused runtime/local-system regressions cover the read-only discovery allowlist, permission-gated local launching, monitor/roster/usage wiring, durable usage extraction, managed dev-environment bridge permission and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
+The final autonomous-run policy pass now narrows the model-facing tool schema to the permissions actually granted for the current Code Editor session. Workspace read/search/RAG tools are not advertised when file-read authority is disabled; write/edit/patch tools are not advertised when file-write authority is disabled; terminal and launcher execution remain admitted only with local-execution authority. This is defense in depth: the existing broker capability checks, workspace/path safety, role tiers and bridge permissions still re-check operations at execution time, and delegated agents independently enforce the same file/terminal toggles.
+
+Runtime now displays the effective autonomous authority alongside system/agent telemetry, including file read/write, local execution, screen capture, desktop automation, shell-network access, web-site guard and package-install guard state. The underlying migrated defaults remain fail-closed: machine permissions start disabled, strict safety and sudo blocking are on, shell network commands are off, web ingestion and dependency installs are approval-guarded, global Python installs prefer a project-local `.venv`, and Vision auto-execution is off. Autonomous Chat continues to reject attempts to persist machine-permission grants; privileged launcher, screen and automation routes reauthorize at the bridge boundary, with automation additionally consuming an exact single-use approval token.
+
+Focused runtime/local-system and autonomous-policy regressions cover permission-scoped tool exposure, delegated capability inheritance, fail-closed defaults, web/package guard behavior, managed dev-environment bridge permission, final launcher/screen/automation authorization and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
 
 ## Next milestone
 
-**Security and autonomous-run policy hardening**
+**Validation and hardening**
 
-- audit workspace-scoped autonomous authority across files, terminal, launcher, Vision and Automation
-- consolidate exact-operation approval and capability-token boundaries where integration exposed gaps
-- verify network/package guard behavior for unattended long-running project runs
-- then move into staged migrated-test/benchmark re-enablement and dedicated long-run recovery/stability validation
+- re-enable compatible migrated IRIS backend/agent/broker/security/provider/semantic/multi-agent suites incrementally
+- re-enable benchmark commands that remain meaningful in the Code Editor product shell
+- add dedicated long-running run/recovery tests and expand multi-agent collision validation
+- run the final repository-wide dependency-aware verification once the environment has installed dependencies
