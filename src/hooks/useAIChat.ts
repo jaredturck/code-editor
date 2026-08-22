@@ -140,7 +140,6 @@ function useAIChat(
   const recording_timer_ref = useRef<number | null>(null)
   const settings_ref = useRef(settings)
   const platform_settings_ref = useRef(platform_settings)
-  const restoring_started_ref = useRef(false)
   const approval_controller = useApprovalController(set_run_status)
 
   settings_ref.current = settings
@@ -166,8 +165,6 @@ function useAIChat(
   }, [project_run?.id, project_run?.status])
 
   useEffect(() => {
-    if (restoring_started_ref.current) return
-    restoring_started_ref.current = true
     let cancelled = false
 
     const restore_chat = async () => {
