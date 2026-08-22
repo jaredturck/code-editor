@@ -110,14 +110,11 @@ export function buildControllerSystemPrompt({
   ];
   if (lean) {
     acting.push(
-      '- Prefer `terminal.exec` for file and system work (ls, find, rg, cat, sed, stat, diff, patch, ' +
-        'ps). Use it for scripting and search. Fall back to the structured file tools only if a ' +
-        'command fails or is unavailable.',
+      '- Prefer `terminal.exec` for discovery and system work (ls, find, rg, stat, ps), builds/tests, git, and genuine bulk transformations. For localized edits to existing source, read the relevant region and prefer `files.edit`; use `files.patch` for a unified multi-hunk diff and `files.write` only for a new file or a genuine wholesale rewrite so editor revision/collision safeguards remain in the path.',
     );
   } else {
     acting.push(
-      '- Prefer the structured file tools (files.read / files.write / files.find) over hand-written ' +
-        'shell; use terminal.exec only when no dedicated tool fits.',
+      '- Prefer the structured file tools over hand-written shell for file content. For a localized change to existing source, read the relevant region and use `files.edit` with an exact unique oldText/newText replacement; use `files.patch` for a unified multi-hunk diff, and `files.write` only for a new file or genuine full rewrite. Use terminal.exec for commands, tests, discovery, and bulk transformations when no dedicated editor-aware tool fits.',
     );
   }
   acting.push(
