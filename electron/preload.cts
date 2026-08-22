@@ -117,7 +117,7 @@ contextBridge.exposeInMainWorld('editor_api', {
       ipcRenderer.invoke('git:prepare-agent-run', root_path, run_id),
     commit_agent_changes: (root_path: string, run_id: string, goal: string) =>
       ipcRenderer.invoke('git:commit-agent-changes', root_path, run_id, goal),
-    abandon_agent_run: (run_id: string) => ipcRenderer.send('git:abandon-agent-run', run_id),
+    abandon_agent_run: (run_id: string) => ipcRenderer.invoke('git:abandon-agent-run', run_id),
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

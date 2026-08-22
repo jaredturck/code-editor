@@ -164,7 +164,7 @@ interface GitApi {
     head: string | null
   }>
   commit_agent_changes: (root_path: string, run_id: string, goal: string) => Promise<GitAgentCommitResult>
-  abandon_agent_run: (run_id: string) => void
+  abandon_agent_run: (run_id: string) => Promise<void>
 }
 
 interface SettingsApi {
