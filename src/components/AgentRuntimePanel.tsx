@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
+import { projectRunController } from '../chat/projectRunController'
+import type { ProjectRunState } from '../chat/projectRunController'
 import { handleAgentRoster } from '../platform/orchestrationClient'
 import { getRoutingProfile } from '../platform/agent/modelRouting'
 import type { SubAgentRosterEntry } from '../platform/agent/subAgentTypes'
-import type { AgentUsageSummary } from '../types/editor'
+import { readOrbSettings } from '../platform/settingsStorage'
 import { useSystemMonitor } from '../platform-features/systemMonitor/useSystemMonitor'
 
 interface AgentRuntimePanelProps {
   generating: boolean
-  provider: string
-  model: string
-  usage?: AgentUsageSummary | null
 }
 
 function format_bytes(bytes: number) {
@@ -34,9 +33,12 @@ function agent_status_label(agent: SubAgentRosterEntry) {
   return `${role} · ${agent.status}${agent.queueDepth ? ` · ${agent.queueDepth} queued` : ''}`
 }
 
-function AgentRuntimePanel({ generating, provider, model, usage }: AgentRuntimePanelProps) {
+function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
   const { stats, procs, err } = useSystemMonitor()
   const [agents, set_agents] = useState<SubAgentRosterEntry[]>([])
+  const [project_run, set_project_run] = useState<ProjectRunState | null>(() => projectRunController.get_state())
+
+  useEffect(() => projectRunController.subscribe(set_project_run), [])
 
   useEffect(() => {
     const poll = () => {
@@ -53,8 +55,10 @@ function AgentRuntimePanel({ generating, provider, model, usage }: AgentRuntimeP
     return () => window.clearInterval(timer)
   }, [])
 
-  const usage_provider = usage?.provider || provider
-  const usage_model = usage?.model || model
+  const settings = readOrbSettings()
+  const usage = project_run?.usage || null
+  const usage_provider = usage?.provider || project_run?.provider || String(settings.ai_provider || '')
+  const usage_model = usage?.model || project_run?.model || String(settings.ai_model || '')
   const cost_tier = getRoutingProfile(usage_provider, usage_model).costTier
   const active_agents = agents.filter(
     (agent) => agent.status === 'working' || Boolean(agent.currentTaskId),
