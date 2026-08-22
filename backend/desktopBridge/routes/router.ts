@@ -15,6 +15,7 @@ import { handleWebSkillRoutes } from './webSkillRoutes.js';
 import { handleAgentRoutes } from './agentRoutes.js';
 import { handlePowerRoutes } from './powerRoutes.js';
 import { handleAudioRoutes } from './audioRoutes.js';
+import { handleScreenRoutes } from './screenRoutes.js';
 
 export type { BridgeRequest, BridgeResponse } from '../types.js';
 
@@ -34,6 +35,7 @@ const ROUTE_HANDLERS: readonly BridgeRouteHandler[] = [
   handleAgentRoutes,
   handlePowerRoutes,
   handleAudioRoutes,
+  handleScreenRoutes,
 ];
 
 // Routes one local bridge request through the ordered route groups and reports whether any group
