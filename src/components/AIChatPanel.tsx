@@ -6,6 +6,7 @@ import type { ProjectRunState } from '../chat/projectRunController'
 import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
 import AgentChatVoiceControls from './AgentChatVoiceControls'
+import AgentRuntimePanel from './AgentRuntimePanel'
 
 interface AIChatPanelProps {
   chat: ReturnType<typeof useAIChat>
@@ -310,13 +311,15 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
         />
       )}
 
+      <AgentRuntimePanel generating={chat.generating} />
+
       <div className="min-h-0 flex-1 overflow-auto px-3 py-4">
         {chat.messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-xs text-[var(--muted)]">
             <div className="mb-2 text-2xl opacity-50">✦</div>
             <p>Ask your configured agent about the current project.</p>
             <p className="mt-1 text-[10px]">
-              This stage can research and analyze attachments; workspace tools come next.
+              The agent can edit the workspace, run tools and tests, coordinate peers, inspect runtime health, and verify visible application state.
             </p>
             <p className="mt-1 text-[10px]">Attach the active file to include unsaved changes.</p>
           </div>
