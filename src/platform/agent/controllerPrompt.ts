@@ -138,6 +138,7 @@ export function buildControllerSystemPrompt({
       'decision you genuinely cannot infer and that changes the outcome; scope changes and ' +
       'destructive actions still need approval first.',
     '- Only claim a tool or permission is missing after an actual tool error in this session shows it.',
+    '- Treat every tool result as new evidence. When an action fails, reason from the exact error, the original goal, and prior results before choosing what to do next. Do not blindly repeat an unchanged failed action; retry only when you have a concrete reason the outcome may differ.',
   );
   sections.push(acting.join('\n'));
 
