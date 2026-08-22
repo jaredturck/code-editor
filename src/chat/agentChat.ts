@@ -41,18 +41,21 @@ const local_system_read_tools = [
   'launcher.list',
 ]
 
-const editor_workspace_tools = [
+const editor_workspace_read_tools = [
   'files.list',
   'files.read',
-  'files.write',
   'files.stat',
   'files.diff',
-  'files.patch',
-  'files.edit',
   'search.ripgrep',
   'search.find',
   'search.fd',
   'rag.retrieve',
+]
+
+const editor_workspace_write_tools = [
+  'files.write',
+  'files.patch',
+  'files.edit',
 ]
 
 const multi_agent_tools = [
@@ -115,10 +118,12 @@ export function get_core_agent_tool_allowlist(
   workspace_root: string | null,
   terminal_enabled = false,
   multi_agent_enabled = false,
+  file_read_enabled = true,
+  file_write_enabled = true,
 ) {
-  const tools = workspace_root
-    ? [...core_agent_tools, ...local_system_read_tools, ...editor_workspace_tools]
-    : [...core_agent_tools, ...local_system_read_tools]
+  const tools = [...core_agent_tools, ...local_system_read_tools]
+  if (workspace_root && file_read_enabled) tools.push(...editor_workspace_read_tools)
+  if (workspace_root && file_write_enabled) tools.push(...editor_workspace_write_tools)
   if (workspace_root && terminal_enabled) tools.push(...agent_terminal_tools)
   if (workspace_root && multi_agent_enabled) tools.push(...multi_agent_tools)
   return tools
@@ -210,6 +215,8 @@ export function build_core_agent_settings(
       workspace_root,
       Boolean(workspace_root && bound.permissions_terminal === true),
       multi_agent_enabled,
+      Boolean(workspace_root && bound.permissions_file_read === true),
+      Boolean(workspace_root && bound.permissions_file_write === true),
     ),
   }
 }
