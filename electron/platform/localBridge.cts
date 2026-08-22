@@ -8,6 +8,7 @@ import path = require('node:path');
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { desktopCapturer, type App } from 'electron';
+import '../navigationBootstrap.cjs';
 import type { StorageKeyContext } from './storageKeyStore.cjs';
 import {
   createDuckDuckGoSearchWindow,
