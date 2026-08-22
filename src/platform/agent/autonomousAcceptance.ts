@@ -54,13 +54,21 @@ function last_index<T>(items: T[], predicate: (item: T) => boolean) {
   return -1
 }
 
-function timeline_has_successful_mutation(timeline: Array<Record<string, unknown>>) {
-  return timeline.some((event) => {
-    if (!MUTATION_TOOLS.has(String(event.tool || '').trim())) return false
-    const type = lower(event.type)
-    const status = lower(event.status)
-    return type === 'tool_result' && !['error', 'failed'].includes(status)
-  })
+function is_successful_timeline_tool(event: Record<string, unknown>, tool: string) {
+  const status = lower(event.status)
+  return (
+    lower(event.type) === 'tool_result' &&
+    String(event.tool || '').trim() === tool &&
+    !['error', 'failed'].includes(status)
+  )
+}
+
+function latest_timeline_mutation_index(timeline: Array<Record<string, unknown>>) {
+  return last_index(
+    timeline,
+    (event) => MUTATION_TOOLS.has(String(event.tool || '').trim()) &&
+      is_successful_timeline_tool(event, String(event.tool || '').trim()),
+  )
 }
 
 export function evaluateAutonomousAcceptance(
@@ -100,8 +108,8 @@ export function evaluateAutonomousAcceptance(
     input.step_history,
     (step) => MUTATION_TOOLS.has(step_tool(step)) && is_successful_step(step),
   )
-  const delegated_mutation = timeline_has_successful_mutation(input.timeline)
-  const requires_review = direct_mutation_index >= 0 || delegated_mutation
+  const timeline_mutation_index = latest_timeline_mutation_index(input.timeline)
+  const requires_review = direct_mutation_index >= 0 || timeline_mutation_index >= 0
   let latest_review: AutonomousAcceptanceResult['latest_review'] = 'missing'
 
   if (requires_review) {
@@ -109,6 +117,11 @@ export function evaluateAutonomousAcceptance(
       input.step_history,
       (step) => step_tool(step) === REVIEW_TOOL && is_successful_step(step),
     )
+    const timeline_review_index = last_index(
+      input.timeline,
+      (event) => is_successful_timeline_tool(event, REVIEW_TOOL),
+    )
+
     if (review_index < 0) {
       blockers.push('Independent review has not run after the coding changes.')
     } else {
@@ -119,8 +132,11 @@ export function evaluateAutonomousAcceptance(
           is_successful_step(step) &&
           (MUTATION_TOOLS.has(step_tool(step)) || DELEGATION_TOOLS.has(step_tool(step))),
         )
+      const timeline_review_is_stale =
+        timeline_mutation_index >= 0 &&
+        (timeline_review_index < 0 || timeline_review_index < timeline_mutation_index)
 
-      if (later_change_or_handoff) {
+      if (later_change_or_handoff || timeline_review_is_stale) {
         blockers.push('Code or delegated work changed after the latest independent review; re-review the final state.')
       } else if (latest_review === 'changes_requested' || latest_review === 'mixed') {
         blockers.push(`The latest independent review is ${latest_review}; remediate its findings and re-review.`)
