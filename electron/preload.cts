@@ -103,6 +103,22 @@ contextBridge.exposeInMainWorld('editor_api', {
     read_attachment: (file_path: string) => ipcRenderer.invoke('file:read-attachment', file_path),
     open_external: (url: string) => ipcRenderer.send('file:open-external', url),
   },
+  git: {
+    ensure_repository: (root_path: string) => ipcRenderer.invoke('git:ensure-repository', root_path),
+    status: (root_path: string) => ipcRenderer.invoke('git:status', root_path),
+    history: (root_path: string, limit = 20) => ipcRenderer.invoke('git:history', root_path, limit),
+    diff: (root_path: string, file_path: string) => ipcRenderer.invoke('git:diff', root_path, file_path),
+    stage: (root_path: string, file_paths: string[]) => ipcRenderer.invoke('git:stage', root_path, file_paths),
+    unstage: (root_path: string, file_paths: string[]) => ipcRenderer.invoke('git:unstage', root_path, file_paths),
+    commit: (root_path: string, message: string) => ipcRenderer.invoke('git:commit', root_path, message),
+    remove_nested_repository: (root_path: string, git_path: string) =>
+      ipcRenderer.invoke('git:remove-nested-repository', root_path, git_path),
+    prepare_agent_run: (root_path: string, run_id: string) =>
+      ipcRenderer.invoke('git:prepare-agent-run', root_path, run_id),
+    commit_agent_changes: (root_path: string, run_id: string, goal: string) =>
+      ipcRenderer.invoke('git:commit-agent-changes', root_path, run_id, goal),
+    abandon_agent_run: (run_id: string) => ipcRenderer.send('git:abandon-agent-run', run_id),
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     update: (settings: unknown) => ipcRenderer.invoke('settings:update', settings),
