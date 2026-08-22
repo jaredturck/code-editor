@@ -4,6 +4,7 @@ import ExplorerContextMenu from './explorer/ExplorerContextMenu'
 import ExplorerInlineInput from './explorer/ExplorerInlineInput'
 import ExplorerTreeRow from './explorer/ExplorerTreeRow'
 import SearchPanel from './SearchPanel'
+import SourceControlPanel from './SourceControlPanel'
 import type { ActivitySection } from '../types/editor'
 
 interface ExplorerPanelProps {
@@ -374,6 +375,8 @@ function ExplorerPanel({
       </div>
 
       {activeSection === 'search' && <SearchPanel rootPath={rootPath} onOpenFile={onOpenFile} />}
+
+      {activeSection === 'source-control' && <SourceControlPanel rootPath={rootPath} onOpenFile={onOpenFile} />}
 
       {activeSection === 'explorer' && (
         <div className="flex min-h-0 flex-1 flex-col">
