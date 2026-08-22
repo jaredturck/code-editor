@@ -246,16 +246,18 @@ export async function handleAgentDelegate(
       ? (args.skills as { load?: unknown; variant?: unknown })
       : { load: [subProfile], variant: skillVariant };
 
+  const delegatedTools = {
+    ...(Array.isArray(args?.tools) ? { available: args.tools } : {}),
+    preferred: Array.isArray(args?.preferredTools) ? args.preferredTools : [],
+    forbidden: Array.isArray(args?.forbiddenTools) ? args.forbiddenTools : [],
+  };
+
   const stp = buildSTP({
     type,
     goal: instructions,
     scope: String(args?.scope || '').trim(),
     constraints: Array.isArray(args?.constraints) ? args.constraints : [],
-    tools: {
-      available: Array.isArray(args?.tools) ? args.tools : [],
-      preferred: Array.isArray(args?.preferredTools) ? args.preferredTools : [],
-      forbidden: Array.isArray(args?.forbiddenTools) ? args.forbiddenTools : [],
-    },
+    tools: delegatedTools,
     outputSchema:
       args?.outputSchema && typeof args.outputSchema === 'object' ? args.outputSchema : {},
     context: args?.context && typeof args.context === 'object' ? args.context : {},
