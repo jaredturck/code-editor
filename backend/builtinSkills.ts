@@ -173,14 +173,14 @@ WHEN NOT TO ASK: routine confirmations, or anything you can settle with a sensib
       'full',
     ],
     summary:
-      'When to deliver output as a FILE (artifact.create) instead of a long chat message. Applies whenever your answer would be a substantial document, script, dataset, or anything the user will keep or reuse (e.g. "write a guide/report/README", "generate a script"). Covers calling artifact.create for the full content + a short nuanced summary in chat, replying inline for short answers, and using files.write (not artifacts) for editing code already in the repo.',
+      'When to deliver output as a FILE (artifact.create) instead of a long chat message. Applies whenever your answer would be a substantial document, script, dataset, or anything the user will keep or reuse (e.g. "write a guide/report/README", "generate a script"). Covers calling artifact.create for the full content + a short nuanced summary in chat, replying inline for short answers, and using editor-aware file tools (not artifacts) for code already in the repo.',
     instructions: `FILE OUTPUT — when your answer would be a SUBSTANTIAL, self-contained deliverable the user will keep or reuse — a document/report/guide (.md), a script (.py/.sh), config or data (.json/.csv) — don't dump it into the chat. Call artifact.create with the full content: it saves the file (under the working dir) and shows it as a file card the user can open in a side panel and download. Your final answer then becomes a SHORT, nuanced summary — what you produced, the key decisions, and how to use it — NOT the content itself.
 
 USE artifact.create WHEN: the content is long (more than a few short paragraphs), structured, or meant to live as a file. One artifact per deliverable; give it a clear filename and a one-line summary.
 
 VERY LARGE DELIVERABLES — a single tool call can only carry what fits in one model response (~hundreds of KB). If the file is bigger than that, don't try to emit it all at once (the call gets truncated and lands empty). Instead build it incrementally: call artifact.create with mode:"create" for the first chunk, then mode:"append" with the SAME filename for each following chunk. Each append extends the same file in the store; the card and download reflect the whole assembled document.
 
-DON'T WHEN: the answer is short and conversational — just reply. Or you're changing code that already lives in the repo — use files.write to edit it in place; artifacts are NEW standalone deliverables, not edits. Never write a file AND repeat its whole content in the chat: the summary is the point.`,
+DON'T WHEN: the answer is short and conversational — just reply. Or you're changing code that already lives in the repo — use files.edit for a localized change, files.patch for a unified multi-hunk change, or files.write for a new/wholesale file; artifacts are NEW standalone deliverables, not repo edits. Never write a file AND repeat its whole content in the chat: the summary is the point.`,
     examples: [
       '"Write me a study guide for X" → artifact.create study-guide.md with the full guide; chat = a 2-line summary + how to use it.',
       '"What does this function do?" → answer inline; no artifact.',
@@ -189,7 +189,7 @@ DON'T WHEN: the answer is short and conversational — just reply. Or you're cha
       simple: `LONG / FILE-WORTHY OUTPUT?
 1. Call artifact.create { filename, content, summary } with the FULL content (a doc, script, or data file). It saves the file + shows a card.
 2. Your final answer = a short summary (what it is, key points, how to use it) — NOT the whole content.
-3. Short conversational answer? Just reply. Editing existing repo code? Use files.write, not artifacts.`,
+3. Short conversational answer? Just reply. Editing existing repo code? Use files.edit/files.patch; use files.write only for a new or wholesale file.`,
     },
     dependencies: [],
   },
@@ -211,7 +211,7 @@ DON'T WHEN: the answer is short and conversational — just reply. Or you're cha
     instructions: `OPERATING MODE — your method should match your own capability. The same task is handled differently by a frontier model and a small local one; pretending otherwise either wastes the strong model's judgment or overwhelms the weak model's reliability. Work to your strength.
 
 IF YOU ARE A CAPABLE MODEL (you reason fluently and call tools accurately):
-- You're on the lean, terminal-first toolset. terminal.exec is your primary instrument — lean on your own knowledge of bash, git, and the toolchain instead of waiting for a recipe.
+- You're on the lean, terminal-first toolset. terminal.exec is your primary instrument for discovery, system commands, builds/tests, git, and genuine bulk transforms. For ordinary source edits, keep the editor authority in the path with files.edit/files.patch.
 - Skills are application knowledge, not a crutch. You start with only the guard rails plus a list of skill cards. Pull a body with skills.load ONLY when the task touches IRIS-specific mechanics you don't already know — how a tool behaves here, the orchestration protocol, host control. Never load a skill to do something you already do well.
 - Trust yourself: plan briefly, act, verify. Over-scaffolding a task you understand is its own failure mode.
 
@@ -223,7 +223,7 @@ IF YOU ARE A SMALLER / LOCAL MODEL (structured toolset, recipes pre-injected):
 EITHER WAY: the guard skills bind you, you verify before claiming done, and you never loop on a failing call.`,
     examples: [
       'Capable model asked to grep a repo → just run `rg -n PATTERN` via terminal.exec; no skill load needed.',
-      'Small model asked to edit a file → follow the file-tools recipe: read, then files.patch, then verify.',
+      'Small model asked to edit a file → follow the file-tools recipe: read the target region, then files.edit the exact unique block, then verify.',
     ],
     modelVariants: {
       simple: `WORK TO YOUR STRENGTH:
@@ -267,9 +267,9 @@ EITHER WAY: the guard skills bind you, you verify before claiming done, and you 
 
 1. RESTATE THE GOAL. In one line, what does "done" look like — the concrete outcome and how you'll know it's reached? If the request is ambiguous on something that changes the steps, resolve it (a sensible default, or user.ask) before planning.
 
-2. DECOMPOSE INTO REAL STEPS. Break the goal into the smallest ordered sequence of concrete actions that actually achieve it — "read auth.js to find the token check", "patch the expiry logic", "run the auth tests" — not "understand the problem" / "do the work". Each step is something you can DO and then VERIFY. If you can't name the step, you don't yet understand it: make investigating it the first step.
+2. DECOMPOSE INTO REAL STEPS. Break the goal into the smallest ordered sequence of concrete actions that actually achieve it — "read auth.js to find the token check", "edit the expiry logic", "run the auth tests" — not "understand the problem" / "do the work". Each step is something you can DO and then VERIFY. If you can't name the step, you don't yet understand it: make investigating it the first step.
 
-3. MAP EACH STEP TO A TOOL. For every step, know which tool performs it (terminal.exec, files.read/patch/write, search.web, launch.run…). A step you can't map to an action is still a question, not a task — split it until each piece is actionable.
+3. MAP EACH STEP TO A TOOL. For every step, know which tool performs it (terminal.exec, files.read/edit/patch/write, search.web, launch.run…). A step you can't map to an action is still a question, not a task — split it until each piece is actionable.
 
 4. TRACK IT HONESTLY. Put the steps in your todo list up front, exactly one in_progress at a time. As reality teaches you more, revise the list — add steps you discover, drop ones that don't apply, mark blockers blocked. The list should always reflect the true remaining work, never a fiction.
 
@@ -277,7 +277,7 @@ EITHER WAY: the guard skills bind you, you verify before claiming done, and you 
 
 6. VERIFY BEFORE DONE. Re-check the outcome against the goal from step 1 (run the test, re-read the file, stat the result). Only then report — what you did, what you verified, and anything still open.`,
     examples: [
-      '"Add rate limiting to the API" → restate (requests capped per IP, 429 when exceeded); steps: read the router, find the middleware seam, write the limiter, wire it in, add a test, run it; map each to files.read/files.write/terminal.exec; track as todos; verify the test passes.',
+      '"Add rate limiting to the API" → restate (requests capped per IP, 429 when exceeded); steps: read the router, find the middleware seam, write the limiter, wire it in, add a test, run it; map each to files.read/files.edit/files.write/terminal.exec; track as todos; verify the test passes.',
       '"Why is the build failing?" → the first step is investigation: run the build, READ the error, THEN plan the fix from what it actually says — don\'t guess a fix before reading the failure.',
     ],
     modelVariants: {
@@ -323,36 +323,38 @@ EITHER WAY: the guard skills bind you, you verify before claiming done, and you 
     ],
     summary:
       'Run shell commands well with terminal.exec. Use when the task needs to search, inspect, build, test, run git, or script (e.g. "find where X is defined", "run the build", "git status", chaining steps with &&). Covers advanced bash, cwd and quoting, and WHEN to switch to the files.* tools instead (editing file content).',
-    instructions: `TERMINAL MASTERY — terminal.exec is your primary instrument. A fluent agent does most of its discovery, inspection, and execution in the shell, because one good command answers what would otherwise take many tool calls. The skill is knowing what the shell does best — and where it stops being the right tool.
+    instructions: `TERMINAL MASTERY — terminal.exec is your primary instrument for discovery and execution. A fluent agent gets a lot done with one good command, but ordinary source editing should stay inside the editor-aware file authority so unsaved buffers and revision checks remain authoritative.
 
-WHEN TO REACH FOR THE TERMINAL (the default for system work):
+WHEN TO REACH FOR THE TERMINAL:
 - DISCOVERY: \`ls -1\`, \`rg -n "PATTERN" path\` (ripgrep — fast and gitignore-aware), \`find . -name '*.js'\`, \`fd PATTERN\`. One ripgrep across the tree beats reading a dozen files to locate a symbol.
 - INSPECTION: \`stat\`, \`wc -l\`, \`head\`/\`tail\`, \`file\`, \`which\`, \`ps\`, \`du -sh\`, \`git status\`, \`git diff\`, \`git log --oneline -n 20\`.
-- EXECUTION: builds, tests, linters, package managers, git, one-off scripts.
+- EXECUTION: builds, tests, linters, package managers, git, one-off scripts, and genuine bulk/codemod transformations where a structured edit would be the wrong abstraction.
 
 ADVANCED BASH — compose, don't repeat:
 - CHAIN dependent steps with && so the run stops at the first failure: \`npm run lint && npm test\`. Use ; for genuinely independent steps, || for a fallback.
-- PIPE to narrow output before it costs you context: \`rg -l TODO | head\`, \`git diff --name-only | wc -l\`. Use jq for JSON and awk/sed for column transforms (read-only).
+- PIPE to narrow output before it costs you context: \`rg -l TODO | head\`, \`git diff --name-only | wc -l\`. Use jq for JSON and awk/sed for read-only transforms.
 - SET the working directory via the tool's cwd arg, not \`cd …\` — a cd inside a compound command can trip a permission prompt.
 - QUOTE deliberately: single-quote literals, double-quote when you need expansion. Keep large or multi-line content OUT of the command string.
 
-WHEN NOT TO USE THE TERMINAL — switch to the file tools:
-- WRITING OR EDITING FILE CONTENT: never \`echo "…" > file\` or a heredoc for anything non-trivial — quoting and escaping silently corrupt content. Use files.write (full content) or files.patch (targeted edit).
-- READING A FILE TO REASON OVER IT: use files.read — it paginates (hasMore/nextStartLine) and is token-accounted, unlike \`cat\` dumping a whole large file into context.
+WHEN NOT TO USE THE TERMINAL — switch to the editor-aware file tools:
+- LOCALIZED EXISTING-CODE EDIT: files.read the relevant region, then files.edit with an exact unique oldText/newText block.
+- MULTI-HUNK UNIFIED CHANGE: files.patch.
+- NEW FILE OR GENUINE WHOLESALE REWRITE: files.write.
+- READING A FILE TO REASON OVER IT: use files.read — it paginates and can search a pattern with context without dumping the whole file.
 - A BLOCKED TIER: if a tool is denied at your tier, its shell equivalent is denied too. Never route around it.
 
 SAFETY: destructive commands (rm -rf, force flags, sudo) require approval.request first — see the safety guard.`,
     examples: [
       'Locate a symbol repo-wide → `rg -n "buildControllerPayload" src` in one terminal.exec.',
       'Run the full check → `npm run lint && npm run typecheck && npm run build` in one chained command.',
-      'Need to rewrite a config file → use files.write, NOT `echo > file`.',
+      'Change one function in a large source file → files.read the region, then files.edit the exact block.',
     ],
     modelVariants: {
-      simple: `TERMINAL = your main tool:
+      simple: `TERMINAL = discovery/execution:
 1. Search/inspect/build/git with bash: ls, rg -n, find, stat, git status, npm test.
 2. Chain dependent steps with &&. Set the cwd arg, don't cd.
-3. To EDIT or WRITE file content → use files.write / files.patch, NOT echo/heredoc.
-4. To READ a file → use files.read, not cat.
+3. Localized code edit → files.edit after reading the region. Multi-hunk diff → files.patch. New/full rewrite → files.write.
+4. Read code with files.read, not a giant cat dump.
 5. Destructive command (rm -rf, force, sudo)? Ask approval first.`,
     },
     dependencies: ['orbit-safety-rails'],
@@ -417,10 +419,10 @@ AFTER INSTALLING — verify it actually landed before relying on it: import it (
     dependencies: ['orbit-safety-rails', 'orbit-terminal-mastery'],
   },
 
-  // ── File tools (read / write / patch / stat / diff) ───────────────────────
+  // ── File tools (read / edit / patch / write / stat / diff) ────────────────
   {
     id: 'orbit-file-tools',
-    title: 'File Tools — Read, Write, Patch',
+    title: 'File Tools — Read, Edit, Patch & Write',
     type: 'procedure',
     agentTarget: '',
     guard: false,
@@ -439,38 +441,39 @@ AFTER INSTALLING — verify it actually landed before relying on it: import it (
       'open',
     ],
     summary:
-      'Read, edit, or create file contents. Use when the task needs to inspect a specific file, make a surgical edit, or write a whole file (e.g. "fix the bug in X.js", "add a function to config.py", "what is in package.json"). Covers files.read pagination, patch vs write, read-before-overwrite, and verify-after.',
-    instructions: `FILE TOOLS — work with file content through structured tools, not shell redirection. Echoing or heredoc'ing into a file corrupts content the moment quoting, newlines, or special characters are involved; these tools exist so a change lands exactly as intended and can be verified.
+      'Read, edit, or create file contents. Use when the task needs to inspect a specific file, make a surgical edit, apply a multi-hunk diff, or write a whole file. Covers targeted reads, files.edit vs files.patch vs files.write, read-before-edit, and verify-after.',
+    instructions: `FILE TOOLS — work with file content through editor-aware structured tools so the live editor buffer, revision checks, and collision protection remain authoritative. A file edit is a surgical act: read enough to understand the target, change the smallest thing that satisfies the task, and prove the change landed.
 
-THE MINDSET: a file edit is a surgical act, not a blunt one. Read enough to understand what you're changing, change the smallest thing that satisfies the task, and prove the change landed. Never modify a file you haven't read.
+files.read — load only the content needed to reason.
+- Use startLine/lineCount for a known region, or pattern + patternContext to find matching lines with nearby context. When hasMore=true, continue from nextStartLine rather than re-reading from the top.
+- Survey/search first when you do not know the location. Do not read a 5,000-line file from top to bottom just to find one function.
 
-files.read — load content to reason over it.
-- Paginates: when the result has hasMore=true, continue from startLine=nextStartLine rather than re-reading from the top. Read enough to act, not the whole file by reflex.
-- Survey before reading: files.stat or files.list to find the right file, then read only that one. Reading a directory of files blindly burns context and rarely helps.
+files.edit — the DEFAULT for a localized change to existing code.
+- Supply oldText copied verbatim from the live files.read result (including indentation) and newText. The old block must match exactly once unless replaceAll is intentionally set.
+- Include enough surrounding context to make the match unique, but do not resend unrelated sections of the file. The host applies the replacement to the current full buffer and returns a diff.
 
-files.write — create a new file, or fully replace one.
-- Pass the COMPLETE new content; it overwrites, it does not append. Reach for it when the file is new or most of it changes.
-- Overwriting a file you haven't read is how you silently destroy someone's work. Read it first (the safety guard requires it), and if what you find contradicts how the task described it, stop and surface that.
+files.patch — use a real unified diff when several related hunks or a diff-shaped change is clearer than one exact replacement.
+- Patch context/removal lines must still match the current editor buffer. Prefer files.edit for a single localized change because exact replacement is simpler and more reliable.
 
-files.patch — surgically replace a specific region inside an existing file.
-- The right tool for a small change in a large file: it swaps an exact old-string for a new one instead of rewriting everything — cheaper, safer, and the rest of the file stays verbatim.
-- The match must be exact, including indentation and enough surrounding lines to be unique. Read the region immediately before patching so your match is precise; a loose match either fails or edits the wrong place.
+files.write — create a new file or genuinely replace most/all of one.
+- For an existing file it represents the complete resulting content, so do not use it for a small change in a large file.
 
-files.diff — preview proposed-vs-current before a risky change, so you see exactly what will move.
-files.stat — confirm a file exists, its size, or that a write actually landed.
+files.diff — preview proposed-vs-current before a risky whole-file change.
+files.stat — confirm a file exists or inspect basic metadata.
 
-THE LOOP: survey → read the target region → choose patch (small, localized change) or write (new or mostly-new file) → apply → VERIFY by re-reading the region or files.stat. Match the file's existing style, indentation, and conventions so your edit reads like it belongs. Change only what the task asks — resist refactoring code you were not asked to touch.`,
+THE LOOP: locate → files.read the target region → choose files.edit (localized), files.patch (multi-hunk unified diff), or files.write (new/wholesale) → apply → VERIFY by re-reading the changed region and, for code, run the appropriate build/test/lint. Match existing style and change only what the task requires.`,
     examples: [
-      'Change one function in a 2000-line file → files.read the region, then files.patch that exact block.',
-      'Generate a brand-new config → files.write with the full content, then files.stat to confirm.',
+      'Change one function in a 5000-line file → locate it, files.read only that region, then files.edit the exact unique block and re-read it.',
+      'Change three related hunks in one file → files.read the relevant regions, then files.patch with a unified diff.',
+      'Generate a brand-new config → files.write with the full content, then files.stat/read to confirm.',
     ],
     modelVariants: {
       simple: `FILE TOOLS:
-1. files.read to view (continue from nextStartLine if hasMore).
-2. Small edit in a big file → files.patch (match text exactly; read it first).
-3. New file or full rewrite → files.write (complete content).
-4. Always read before you overwrite. Keep the existing style.
-5. After writing, verify with files.read or files.stat.`,
+1. Locate the code, then files.read only the relevant region (pattern + context is useful).
+2. Small/localized existing-code edit → files.edit with exact unique oldText/newText.
+3. Several related diff hunks → files.patch (unified diff).
+4. New file or genuine full rewrite → files.write (complete content).
+5. Verify by re-reading the changed region; run the relevant build/test for code.`,
     },
     dependencies: ['orbit-safety-rails'],
   },
@@ -964,23 +967,23 @@ CLOSING REVIEW (complex code): after writing non-trivial code, agent.review({ di
     guard: true,
     priority: 9,
     enabled: true,
-    triggers: ['write', 'patch', 'edit', 'modify', 'update file', 'files.write', 'files.patch'],
+    triggers: ['write', 'patch', 'edit', 'modify', 'update file', 'files.write', 'files.patch', 'files.edit'],
     summary:
-      'Prevents two sub-agents writing the same file at once. Applies when delegating file-write or patch tasks in parallel (e.g. splitting edits across executor and scout). Covers checking the delegation-log for the same path, serializing on conflict risk, and verifying integrity with files.stat after parallel writes.',
-    instructions: `COLLISION GUARD — two agents writing the same file at once corrupt it, and the corruption is silent until something downstream breaks. This guard is active whenever you delegate file-write work in parallel; its whole job is to ensure no two writers ever touch the same target.
+      'Prevents two sub-agents writing the same file at once. Applies when delegating file-mutation tasks in parallel. Covers checking the delegation-log for the same path, serializing on conflict risk, and verifying integrity after parallel writes.',
+    instructions: `COLLISION GUARD — two agents mutating the same file at once can corrupt or invalidate each other's work. This guard is active whenever you delegate file-write work in parallel; its whole job is to ensure no two writers ever touch the same target.
 
-- Before delegating any files.write / files.patch task, check the delegation-log notes for an active task already targeting that path.
+- Before delegating any files.write / files.edit / files.patch task, check the delegation-log notes for an active task already targeting that path.
 - Never assign two agents to modify the same file or directory simultaneously.
 - If there's any collision risk, serialize: post the second task only after the first completes.
-- After any parallel file-write delegation, verify integrity with files.stat.
-- When in doubt, serialize. Sequential correctness beats parallel corruption every time — the parallelism you'd save is never worth a mangled file.`,
+- After any parallel file-write delegation, verify integrity with files.stat and/or re-read the touched region.
+- When in doubt, serialize. Sequential correctness beats parallel corruption every time.`,
     examples: [],
     modelVariants: {
       simple: `COLLISION GUARD:
-1. Check delegation-log for same path before delegating a write.
+1. Check delegation-log for same path before delegating a write/edit/patch.
 2. Never two agents writing the same file at once.
 3. Collision risk → serialize, not parallel.
-4. After parallel writes → verify with files.stat.`,
+4. After parallel writes → verify with files.stat/read.`,
     },
     dependencies: [],
   },
@@ -1156,7 +1159,7 @@ UNIVERSAL: always pass toAgent ("executor" | "scout"), concrete numbered instruc
 2. LOCATE, DON'T READ: use search.ripgrep / files.find to find a symbol or file, rather than reading whole files hoping to spot it.
 3. SURVEY BEFORE READING: files.stat / files.list to pick the right files, then read only those — never read a directory of files blindly.
 4. BATCH dependent steps: chain them with && in one terminal.exec rather than a call per step.
-5. READ IN CHUNKS: when files.read returns hasMore, continue from startLine=nextStartLine instead of starting over.
+5. READ IN CHUNKS: when files.read returns hasMore, continue from startLine=nextStartLine instead of starting over. Use pattern + context when you only need matching regions.
 6. DON'T RE-FETCH: reuse results already in your step history; never re-run the same search.web query.
 
 SAFETY: efficiency never justifies a tier bypass — if a tool is blocked at your tier, the equivalent shell command is blocked too.`,
@@ -1167,7 +1170,7 @@ SAFETY: efficiency never justifies a tier bypass — if a tool is blocked at you
     modelVariants: {
       simple: `BE TOKEN-EFFICIENT:
 1. One shell command beats many tool calls (if terminal is allowed).
-2. Use ripgrep/find to locate, don't read whole files.
+2. Use ripgrep/find to locate; use files.read pattern/context or line ranges instead of whole-file reads.
 3. stat/list first, then read only what matters.
 4. Chain steps with && in one command.
 5. Reuse prior results; don't re-fetch.`,
@@ -1248,9 +1251,9 @@ EVALUATE every delegation against its criteria with agent.verify before you buil
       'What the executor sub-agent can and cannot do — use to scope delegations to it. Use when deciding whether a task fits the executor (e.g. file ops, search, structured edits with a clear spec). Covers its strengths (accurate multi-tool chains), weaknesses (long-horizon reasoning, ambiguity), and how to spec a task for it.',
     instructions: `EXECUTOR SUB-AGENT — the tool-heavy worker. Read this to scope what you hand it: the executor is reliable exactly where the work is concrete and well-specified, and unreliable exactly where it has to infer the goal. Play to that shape.
 
-STRENGTHS: schema compliance, accurate tool calls, multi-file read/write/patch chains, and following numbered step-by-step instructions faithfully.
+STRENGTHS: schema compliance, accurate tool calls, multi-file read/write/edit/patch chains, and following numbered step-by-step instructions faithfully.
 WEAKNESSES: long-horizon reasoning (smaller executors lose the goal after ~6-8 steps); ambiguity (it will proceed confidently on a wrong assumption); creative or open-ended writing.
-DELEGATE TO IT: file read/write/patch, content search (rg/find/fd), terminal commands, structured extraction, and code changes that come with a clear spec.
+DELEGATE TO IT: file read/write/edit/patch, content search (rg/find/fd), terminal commands, structured extraction, and code changes that come with a clear spec.
 DO NOT DELEGATE: judgment about user intent, tasks with no clear success criteria, or cross-session memory work — those are yours.
 WHEN YOU DELEGATE: give concrete numbered instructions + an explicit outputSchema, and size maxSteps to the job (8-12 typical). Reach for it also when a scout is unavailable but the task needs real tool work.`,
     examples: [],
@@ -1301,20 +1304,20 @@ Keep context tiny; maxSteps 3-6.`,
     instructions: `PRECISION EXECUTION (executor) — you are the hands, not the head: you were handed a spec because someone is counting on it being carried out exactly. Precision and honesty are your whole value. Follow the spec, change the minimum, prove it, report the truth.
 
 1. READ BEFORE WRITE: never modify a file you haven't read; preserve the surrounding style and indentation so your edit belongs.
-2. SMALLEST CHANGE: make the minimal edit that satisfies the spec — don't refactor code you weren't asked to touch.
-3. VERIFY AFTER WRITE: re-read or files.stat the target to confirm the change actually landed.
-4. HANDLE TRUNCATION: when a read is truncated, continue from nextStartLine until you have enough context to act correctly.
-5. ONE COMMAND OVER MANY: when terminal is permitted and it's cheaper, prefer a single shell command (ls / rg / &&) to a string of tool calls.
+2. SMALLEST CHANGE: make the minimal edit that satisfies the spec — use files.edit for a localized existing-code change instead of regenerating an entire large file.
+3. VERIFY AFTER WRITE: re-read the changed region or files.stat the target to confirm the change actually landed.
+4. HANDLE TRUNCATION: when a read is truncated, continue from nextStartLine until you have enough context to act correctly; use pattern/context when you know what you are locating.
+5. ONE COMMAND OVER MANY: when terminal is permitted and it's cheaper, prefer a single shell command for discovery/build/test work, not for bypassing editor-aware source edits.
 6. FAIL LOUD: when a step errors, report the exact error in your output — never guess past it or fabricate success.
 7. RETURN EXACTLY the requested output schema: concrete values, paths, and a short summary of what changed.`,
     examples: [],
     modelVariants: {
       simple: `EXECUTE PRECISELY:
 1. Read before you write; keep style.
-2. Smallest change only.
-3. Verify the change landed.
-4. Continue truncated reads.
-5. One command > many calls (if allowed).
+2. Localized existing-code change → files.edit; don't rewrite a huge file.
+3. Verify by re-reading the changed region.
+4. Continue truncated reads / use pattern context.
+5. Use terminal for discovery/build/test when useful.
 6. Report real errors; return the exact schema.`,
     },
     dependencies: [],
