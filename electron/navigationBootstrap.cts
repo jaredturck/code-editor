@@ -2,7 +2,6 @@ import { app, shell, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
-  is_privileged_editor_preload,
   is_trusted_renderer_navigation,
 } from './navigationSecurity.cjs'
 
@@ -38,7 +37,17 @@ export function secure_privileged_renderer_navigation(window: BrowserWindow) {
 }
 
 app.on('browser-window-created', (_event, window) => {
-  const preload = window.webContents.getLastWebPreferences().preload
-  if (!is_privileged_editor_preload(preload)) return
-  secure_privileged_renderer_navigation(window)
+  const trusted_url = trusted_renderer_url()
+  const arm_guard = (...args: any[]) => {
+    const detail = args[1]
+    const url = typeof detail === 'string'
+      ? detail
+      : detail && typeof detail === 'object'
+        ? String(detail.url || '')
+        : ''
+    if (!is_trusted_renderer_navigation(url, trusted_url)) return
+    window.webContents.removeListener('did-start-navigation', arm_guard)
+    secure_privileged_renderer_navigation(window)
+  }
+  window.webContents.on('did-start-navigation', arm_guard)
 })

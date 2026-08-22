@@ -50,12 +50,14 @@ function configure_browser_inspection_session() {
         callback({})
         return
       }
-      const state = browser_inspection_network.get(details.webContentsId)
+      const web_contents_id = details.webContentsId
+      const state = typeof web_contents_id === 'number' ? browser_inspection_network.get(web_contents_id) : null
       if (state) bounded_push(state.blocked_requests, details.url, 40)
       callback({ cancel: true })
     })
     inspection_session.webRequest.onErrorOccurred({ urls: ['<all_urls>'] }, (details) => {
-      const state = browser_inspection_network.get(details.webContentsId)
+      const web_contents_id = details.webContentsId
+      const state = typeof web_contents_id === 'number' ? browser_inspection_network.get(web_contents_id) : null
       if (!state || state.blocked_requests.includes(details.url)) return
       bounded_push(state.failed_requests, { url: details.url, error: details.error }, 40)
     })
@@ -128,12 +130,13 @@ export async function inspect_local_browser_runtime(raw_url: string, options: Br
   }
   web_contents.on('will-navigate', guard_navigation)
   web_contents.on('will-redirect', guard_navigation)
-  web_contents.on('console-message', (_event, details) => {
+  web_contents.on('console-message', (_event, level, message, line, source_id) => {
+    const level_name = ['verbose', 'info', 'warning', 'error'][Number(level)] || 'info'
     bounded_push(console_messages, {
-      level: String(details.level || 'info'),
-      message: String(details.message || '').slice(0, 2000),
-      line: Number(details.lineNumber || 0),
-      source: String(details.sourceId || '').slice(0, 1000),
+      level: level_name,
+      message: String(message || '').slice(0, 2000),
+      line: Number(line || 0),
+      source: String(source_id || '').slice(0, 1000),
     })
   })
   web_contents.on(
