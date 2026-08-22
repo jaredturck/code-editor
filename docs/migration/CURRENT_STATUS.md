@@ -25,6 +25,8 @@ Completed integration milestones:
 - Multi-agent coding coordination
 - Review and autonomous quality control
 - Audio and voice
+- Vision and screen capabilities
+- Permissioned desktop automation
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -52,12 +54,18 @@ Agent Chat voice input now uses the migrated IRIS audio controller instead of th
 
 Focused audio configuration/integration regression coverage is present. A targeted Vitest run for the new audio tests plus the existing Chat panel test exceeded the execution window before returning a result; implementation work was not blocked on a full-suite run and no explicit test failure was returned before that timeout.
 
+Vision and screen understanding are now connected to autonomous Agent Chat without reviving the old IRIS Vision panel. Screen capture is owned by Electron, bounded before it crosses the authenticated per-launch bridge, checked against the separate fail-closed screen-capture permission at the privileged route, and validated again by the renderer client. Every `screen.capabilities` call captures a fresh frame and sends it only to the existing local-only IRIS Vision runtime; raw screenshot bytes are not returned to the main agent transcript, and screen text is explicitly treated as untrusted evidence.
+
+The migrated desktop Automation path is now connected through the same existing Code Editor capability controls rather than a parallel implementation. Visual actions require both the `Capture screen` and `Desktop automation` GUI permissions. When a local Vision pass returns a bounded action plan, IRIS's existing automation client obtains a short-lived approval token bound to that exact action list and workspace-resolved working directory; the trusted bridge consumes it once, applies its automation rate limit, and hands the plan to the existing bounded executor. Disabling screen capture revokes observation immediately, while disabling desktop automation prevents action execution. Scheduled/background project execution remains a future extension rather than being implied by this desktop-control milestone.
+
+Focused Vision and Automation regressions cover capture authorization, local-only Vision, fresh-screen Agent Chat exposure, GUI permission gating, exact-plan approval binding and single-use consumption. The supplied source snapshot does not include `node_modules`, so the focused Vitest command could not be executed in this continuation; no test failure was observed.
+
 ## Next milestone
 
-**Vision and Screen Capabilities**
+**System Monitoring and Runtime Visibility**
 
-- screen capture and the migrated vision runtime
-- permissioned visual verification/actions inside autonomous Agent Chat
-- preserve the Code Editor shell rather than reviving the old IRIS Vision panel
+- surface the migrated CPU/RAM/GPU/process monitoring in the Code Editor
+- expose model, agent, token and cost visibility for long autonomous runs
+- preserve the existing editor shell and reuse IRIS monitor/controller services
 
-Automation, system/runtime visibility, launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
+Launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
