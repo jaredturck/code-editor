@@ -7,16 +7,22 @@
 import {
   contentToText,
   normalizeUsage,
+  parseToolArguments,
   safeNumber,
   toMetaResponse,
 } from '@/platform/providers/providerUtils';
+import {
+  normalizeOpenAIMessages,
+  parseOpenAIChatResponse,
+} from '@/platform/providers/openaiProvider';
+import { decodeToolName, encodeToolName, toOpenAITools } from '@/platform/agent/toolSchema';
 import type {
   AIMessage,
   ProviderCallOptions,
   ProviderFetch,
   ProviderStreamFn,
 } from '@/platform/providers/types';
-import type { ProviderGenerationTimings } from '@/platform/agent/types';
+import type { ProviderGenerationTimings, ToolCall } from '@/platform/agent/types';
 
 /**
  * Sends a provider-neutral request to the configured local model server and normalizes its
@@ -105,6 +111,26 @@ function buildOllamaTimings(data: Record<string, unknown>): ProviderGenerationTi
     promptEvalMs: nanosecondsToMilliseconds(data.prompt_eval_duration),
     generationMs: nanosecondsToMilliseconds(data.eval_duration),
   };
+}
+
+function normalizeOllamaToolCalls(value: unknown): ToolCall[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((toolCall) => Boolean(toolCall?.function?.name))
+    .map((toolCall, index) => {
+      const rawArguments = toolCall?.function?.arguments;
+      const parsed =
+        rawArguments && typeof rawArguments === 'object' && !Array.isArray(rawArguments)
+          ? { args: rawArguments as Record<string, unknown>, argsError: false }
+          : parseToolArguments(rawArguments);
+      return {
+        id: String(toolCall?.id || `ollama-tool-${index + 1}`),
+        name: decodeToolName(toolCall?.function?.name),
+        args: parsed.args,
+        argsError: parsed.argsError,
+        rawArgs: parsed.rawArgs,
+      };
+    });
 }
 
 async function streamOllamaCompletion(
@@ -300,8 +326,6 @@ export async function callLocalLLM(
   options: ProviderCallOptions = {},
 ) {
   if (!baseUrl) throw new Error('Local server URL not configured.');
-  // `localhost` can resolve to IPv6 ::1 while Ollama/LM Studio listen only on IPv4 127.0.0.1 →
-  // connection refused. Pin to 127.0.0.1 so a working server isn't missed on the first attempt.
   const _url = baseUrl
     .replace(/\/$/, '')
     .replace(/(^https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1');
@@ -316,45 +340,57 @@ export async function callLocalLLM(
     return '';
   };
 
-  const toOllamaMessage = (message: AIMessage) => {
-    if (!Array.isArray(message.content)) {
-      return { role: message.role, content: String(message.content || '') };
+  const toOllamaMessages = (message: AIMessage): Array<Record<string, unknown>> => {
+    if (message.role === 'tool' && Array.isArray(message.toolResults)) {
+      return message.toolResults.map((result) => ({
+        role: 'tool',
+        content: String(result.content ?? ''),
+        tool_name: encodeToolName(result.name),
+        ...(result.id ? { tool_call_id: result.id } : {}),
+      }));
     }
-    const text = contentToText(message.content);
-    const images = message.content
-      .map((part: any) => toDataUrl(part))
-      .filter((url: string) => /^data:image\/[^;]+;base64,/i.test(url))
-      .map((url: string) => url.replace(/^data:image\/[^;]+;base64,/i, ''));
-    return {
+
+    const content = Array.isArray(message.content)
+      ? contentToText(message.content)
+      : String(message.content || '');
+    const images = Array.isArray(message.content)
+      ? message.content
+          .map((part: any) => toDataUrl(part))
+          .filter((url: string) => /^data:image\/[^;]+;base64,/i.test(url))
+          .map((url: string) => url.replace(/^data:image\/[^;]+;base64,/i, ''))
+      : [];
+
+    if (message.role === 'assistant' && Array.isArray(message.toolCalls) && message.toolCalls.length) {
+      return [{
+        role: 'assistant',
+        content,
+        tool_calls: message.toolCalls.map((toolCall) => ({
+          ...(toolCall.id ? { id: toolCall.id } : {}),
+          function: {
+            name: encodeToolName(toolCall.name),
+            arguments: toolCall.args || {},
+          },
+        })),
+      }];
+    }
+
+    return [{
       role: message.role,
-      content: text,
+      content,
       ...(images.length ? { images } : {}),
-    };
+    }];
   };
 
-  const ollamaMessages = messages.map(toOllamaMessage);
-  const openAiMessages = messages.map((message) => ({
-    role: message.role,
-    content: Array.isArray(message.content)
-      ? message.content
-          .map((part: any) => {
-            if (part?.type === 'image_url' || part?.image_url) {
-              const url = toDataUrl(part);
-              return url ? { type: 'image_url', image_url: { url } } : null;
-            }
-            if (part?.inline_data?.data) {
-              const url = toDataUrl(part);
-              return { type: 'image_url', image_url: { url } };
-            }
-            return { type: 'text', text: String(part?.text || '') };
-          })
-          .filter(Boolean)
-      : String(message.content || ''),
-  }));
+  const ollamaMessages = messages.flatMap(toOllamaMessages);
+  const openAiMessages = normalizeOpenAIMessages(messages);
+  const nativeTools = Array.isArray(options.tools) && options.tools.length
+    ? toOpenAITools(options.tools)
+    : [];
 
-  // Stream local completions when the caller wants live answer tokens. The same ordinary HTTP
-  // connection remains open for the complete response; no polling or WebSocket is required.
-  if ((options.onToken || options.onThinkingToken) && options.streamFn) {
+  // Ollama tool calling is most reliable as a complete /api/chat turn. Keep ordinary
+  // tool-free local chat streaming exactly as before, but do not split tool calls across
+  // streaming chunks: the stateful agent loop needs one canonical tool-call object.
+  if (!nativeTools.length && (options.onToken || options.onThinkingToken) && options.streamFn) {
     let ollamaError = '';
     try {
       const streamed = await streamOllamaCompletion(
@@ -408,13 +444,20 @@ export async function callLocalLLM(
     }
   }
 
-  // ── Try Ollama /api/chat first ────────────────────────────────────────────
   let _ollamaNote = '';
   try {
+    const ollamaBody: Record<string, unknown> = {
+      model,
+      messages: ollamaMessages,
+      stream: false,
+    };
+    if (nativeTools.length) ollamaBody.tools = nativeTools;
+
     const _res = await fetchFn(`${_url}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: ollamaMessages, stream: false }),
+      body: JSON.stringify(ollamaBody),
+      signal: options.signal,
     });
 
     if (_res.ok) {
@@ -423,18 +466,22 @@ export async function callLocalLLM(
         promptTokens: safeNumber(_data?.prompt_eval_count),
         completionTokens: safeNumber(_data?.eval_count),
       });
+      const _toolCalls = normalizeOllamaToolCalls(_data?.message?.tool_calls);
       return toMetaResponse({
         provider: 'Local',
         model,
         text:
-          _data?.message?.content || _data?.choices?.[0]?.message?.content || JSON.stringify(_data),
+          _data?.message?.content ||
+          _data?.choices?.[0]?.message?.content ||
+          (_toolCalls.length ? '' : JSON.stringify(_data)),
         usage: _usage,
+        toolCalls: _toolCalls,
+        stopReason: _data?.done_reason || '',
         thinkingText: _data?.message?.thinking || _data?.message?.reasoning_content || '',
         timings: buildOllamaTimings(_data),
       });
     }
 
-    // Surface Ollama's real error — it returns { error: "model '…' not found, try pulling it first" }.
     const _body = await _res.text().catch(() => '');
     let _serverMsg = '';
     try {
@@ -442,8 +489,6 @@ export async function callLocalLLM(
     } catch {
       _serverMsg = _body.slice(0, 200);
     }
-    // A model/parameter error from Ollama means the SERVER IS REACHABLE — don't mask it by retrying
-    // the LM Studio endpoint on the same port (which would 404 and hide the real cause).
     if (/model|not found|pull|no such/i.test(_serverMsg)) {
       throw new Error(
         `Local model "${model}" isn't available on the Ollama server (${_serverMsg}). Pull it with \`ollama pull ${model}\`, or pick an installed model in Settings → Agents.`,
@@ -451,18 +496,26 @@ export async function callLocalLLM(
     }
     _ollamaNote = `Ollama ${_res.status}${_serverMsg ? `: ${_serverMsg}` : ''}`;
   } catch (err) {
-    // Re-throw the actionable model error; otherwise record the connection failure and try LM Studio.
     if (err instanceof Error && /isn't available on the Ollama server/.test(err.message)) throw err;
     _ollamaNote = `Ollama unreachable (${err instanceof Error ? err.message : 'connection failed'})`;
   }
 
-  // ── Fallback to LM Studio /v1/chat/completions ────────────────────────────
   let _res2: Awaited<ReturnType<ProviderFetch>>;
   try {
+    const lmStudioBody: Record<string, unknown> = {
+      model,
+      messages: openAiMessages,
+      stream: false,
+    };
+    if (nativeTools.length) {
+      lmStudioBody.tools = nativeTools;
+      lmStudioBody.tool_choice = options.toolChoice || 'auto';
+    }
     _res2 = await fetchFn(`${_url}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages: openAiMessages, stream: false }),
+      body: JSON.stringify(lmStudioBody),
+      signal: options.signal,
     });
   } catch (err) {
     throw new Error(
@@ -485,18 +538,7 @@ export async function callLocalLLM(
   }
 
   const _data2: any = await _res2.json();
-  const _usage2 = normalizeUsage(_data2?.usage);
-
-  return toMetaResponse({
-    provider: 'Local',
-    model,
-    text: _data2?.choices?.[0]?.message?.content || '',
-    usage: _usage2,
-    thinkingText:
-      _data2?.choices?.[0]?.message?.reasoning_content ||
-      _data2?.choices?.[0]?.message?.reasoning ||
-      '',
-  });
+  return parseOpenAIChatResponse(_data2, 'Local', model);
 }
 
 /**
@@ -509,7 +551,6 @@ export async function listLocalModels(baseUrl: string, fetchFn: ProviderFetch): 
     .replace(/(^https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1');
   if (!_url) return [];
 
-  // Ollama
   try {
     const _res = await fetchFn(`${_url}/api/tags`, { method: 'GET' });
     if (_res.ok) {
@@ -526,7 +567,6 @@ export async function listLocalModels(baseUrl: string, fetchFn: ProviderFetch): 
     /* try next */
   }
 
-  // LM Studio / OpenAI-compatible
   try {
     const _res = await fetchFn(`${_url}/v1/models`, { method: 'GET' });
     if (_res.ok) {
