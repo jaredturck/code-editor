@@ -4,6 +4,7 @@ const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
   load_context: vi.fn(),
   save_compacted: vi.fn(),
+  planner: vi.fn(),
   sessions: new Map<string, Record<string, unknown>>(),
 }))
 
@@ -19,11 +20,13 @@ vi.mock('@/platform/chatSessionStore', () => ({
 }))
 
 vi.mock('@/platform/agent/localPlanner', () => ({
-  buildLocalPreflightPlan: vi.fn(),
+  buildLocalPreflightPlan: runtime_state.planner,
 }))
 
 import {
   addVerificationCandidate,
+  buildVerificationContractKey,
+  createVerificationState,
   declareVerificationRequirements,
   markVerificationMutation,
   recordVerificationEvidence,
@@ -59,6 +62,7 @@ describe('project verification acceptance', () => {
     runtime_state.run.mockReset()
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
+    runtime_state.planner.mockReset()
     runtime_state.sessions.clear()
     runtime_state.load_context.mockResolvedValue({ messages: [], memory: '', compacted: '' })
     runtime_state.save_compacted.mockResolvedValue(undefined)
@@ -142,4 +146,60 @@ describe('project verification acceptance', () => {
     expect(persisted.requirements).toEqual(['tests', 'browser-runtime'])
     expect(persisted.mutationEpoch).toBe(1)
   })
+
+  it('reuses the persisted model task contract when a paused project run resumes', async () => {
+    const persisted_plan = {
+      taskType: 'implementation',
+      developmentTask: true,
+      workspaceMutationExpected: true,
+      verificationRequired: true,
+      successCriteria: ['The resumed implementation remains correct.'],
+      verificationChecks: [],
+    }
+    const state = createVerificationState(
+      buildVerificationContractKey(persisted_plan),
+      true,
+    )
+    declareVerificationRequirements(state, ['tests'])
+    const tests = addVerificationCandidate(
+      state,
+      'terminal.exec',
+      { command: 'npm test' },
+      { exitCode: 0 },
+    )!
+    recordVerificationEvidence(state, 'tests', tests.id)
+
+    runtime_state.sessions.set('resume-chat', {
+      projectRun: {
+        summary: {
+          taskPreflightPlan: persisted_plan,
+          verificationState: state,
+        },
+      },
+    })
+    runtime_state.planner.mockResolvedValue({
+      ...persisted_plan,
+      successCriteria: ['A textually different regenerated contract.'],
+    })
+    runtime_state.run.mockImplementationOnce(async (input: AgentSessionInput) => {
+      expect(input.settings.agent_preflight_plan).toEqual(persisted_plan)
+      expect(verification_state(input).contractKey).toBe(buildVerificationContractKey(persisted_plan))
+      return result('Resumed without discarding valid verification evidence.', 1)
+    })
+
+    const output = await runAgentSession({
+      userInput: 'Resume the existing project run.',
+      conversation: [],
+      settings: {
+        agent_working_dir: '/workspace',
+        chat_session: { id: 'resume-chat' },
+      },
+    })
+
+    expect(runtime_state.planner).not.toHaveBeenCalled()
+    expect(runtime_state.run).toHaveBeenCalledTimes(1)
+    expect(output.summary.verification).toMatchObject({ required: true, passed: true })
+    expect(output.summary.taskPreflightPlan).toEqual(persisted_plan)
+  })
+
 })

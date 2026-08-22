@@ -48,8 +48,34 @@ function taskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null 
   return plan as unknown as LocalPreflightPlan
 }
 
+function persistedProjectSummary(input: AgentSessionInput) {
+  if (!isWorkspaceProjectRun(input)) return null
+  const projectRun = getChatSessionState(projectChatId(input))?.projectRun
+  if (!projectRun?.summary || typeof projectRun.summary !== 'object' || Array.isArray(projectRun.summary)) {
+    return null
+  }
+  return projectRun.summary as Record<string, unknown>
+}
+
+function persistedTaskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null {
+  const plan = persistedProjectSummary(input)?.taskPreflightPlan
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null
+  return plan as unknown as LocalPreflightPlan
+}
+
 async function withModelTaskContract(input: AgentSessionInput): Promise<AgentSessionInput> {
   if (taskPreflightPlan(input) || !String(input.userInput || '').trim()) return input
+
+  const persistedPlan = persistedTaskPreflightPlan(input)
+  if (persistedPlan) {
+    return {
+      ...input,
+      settings: {
+        ...input.settings,
+        agent_preflight_plan: persistedPlan,
+      },
+    }
+  }
 
   try {
     const conversation = (input.conversation || []).map((message) => ({
@@ -92,10 +118,7 @@ function withVerificationState(input: AgentSessionInput): AgentSessionInput {
   if (!plan || !isWorkspaceProjectRun(input)) return input
   const required = plan.developmentTask === true && plan.verificationRequired === true
   const contractKey = buildVerificationContractKey(plan as unknown as Record<string, unknown>)
-  const projectRun = getChatSessionState(projectChatId(input))?.projectRun
-  const projectSummary = projectRun?.summary && typeof projectRun.summary === 'object'
-    ? projectRun.summary as Record<string, unknown>
-    : null
+  const projectSummary = persistedProjectSummary(input)
   const persistedState = input.settings?.agent_verification_state
     || projectSummary?.verificationState
   const state = ensureVerificationState(
@@ -187,6 +210,7 @@ function annotateVerification(
   gate: VerificationGateResult | null,
   remediationPasses: number,
   state: VerificationState | null,
+  plan: LocalPreflightPlan | null,
 ) {
   if (!gate) return result
   const summary = {
@@ -196,6 +220,7 @@ function annotateVerification(
       remediationPasses,
     },
     verificationState: state ? snapshotVerificationState(state) : null,
+    taskPreflightPlan: plan,
   }
   if (gate.passed) return { ...result, summary }
 
@@ -271,7 +296,13 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     gate = state ? evaluateVerificationGate(state) : null
   }
 
-  const finalResult = annotateVerification(combined, gate, remediationPasses, state)
+  const finalResult = annotateVerification(
+    combined,
+    gate,
+    remediationPasses,
+    state,
+    taskPreflightPlan(executionInput),
+  )
   try {
     await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
   } catch (error) {
