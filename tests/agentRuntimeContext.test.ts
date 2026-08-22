@@ -105,6 +105,39 @@ describe('autonomous project working context', () => {
     expect(result.contextCompaction).toContain('Autonomous project working context')
   })
 
+  it('carries failed tool evidence into workspace recovery without prescribing the fix', async () => {
+    const failed = result_fixture()
+    failed.reply = 'The requested change was not completed.'
+    failed.stepHistory = [
+      { step: 1, tool: 'files.read', ok: false, error: 'website.py does not exist.' },
+      { step: 2, tool: 'files.list', ok: true, summary: 'website.py is absent from /workspace' },
+    ]
+    failed.todos = [{ id: 1, text: 'Inspect website.py', status: 'in_progress' }]
+
+    const recovered = result_fixture()
+    recovered.reply = 'Created website.py.'
+    recovered.stepHistory = [
+      { step: 1, tool: 'files.write', ok: true, summary: 'created /workspace/website.py' },
+    ]
+    recovered.todos = [{ id: 1, text: 'Create website.py', status: 'done' }]
+
+    runtime_state.run.mockResolvedValueOnce(failed).mockResolvedValueOnce(recovered)
+    const input = input_fixture()
+    input.userInput = 'Create a website.py file with a Flask view'
+    input.settings.permissions_file_write = true
+
+    await runAgentSession(input)
+
+    expect(runtime_state.run).toHaveBeenCalledTimes(2)
+    const recovery_input = runtime_state.run.mock.calls[1][0] as AgentSessionInput
+    const recovery_prompt = String(recovery_input.userInput || '')
+    expect(recovery_prompt).toContain('website.py does not exist.')
+    expect(recovery_prompt).toContain('website.py is absent from /workspace')
+    expect(recovery_prompt).toContain('decide the next action yourself')
+    expect(recovery_prompt).toContain('Reconcile any stale TODOs')
+    expect(recovery_prompt).not.toContain('Use files.write/files.edit/files.patch')
+  })
+
   it('does not create project checkpoints outside a workspace-scoped agent run', async () => {
     const input = input_fixture()
     input.settings.agent_working_dir = ''
