@@ -165,7 +165,7 @@ function buildVerificationRemediationPrompt(
     `Continue the original development request:\n${originalRequest}`,
     'VERIFICATION GATE REMEDIATION: The runtime cannot accept this task yet because the verification checks chosen by the model are incomplete, stale, failed, or inconclusive.',
     'Use your own engineering judgment. You decide which checks are relevant to this project; the runtime does not infer checks from framework or language names.',
-    'Use verification.require to declare or revise the checks you consider necessary. Real terminal.exec, launch.run, browser.inspect, and diagnostics.check results return verificationCandidateId values. Use verification.record to bind the appropriate candidate to one declared requirement. The runtime derives pass/fail from the real result; do not claim or encode a passed boolean yourself.',
+    'Use verification.require to declare or revise the checks you consider necessary. Real terminal.exec, launch.run, browser.inspect, diagnostics.check, and agent.review results return verificationCandidateId values. Use verification.record to bind the appropriate candidate to one declared requirement. The runtime derives pass/fail from the real result; do not claim or encode a passed boolean yourself.',
     'If you change source files after a check passes, that evidence becomes stale. Re-run whichever checks you still consider necessary after the change.',
     `Current verification state:\n${formatVerificationGate(gate)}`,
     gate.blockers.length
