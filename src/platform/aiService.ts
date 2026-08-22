@@ -4,7 +4,7 @@
  * browser requests are unavailable. Provider-specific wire formats remain in `providers/`.
  */
 
-import { proxyAIRequest, proxyAIStream } from '@/platform/desktopBridge';
+import { proxyAIRequest, proxyAIStream, pullLocalOllamaModel } from '@/platform/desktopBridge';
 import { getKey } from '@/platform/keyStore';
 import { logAI, logError } from '@/platform/logger';
 import { enforceLocalOnlyProvider } from '@/platform/agent/localOnlyPolicy';
@@ -45,6 +45,31 @@ export type {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const _DEFAULT_PROXY_TIMEOUT_MS = 90000;
+
+const _localModelPulls = new Map<string, Promise<void>>();
+
+function _isMissingLocalModelError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /isn't available on the Ollama server|model[^\n]{0,160}not found|try pulling it first|ollama pull/i.test(
+    message,
+  );
+}
+
+async function _pullConfiguredLocalModel(settings: AISettings, model: string): Promise<void> {
+  const baseUrl = String(settings.ai_local_url || '').trim();
+  if (!baseUrl || !model) throw new Error('Local Ollama model or server URL is not configured.');
+  const key = `${baseUrl.replace(/\/$/, '').toLowerCase()}|${model.toLowerCase()}`;
+  let pending = _localModelPulls.get(key);
+  if (!pending) {
+    pending = pullLocalOllamaModel(baseUrl, model)
+      .then(() => undefined)
+      .finally(() => {
+        _localModelPulls.delete(key);
+      });
+    _localModelPulls.set(key, pending);
+  }
+  await pending;
+}
 
 interface ProxyResponsePayload {
   ok?: boolean;
@@ -415,16 +440,34 @@ export async function callAIWithMeta(
   // Registry handlers are deliberately thin: provider-specific request,
   // streaming, and response logic remains in each existing adapter file.
   const _registration = getAIProvider(ai_provider);
-  const _dispatch = _registration.invoke({
-    messages,
-    settings: _settings,
-    apiKey: _apiKey,
-    model: String(ai_model || _registration.defaultModel),
-    fetchFn: _fetch,
-    options: _options,
-  });
+  const _model = String(ai_model || _registration.defaultModel);
+  const _invoke = () =>
+    _registration.invoke({
+      messages,
+      settings: _settings,
+      apiKey: _apiKey,
+      model: _model,
+      fetchFn: _fetch,
+      options: _options,
+    });
 
-  Promise.resolve(_dispatch).then(
+  let _dispatch = Promise.resolve().then(_invoke);
+  if (String(ai_provider || '').toLowerCase() === 'local') {
+    _dispatch = _dispatch.catch(async (error) => {
+      if (!_isMissingLocalModelError(error)) throw error;
+      if (_signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      try {
+        logAI(`pulling configured local model → ${_model}`);
+      } catch {
+        /* non-fatal */
+      }
+      await _pullConfiguredLocalModel(_settings, _model);
+      if (_signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      return _invoke();
+    });
+  }
+
+  _dispatch.then(
     (meta) => {
       try {
         logAI(`response ← ${ai_provider}/${ai_model || ''}`, {
