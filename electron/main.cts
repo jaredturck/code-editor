@@ -3,6 +3,7 @@ import { open, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { analyze_document, type DiagnosticInput } from './diagnostics.cjs'
+import { inspect_local_browser_runtime, type BrowserInspectionOptions } from './browserInspection.cjs'
 import { file_exists, get_resource_path, open_editor_file, read_attachment, resolve_relative_file } from './files.cjs'
 import {
   get_ollama_model_capabilities,
@@ -627,6 +628,11 @@ ipcMain.handle('ai:install-speech-model', async (_event, base_url: string, speec
 ipcMain.handle('ai:transcribe', async (_event, base_url: string, speech_model: string, audio: Uint8Array) => {
   return transcribe_audio(base_url, speech_model, audio)
 })
+
+ipcMain.handle(
+  'browser:inspect-runtime',
+  async (_event, url: string, options?: BrowserInspectionOptions) => inspect_local_browser_runtime(url, options),
+)
 
 ipcMain.handle('browser:create', (event, browser_id: number, initial_url: string) => {
   const main_window = get_event_window(event.sender)

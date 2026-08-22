@@ -7,6 +7,7 @@
  */
 export * from '@/platform/agent/runtime/toolBrokerLegacy'
 
+import '@/platform/agent/browserToolExtension'
 import { evaluateToolAccess } from '@/platform/agent/runtime/capabilityPolicy'
 import { assertAllowedTool } from '@/platform/agent/runtime/safetyPolicy'
 import { inspectBrowserRuntime } from '@/platform/browserInspectionBridge'

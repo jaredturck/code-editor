@@ -185,7 +185,8 @@ export async function inspect_local_browser_runtime(raw_url: string, options: Br
         !dom_error &&
         console_errors.length === 0 &&
         network_state.blocked_requests.length === 0 &&
-        network_state.failed_requests.length === 0,
+        network_state.failed_requests.length === 0 &&
+        !blank_page,
       requestedUrl: url,
       finalUrl: web_contents.getURL() || url,
       title: web_contents.getTitle() || '',
