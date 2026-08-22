@@ -51,10 +51,15 @@ function taskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null 
 function persistedProjectSummary(input: AgentSessionInput) {
   if (!isWorkspaceProjectRun(input)) return null
   const projectRun = getChatSessionState(projectChatId(input))?.projectRun
-  if (!projectRun?.summary || typeof projectRun.summary !== 'object' || Array.isArray(projectRun.summary)) {
-    return null
+  const runtimeSummary = projectRun?.runtime_summary
+  if (runtimeSummary && typeof runtimeSummary === 'object' && !Array.isArray(runtimeSummary)) {
+    return runtimeSummary as Record<string, unknown>
   }
-  return projectRun.summary as Record<string, unknown>
+  const legacySummary = projectRun?.summary
+  if (legacySummary && typeof legacySummary === 'object' && !Array.isArray(legacySummary)) {
+    return legacySummary as Record<string, unknown>
+  }
+  return null
 }
 
 function persistedTaskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null {

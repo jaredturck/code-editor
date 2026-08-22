@@ -64,6 +64,71 @@ describe('project run controller', () => {
     expect(projectRunController.get_state()?.status).toBe('cancelled')
   })
 
+  it('persists bounded structured runtime summary for autonomous resume', () => {
+    projectRunController.begin({
+      id: 'run-1',
+      chat_id: 'chat-1',
+      goal: 'Build the feature',
+      mode: 'automatic',
+      provider: 'openai',
+      model: 'gpt-test',
+      todos: [],
+    })
+
+    projectRunController.set_status('paused', {
+      summary: {
+        usage: { totalTokens: 42 },
+        verificationState: {
+          version: 1,
+          contractKey: 'contract-1',
+          required: true,
+          mutationEpoch: 3,
+          nextCandidate: 5,
+          requirements: ['tests'],
+          candidates: {},
+          evidence: {},
+        },
+        taskPreflightPlan: {
+          taskType: 'implementation',
+          developmentTask: true,
+          verificationRequired: true,
+        },
+        verification: { required: true, passed: false },
+        arbitraryLargeResult: { secret: 'drop-me' },
+      },
+    })
+
+    const state = projectRunController.get_state()!
+    expect(state.summary).toBe('')
+    expect(state.usage?.totalTokens).toBe(42)
+    expect(state.runtime_summary).toEqual({
+      verificationState: {
+        version: 1,
+        contractKey: 'contract-1',
+        required: true,
+        mutationEpoch: 3,
+        nextCandidate: 5,
+        requirements: ['tests'],
+        candidates: {},
+        evidence: {},
+      },
+      taskPreflightPlan: {
+        taskType: 'implementation',
+        developmentTask: true,
+        verificationRequired: true,
+      },
+      verification: { required: true, passed: false },
+    })
+
+    const stored = session_storage.values.get('chat-1')?.projectRun as Record<string, unknown>
+    expect(stored.runtime_summary).toEqual(state.runtime_summary)
+    expect(stored).not.toHaveProperty('arbitraryLargeResult')
+
+    projectRunController.finish_segment()
+    projectRunController.restore('chat-1')
+    expect(projectRunController.get_state()?.runtime_summary).toEqual(state.runtime_summary)
+  })
+
   it('turns a persisted active run into an interrupted resumable run on restore', () => {
     session_storage.values.set('chat-1', {
       projectRun: {

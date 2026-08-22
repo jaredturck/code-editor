@@ -40,6 +40,7 @@ export interface ProjectRunState {
   todos: ProjectRunTodo[]
   steps: number
   summary: string
+  runtime_summary: Record<string, unknown> | null
   usage: AgentUsageSummary | null
   last_activity: string
   error: string
@@ -91,6 +92,8 @@ const MAX_MODEL_LENGTH = 300
 const MAX_TODO_ID_LENGTH = 200
 const MAX_TODO_TEXT_LENGTH = 1_000
 const MAX_TODO_DEPENDENCIES = 30
+const MAX_RUNTIME_SUMMARY_LENGTH = 128_000
+const runtime_summary_keys = ['verificationState', 'taskPreflightPlan', 'verification'] as const
 
 function normalize_todo_status(value: unknown): ProjectRunTodo['status'] {
   const status = String(value || '').toLowerCase()
@@ -123,6 +126,23 @@ function normalize_project_run_usage(value: unknown): AgentUsageSummary | null {
     jsonSteps: Math.max(0, Number(source.jsonSteps) || 0),
     nativeToolAdoption: Math.max(0, Math.min(1, Number(source.nativeToolAdoption) || 0)),
   }
+}
+
+function normalize_project_run_runtime_summary(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const source = value as Record<string, unknown>
+  const runtime_summary: Record<string, unknown> = {}
+
+  for (const key of runtime_summary_keys) {
+    const candidate = source[key]
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+    runtime_summary[key] = candidate
+  }
+
+  if (!Object.keys(runtime_summary).length) return null
+  const serialized = JSON.stringify(runtime_summary)
+  if (serialized.length > MAX_RUNTIME_SUMMARY_LENGTH) return null
+  return JSON.parse(serialized) as Record<string, unknown>
 }
 
 export function normalize_project_run_todos(value: unknown): ProjectRunTodo[] {
@@ -212,6 +232,7 @@ export function normalize_project_run_state(value: unknown): ProjectRunState | n
     todos: normalize_project_run_todos(source.todos),
     steps: Math.max(0, Number(source.steps) || 0),
     summary: typeof source.summary === 'string' ? source.summary.slice(0, 4000) : '',
+    runtime_summary: normalize_project_run_runtime_summary(source.runtime_summary),
     usage: normalize_project_run_usage(source.usage),
     last_activity: String(source.last_activity || '').slice(0, 300),
     error: String(source.error || '').slice(0, 1000),
@@ -241,7 +262,8 @@ function apply_patch(state: ProjectRunState, patch: ProjectRunPatch) {
     const summary = patch.summary && typeof patch.summary === 'object'
       ? patch.summary as Record<string, unknown>
       : null
-    state.summary = typeof patch.summary === 'string' ? patch.summary.slice(0, 4000) : ''
+    state.summary = typeof patch.summary === 'string' ? patch.summary.slice(0, 4000) : state.summary
+    state.runtime_summary = normalize_project_run_runtime_summary(summary)
     state.usage = normalize_project_run_usage(summary?.usage)
   }
   if (Object.hasOwn(patch, 'last_activity')) {
@@ -345,6 +367,7 @@ function begin(input: BeginProjectRunInput) {
     todos: normalize_project_run_todos(input.todos),
     steps: 0,
     summary: '',
+    runtime_summary: null,
     usage: null,
     last_activity: input.mode === 'plan_first' ? 'Planning project run' : 'Starting project run',
     error: '',
