@@ -18,6 +18,7 @@ export interface AutonomousAcceptanceResult {
 
 const MUTATION_TOOLS = new Set(['files.write', 'files.edit', 'files.patch'])
 const REVIEW_TOOL = 'agent.review'
+const DELEGATION_TOOLS = new Set(['agent.delegate', 'agent.recall', 'agent.recallAll'])
 
 function lower(value: unknown) {
   return String(value || '').trim().toLowerCase()
@@ -78,10 +79,21 @@ export function evaluateAutonomousAcceptance(
     const queue_depth = Number(agent.queueDepth || 0)
     return (status && status !== 'idle') || queue_depth > 0 || Boolean(agent.currentTaskId)
   })
-  if (active_agents.length) blockers.push(`${active_agents.length} delegated agent(s) still have active or queued work.`)
+  if (active_agents.length) {
+    const task_ids = active_agents
+      .map((agent) => String(agent.currentTaskId || '').trim())
+      .filter(Boolean)
+      .slice(0, 6)
+    blockers.push(
+      `${active_agents.length} delegated agent(s) still have active or queued work${task_ids.length ? ` (active task ids: ${task_ids.join(', ')})` : ''}.`,
+    )
+  }
 
   if (input.write_leases.length) {
-    blockers.push(`${input.write_leases.length} task-scoped file write lease(s) are still held.`)
+    const leased_paths = input.write_leases.map((lease) => lease.path).slice(0, 6)
+    blockers.push(
+      `${input.write_leases.length} task-scoped file write lease(s) are still held${leased_paths.length ? ` (${leased_paths.join(', ')})` : ''}.`,
+    )
   }
 
   const direct_mutation_index = last_index(
@@ -101,13 +113,15 @@ export function evaluateAutonomousAcceptance(
       blockers.push('Independent review has not run after the coding changes.')
     } else {
       latest_review = review_verdict(input.step_history[review_index])
-      const later_direct_mutation = input.step_history
+      const later_change_or_handoff = input.step_history
         .slice(review_index + 1)
-        .some((step) => MUTATION_TOOLS.has(step_tool(step)) && is_successful_step(step))
-      const review_is_stale = later_direct_mutation
+        .some((step) =>
+          is_successful_step(step) &&
+          (MUTATION_TOOLS.has(step_tool(step)) || DELEGATION_TOOLS.has(step_tool(step))),
+        )
 
-      if (review_is_stale) {
-        blockers.push('Code changed after the latest independent review; re-review the corrected state.')
+      if (later_change_or_handoff) {
+        blockers.push('Code or delegated work changed after the latest independent review; re-review the final state.')
       } else if (latest_review === 'changes_requested' || latest_review === 'mixed') {
         blockers.push(`The latest independent review is ${latest_review}; remediate its findings and re-review.`)
       } else if (latest_review !== 'approved') {
@@ -126,5 +140,5 @@ export function evaluateAutonomousAcceptance(
 
 export function buildAcceptanceRemediationPrompt(result: AutonomousAcceptanceResult) {
   const blockers = result.blockers.map((blocker) => `- ${blocker}`).join('\n')
-  return `AUTONOMOUS ACCEPTANCE GATE: The project is not ready to finish yet. Continue working without asking the user unless a genuine product decision or permission is required.\n\nBlocking conditions:\n${blockers}\n\nRecall or await active delegated work, resolve stale/lease conflicts through coordination and fresh live-file reads, finish or explicitly resolve TODOs, and if code changed obtain an independent agent.review. If review requests changes, fix them, rerun relevant verification, then review the corrected state again. Do not declare completion until the gate can pass.`
+  return `AUTONOMOUS ACCEPTANCE GATE: The project is not ready to finish yet. Continue working without asking the user unless a genuine product decision or permission is required.\n\nBlocking conditions:\n${blockers}\n\nUse agent.roster/status/recall as needed to await active work, resolve stale/lease conflicts through coordination and fresh live-file reads, finish or explicitly resolve TODOs, and if code changed obtain an independent agent.review. If review requests changes, fix them, rerun relevant verification, then review the corrected state again. Do not declare completion until the gate can pass.`
 }
