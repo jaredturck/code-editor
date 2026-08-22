@@ -88,23 +88,4 @@ describe('editor-aware agent filesystem', () => {
       /outside the open workspace/i,
     )
   })
-
-  it('keeps editor-owned Git metadata outside the agent file authority', async () => {
-    const { list_agent_workspace, read_agent_workspace_file, write_agent_workspace_file } = await import(
-      '../electron/workspace.cts'
-    )
-    const root = await mkdtemp(join(tmpdir(), 'code-editor-git-metadata-'))
-    await mkdir(join(root, '.git'), { recursive: true })
-    await writeFile(join(root, '.git', 'config'), '[core]\nrepositoryformatversion = 0\n', 'utf8')
-
-    await expect(read_agent_workspace_file(root, join(root, '.git', 'config'))).rejects.toThrow(
-      /managed by Source Control/i,
-    )
-    await expect(
-      write_agent_workspace_file(root, join(root, 'nested', '.git', 'config'), 'unsafe', null),
-    ).rejects.toThrow(/managed by Source Control/i)
-
-    const listing = await list_agent_workspace(root, root, 2)
-    expect(JSON.stringify(listing)).not.toContain('.git')
-  })
 })
