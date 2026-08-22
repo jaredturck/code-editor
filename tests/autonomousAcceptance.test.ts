@@ -63,11 +63,31 @@ describe('autonomous multi-agent acceptance', () => {
     expect(stale.blockers.join(' ')).toMatch(/re-review/)
   })
 
+  it('rejects a review that completed before a delegated worker finished writing', () => {
+    const result = evaluate({
+      step_history: [
+        { tool: 'agent.delegate', ok: true },
+        { tool: 'agent.review', ok: true, summary: '{"overallVerdict":"approved"}' },
+      ],
+      timeline: [
+        { type: 'tool_result', tool: 'agent.review', status: 'ok' },
+        { type: 'tool_result', tool: 'files.edit', status: 'ok', role: 'executor' },
+      ],
+    })
+
+    expect(result.accepted).toBe(false)
+    expect(result.blockers.join(' ')).toMatch(/re-review/)
+  })
+
   it('accepts clean reviewed coding work after all delegated work settles', () => {
     const result = evaluate({
       step_history: [
         { tool: 'files.edit', ok: true },
         { tool: 'agent.review', ok: true, summary: '{"reviewed":true,"overallVerdict":"approved"}' },
+      ],
+      timeline: [
+        { type: 'tool_result', tool: 'files.edit', status: 'ok' },
+        { type: 'tool_result', tool: 'agent.review', status: 'ok' },
       ],
       active_agents: [{ status: 'idle', currentTaskId: null, queueDepth: 0 }],
     })
