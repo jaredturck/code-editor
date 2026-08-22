@@ -15,8 +15,8 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
-- IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace file editing, text/image attachments, and optional voice transcription
-- Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, multi-agent orchestration, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio/vision/automation/launcher backends
+- IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace file editing, multi-agent coordination/review, text/image attachments, optional voice transcription, fresh local-only screen verification, and permissioned desktop automation
+- Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio, Vision, Automation, system-monitor, and launcher/local-system foundations
 - OS-protected credential storage and encrypted local SQLite platform persistence
 - Authenticated loopback capability bridge with capability permissions and emergency-stop foundation
 
@@ -27,6 +27,8 @@ System utilities such as Python, Git, compilers, and interpreters are not bundle
 This repository contains a bulk migration of the reusable IRIS platform/backend. IRIS presentation code such as the Orb/planet launcher, old panel shell, duplicate editor/file-manager UI, and old multi-window presentation is intentionally omitted. Existing Code Editor UI components remain the product frontend.
 
 The platform source is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some migrated systems are intentionally present before their Code Editor UI integration is complete.
+
+Connected product milestones include autonomous Agent Chat/project runs, editor/terminal/search/RAG integration, encrypted memory and artifacts, multi-agent coding coordination and independent review, voice input, fresh local screen understanding, and permissioned exact-plan desktop automation. The next grouped integration focus is system/runtime visibility plus local developer-tool discovery before final autonomous-run policy hardening and validation.
 
 See:
 
