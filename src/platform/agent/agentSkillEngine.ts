@@ -593,11 +593,12 @@ function _toolResultFailed(result: unknown): boolean {
  * generic tool outcomes; numeric conditions retain the inherited result.path form.
  */
 function _evaluateReflexCondition(condition: unknown, result: unknown): boolean {
-  const symbolic = String(condition || '').trim().toLowerCase();
+  const raw = String(condition || '').trim();
+  const symbolic = raw.toLowerCase();
   if (['error', 'failed', 'failure'].includes(symbolic)) return _toolResultFailed(result);
   if (['ok', 'success', 'succeeded'].includes(symbolic)) return !_toolResultFailed(result);
 
-  const match = symbolic.match(
+  const match = raw.match(
     /^result\.([a-zA-Z_][a-zA-Z0-9_.]*)\s*(===|!==|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/,
   );
   if (!match) return false;
@@ -638,8 +639,13 @@ export function checkReflexSkills(
   toolResult: unknown,
   allSkills: unknown,
 ): NormalizedSkill[] {
-  if (!Array.isArray(allSkills)) return [];
-  const normalized = (allSkills as unknown[]).map((skill, index) => normalizeSkill(skill, index));
+  const source = Array.isArray(allSkills)
+    ? allSkills
+    : isRecord(allSkills) && Array.isArray(allSkills.skills)
+      ? allSkills.skills
+      : [];
+  if (!source.length) return [];
+  const normalized = source.map((skill, index) => normalizeSkill(skill, index));
   const requestedTool = String(toolName || '').trim();
   return normalized.filter((skill) => {
     if (skill.type !== 'reflex') return false;
