@@ -193,9 +193,52 @@ function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResul
   };
 }
 
+function requiresToolBackedWorkspaceMutation(input: AgentSessionInput) {
+  if (!isWorkspaceProjectRun(input) || input.settings?.permissions_file_write !== true) return false;
+  const text = String(input.userInput || '').trim();
+  if (!text) return false;
+  const action = /\b(create|make|add|write|edit|modify|update|change|fix|implement|delete|remove|rename|move)\b/i.test(text);
+  const target = /\b(file|files|code|script|component|module|page|website|project)\b|\.[a-z0-9]{1,8}\b/i.test(text);
+  const explanatory = /\b(how (do|can|would)|explain|example|show me how|what is|why)\b/i.test(text);
+  return action && target && !explanatory;
+}
+
+function hasSuccessfulWorkspaceMutation(result: AgentSessionResult) {
+  return (Array.isArray(result.stepHistory) ? result.stepHistory : []).some((step) => {
+    const tool = String(step.tool || step.requestedTool || '').trim();
+    const status = String(step.status || '').toLowerCase();
+    return ['files.write', 'files.edit', 'files.patch'].includes(tool) &&
+      step.ok !== false &&
+      !['error', 'failed'].includes(status);
+  });
+}
+
+function shouldRequireIndependentReview(input: AgentSessionInput, result: AgentSessionResult) {
+  const mode = String(input.settings?.agent_peer_review || 'off').toLowerCase();
+  if (mode === 'always') return true;
+  if (mode !== 'suggested') return false;
+
+  const mutationPaths = new Set(
+    (Array.isArray(result.stepHistory) ? result.stepHistory : [])
+      .filter((step) => ['files.write', 'files.edit', 'files.patch'].includes(String(step.tool || step.requestedTool || '')))
+      .filter((step) => step.ok !== false && !['error', 'failed'].includes(String(step.status || '').toLowerCase()))
+      .map((step) => {
+        const args = step.args && typeof step.args === 'object' ? step.args as Record<string, unknown> : {};
+        return String(args.path || step.path || '').trim();
+      })
+      .filter(Boolean),
+  );
+  const delegated = (Array.isArray(result.stepHistory) ? result.stepHistory : []).some((step) =>
+    ['agent.delegate', 'agent.recall', 'agent.recallAll'].includes(String(step.tool || step.requestedTool || '')),
+  );
+
+  return delegated || mutationPaths.size > 1;
+}
+
 function evaluateResultAcceptance(input: AgentSessionInput, result: AgentSessionResult) {
   return evaluateAutonomousAcceptance({
     multi_agent_enabled: multiAgentEnabled(input),
+    require_independent_review: shouldRequireIndependentReview(input, result),
     todos: Array.isArray(result.todos) ? result.todos : [],
     step_history: Array.isArray(result.stepHistory) ? result.stepHistory : [],
     timeline: Array.isArray(result.timeline) ? result.timeline : [],
@@ -243,6 +286,32 @@ async function runWithAutonomousAcceptance(
   };
   let current_input = clean_input;
   let combined = await (runAgentSessionImpl as RunAgentSessionImplementation)(current_input);
+
+  if (
+    requiresToolBackedWorkspaceMutation(clean_input) &&
+    !hasSuccessfulWorkspaceMutation(combined) &&
+    !clean_input.abortSignal?.aborted
+  ) {
+    const correctionInput: AgentSessionInput = {
+      ...clean_input,
+      userInput: `Continue the original request and execute it in the workspace. No successful file mutation was recorded in the previous attempt. Use files.write/files.edit/files.patch to make the requested change; do not claim a file was created or edited unless the tool succeeds. Verify only what is useful, then reply briefly.\n\nOriginal request: ${clean_input.userInput}`,
+      conversation: [
+        ...(clean_input.conversation || []),
+        { role: 'assistant', content: combined.reply },
+      ].slice(-80),
+      todos: withoutAcceptanceTodo(combined.todos),
+    };
+    const corrected = await (runAgentSessionImpl as RunAgentSessionImplementation)(correctionInput);
+    combined = mergeAgentResults(combined, corrected);
+
+    if (!hasSuccessfulWorkspaceMutation(combined)) {
+      combined = {
+        ...combined,
+        reply: 'I did not make the requested workspace change because no file mutation completed successfully.',
+      };
+    }
+  }
+
   if (!multiAgentEnabled(clean_input) || clean_input.abortSignal?.aborted) {
     return combined;
   }
