@@ -188,6 +188,38 @@ interface BrowserState {
   loading: boolean
 }
 
+interface BrowserRuntimeConsoleMessage {
+  level: string
+  message: string
+  line: number
+  source: string
+}
+
+interface BrowserRuntimeInspection {
+  ok: boolean
+  requestedUrl: string
+  finalUrl: string
+  title: string
+  loadFailure: { code: number; description: string; url: string } | null
+  blockedNavigation: string | null
+  console: BrowserRuntimeConsoleMessage[]
+  consoleErrors: BrowserRuntimeConsoleMessage[]
+  blockedRequests: string[]
+  failedRequests: Array<{ url: string; error: string }>
+  dom: {
+    readyState?: string
+    title?: string
+    bodyText?: string
+    bodyChildCount?: number
+    bodyHtmlLength?: number
+    visibleElementCount?: number
+    root?: { id?: string; text?: string; childCount?: number; htmlLength?: number } | null
+  } | null
+  domError: string | null
+  blankPage: boolean
+  settleMs: number
+}
+
 interface BrowserApi {
   create: (id: number, url: string) => Promise<BrowserState>
   destroy: (id: number) => void
@@ -197,6 +229,10 @@ interface BrowserApi {
   go_back: (id: number) => void
   go_forward: (id: number) => void
   reload: (id: number) => void
+  inspect_runtime: (
+    url: string,
+    options?: { settle_ms?: number; timeout_ms?: number; max_text_chars?: number },
+  ) => Promise<BrowserRuntimeInspection>
   on_state_change: (callback: (state: BrowserState) => void) => () => void
 }
 

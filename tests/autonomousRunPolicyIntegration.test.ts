@@ -58,7 +58,7 @@ describe('autonomous-run security policy integration', () => {
   })
 
   it('keeps guarded web/package operations fail-closed without user approval', () => {
-    const broker = source('src/platform/agent/runtime/toolBroker.ts')
+    const broker = source('src/platform/agent/runtime/toolBrokerLegacy.ts')
     expect(broker).toContain('if (settings?.agent_web_site_guard === false) return true')
     expect(broker).toContain('if (!onApprovalRequest) return false; // guard on, unknown package, no UI → fail closed')
     expect(broker).toContain('agent_package_require_venv')
