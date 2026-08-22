@@ -331,6 +331,15 @@ export function buildSTPSystemPrompt(
     });
   }
 
+  if (stp.context && Object.keys(stp.context).length > 0) {
+    const contextText = JSON.stringify(stp.context, null, 2).slice(0, 12000);
+    lines.push('SHARED CONTEXT FROM THE ORCHESTRATOR:');
+    lines.push(contextText);
+    lines.push(
+      'Treat this as working evidence from the parent run. Reason from it, but verify live workspace state when the task depends on facts that may have changed.',
+    );
+  }
+
   if (stp.tools.available.length > 0) {
     lines.push(`AVAILABLE TOOLS: ${stp.tools.available.join(', ')}`);
   }
