@@ -33,6 +33,12 @@ describe('read-only terminal policy', () => {
       'cat /etc/passwd',
       'ls ../',
       'find /tmp -type f',
+      'git diff --no-index /etc/passwd package.json',
+      'git --git-dir=/tmp/repo status',
+      'git --work-tree=../outside status',
+      'rg --ignore-file=/etc/passwd verification src',
+      'grep --file=/etc/passwd token src/file.ts',
+      'wc --files0-from=/etc/passwd',
     ]
 
     for (const command of allowed) expect(isReadOnlyWorkspaceCommand(command), command).toBe(true)

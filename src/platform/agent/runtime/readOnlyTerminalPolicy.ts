@@ -44,6 +44,7 @@ const unsafeGitOptions = new Set([
   '-p',
   '--ext-diff',
   '--textconv',
+  '--no-index',
 ])
 
 function splitWords(command: string) {
@@ -90,10 +91,23 @@ function hasAny(words: string[], blocked: Set<string>) {
   return words.some((word) => blocked.has(word) || [...blocked].some((item) => word.startsWith(`${item}=`)))
 }
 
+function pathValueEscapesWorkspace(value: string) {
+  const normalized = value.replace(/\\/g, '/')
+  return normalized.startsWith('/')
+    || normalized.startsWith('~/')
+    || /^[A-Za-z]:\//.test(normalized)
+    || normalized === '..'
+    || normalized.startsWith('../')
+    || normalized.includes('/../')
+}
+
 function escapesWorkspace(words: string[]) {
   return words.slice(1).some((word) => {
-    if (!word || word.startsWith('-')) return false
-    return word.startsWith('/') || word.startsWith('~/') || word === '..' || word.startsWith('../') || word.includes('/../')
+    if (!word) return false
+    const value = word.startsWith('-') && word.includes('=')
+      ? word.slice(word.indexOf('=') + 1)
+      : word
+    return pathValueEscapesWorkspace(value)
   })
 }
 
@@ -132,7 +146,7 @@ export function isReadOnlyWorkspaceCommand(command: unknown) {
   const words = splitWords(text)
   if (!words?.length) return false
   const name = commandName(words[0])
-  if (escapesWorkspace(words) && name !== 'git') return false
+  if (escapesWorkspace(words)) return false
 
   if (simpleCommands.has(name)) return true
   if (name === 'command') return words.length >= 3 && words[1] === '-v'
