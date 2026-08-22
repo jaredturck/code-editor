@@ -12,6 +12,7 @@ import {
 import { getToolDefinitions } from '@/platform/agent/toolCatalog';
 import { listAgentWriteLeases } from '@/platform/agent/writeLease';
 import { startModelHealthMonitor } from '@/platform/agent/modelHealthMonitor';
+import { buildLocalPreflightPlan, type LocalPreflightPlan } from '@/platform/agent/localPlanner';
 import { runAgentSession as runAgentSessionImpl } from '@/platform/agent/runtime/sessionRunner';
 import { getAgentRoster } from '@/platform/subAgentRuntime';
 import { loadChatContext, saveCompacted } from '@/platform/chatSessionStore';
@@ -77,6 +78,12 @@ function multiAgentEnabled(input: AgentSessionInput) {
   return Boolean(isWorkspaceProjectRun(input) && input.settings?.agent_multi_enabled === true);
 }
 
+function taskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null {
+  const plan = input.settings?.agent_preflight_plan;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  return plan as unknown as LocalPreflightPlan;
+}
+
 function withoutAcceptanceTodo(todos: Array<Record<string, unknown>> | undefined) {
   return (Array.isArray(todos) ? todos : []).filter(
     (todo) => String(todo.id || '') !== AUTONOMOUS_ACCEPTANCE_TODO_ID,
@@ -92,6 +99,45 @@ function hasHybridLocalWorker(settings: Record<string, unknown>) {
     const model = entry as Record<string, unknown>;
     return String(model.provider || '').toLowerCase() === 'local' && Boolean(String(model.model || '').trim());
   });
+}
+
+async function withModelTaskContract(input: AgentSessionInput): Promise<AgentSessionInput> {
+  if (taskPreflightPlan(input) || !String(input.userInput || '').trim()) return input;
+
+  try {
+    const conversation = (input.conversation || []).map((message) => ({
+      role: typeof message.role === 'string' ? message.role : undefined,
+      content: message.content,
+    }));
+    const plan = await buildLocalPreflightPlan(
+      input.userInput,
+      conversation,
+      input.settings,
+      input.abortSignal,
+    );
+    if (!plan) return input;
+
+    input.onEvent?.({
+      type: 'thinking',
+      summary: `AI preflight interpreted the task as ${plan.taskType}${plan.workspaceMutationExpected ? ' with workspace changes' : ''}${plan.verificationRequired ? ' and completion verification' : ''}.`,
+      at: Date.now(),
+    });
+    return {
+      ...input,
+      settings: {
+        ...input.settings,
+        agent_preflight_plan: plan,
+      },
+    };
+  } catch (error) {
+    input.onEvent?.({
+      type: 'notice',
+      level: 'warning',
+      summary: `AI task preflight was unavailable; the main agent will interpret the request directly (${cleanLine(error instanceof Error ? error.message : error, 180)}).`,
+      at: Date.now(),
+    });
+    return input;
+  }
 }
 
 export function withAutonomousModelExecution(input: AgentSessionInput): AgentSessionInput {
@@ -193,14 +239,10 @@ function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResul
   };
 }
 
-function requiresToolBackedWorkspaceMutation(input: AgentSessionInput) {
-  if (!isWorkspaceProjectRun(input) || input.settings?.permissions_file_write !== true) return false;
-  const text = String(input.userInput || '').trim();
-  if (!text) return false;
-  const action = /\b(create|make|add|write|edit|modify|update|change|fix|implement|build|develop|refactor|configure|setup|set up|delete|remove|rename|move)\b/i.test(text);
-  const target = /\b(file|files|code|script|component|module|page|website|project|app|application|service|api|frontend|front end|backend|back end)\b|\.[a-z0-9]{1,8}\b/i.test(text);
-  const explanatory = /\b(how (do|can|would)|explain|example|show me how|what is|why)\b/i.test(text);
-  return action && target && !explanatory;
+function expectsWorkspaceMutation(input: AgentSessionInput) {
+  return Boolean(
+    isWorkspaceProjectRun(input) && taskPreflightPlan(input)?.workspaceMutationExpected === true,
+  );
 }
 
 function hasSuccessfulWorkspaceMutation(result: AgentSessionResult) {
@@ -232,24 +274,41 @@ function formatExecutionEvidence(result: AgentSessionResult, limit = 12) {
     .join('\n');
 }
 
-function buildRecoveryContinuation(originalRequest: string, result: AgentSessionResult) {
+function formatSuccessCriteria(plan: LocalPreflightPlan | null) {
+  if (!plan?.successCriteria?.length) return '';
+  return plan.successCriteria.map((criterion) => `- ${cleanLine(criterion, 400)}`).join('\n');
+}
+
+function buildRecoveryContinuation(
+  originalRequest: string,
+  result: AgentSessionResult,
+  plan: LocalPreflightPlan | null,
+) {
+  const successCriteria = formatSuccessCriteria(plan);
   return [
-    'Continue the original request from the evidence already gathered. The previous attempt did not achieve the required workspace change.',
+    'Continue the original request from the evidence already gathered. The model-defined task contract says the requested workspace change is still required.',
     'Diagnose why progress stalled using the exact tool outcomes below, then decide the next action yourself. Do not blindly repeat an unchanged failed action; retry only when you have a concrete reason the outcome may now differ.',
     'Reconcile any stale TODOs if the evidence invalidated an earlier assumption. Do not claim success unless the requested workspace work actually completes.',
     `Original request:\n${originalRequest}`,
+    successCriteria ? `Model-defined success criteria:\n${successCriteria}` : '',
     `Execution evidence from the previous attempt:\n${formatExecutionEvidence(result)}`,
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
-function buildDevelopmentCompletionCheckpoint(originalRequest: string, result: AgentSessionResult) {
+function buildDevelopmentCompletionCheckpoint(
+  originalRequest: string,
+  result: AgentSessionResult,
+  plan: LocalPreflightPlan | null,
+) {
   const todos = formatTodoState(Array.isArray(result.todos) ? result.todos : []);
+  const successCriteria = formatSuccessCriteria(plan);
   return [
     'SOFTWARE DEVELOPMENT COMPLETION CHECKPOINT: Reassess the work before this project run is allowed to finish.',
     'Use your own software-engineering judgment. Decide whether the requested implementation is genuinely complete and adequately verified in the project that actually exists. Do not assume a language, framework, package manager, test command, or environment from this instruction.',
     'If verification is missing or weak, continue working now: inspect the current project/environment as needed, choose the appropriate run/build/test/lint/import or other validation for this ecosystem, and execute it. If validation fails, reason from the exact failure, choose and implement the most appropriate fix, then verify again. The next action and any fix must come from your reasoning, not from a hard-coded recovery recipe.',
     'If the evidence already demonstrates that the requested work is complete and sufficiently verified, do not redo completed work; return a concise final summary grounded in that evidence.',
     `Original request:\n${originalRequest}`,
+    successCriteria ? `Model-defined success criteria:\n${successCriteria}` : '',
     todos ? `Current TODO state:\n${todos}` : '',
     `Execution evidence so far:\n${formatExecutionEvidence(result, 24)}`,
     `Previous completion summary:\n${cleanLine(result.reply, 1800)}`,
@@ -260,11 +319,11 @@ function shouldRunDevelopmentCompletionCheckpoint(
   input: AgentSessionInput,
   result: AgentSessionResult,
 ) {
-  return (
-    requiresToolBackedWorkspaceMutation(input) &&
-    hasSuccessfulWorkspaceMutation(result) &&
-    !input.abortSignal?.aborted
-  );
+  const plan = taskPreflightPlan(input);
+  if (!plan || !isWorkspaceProjectRun(input) || input.abortSignal?.aborted) return false;
+  if (plan.developmentTask !== true || plan.verificationRequired !== true) return false;
+  if (plan.workspaceMutationExpected === true && !hasSuccessfulWorkspaceMutation(result)) return false;
+  return true;
 }
 
 function shouldRequireIndependentReview(input: AgentSessionInput, result: AgentSessionResult) {
@@ -342,13 +401,17 @@ async function runWithAutonomousAcceptance(
   let combined = await (runAgentSessionImpl as RunAgentSessionImplementation)(current_input);
 
   if (
-    requiresToolBackedWorkspaceMutation(clean_input) &&
+    expectsWorkspaceMutation(clean_input) &&
     !hasSuccessfulWorkspaceMutation(combined) &&
     !clean_input.abortSignal?.aborted
   ) {
     const correctionInput: AgentSessionInput = {
       ...clean_input,
-      userInput: buildRecoveryContinuation(clean_input.userInput, combined),
+      userInput: buildRecoveryContinuation(
+        clean_input.userInput,
+        combined,
+        taskPreflightPlan(clean_input),
+      ),
       conversation: [
         ...(clean_input.conversation || []),
         { role: 'assistant', content: combined.reply },
@@ -361,7 +424,7 @@ async function runWithAutonomousAcceptance(
     if (!hasSuccessfulWorkspaceMutation(combined)) {
       combined = {
         ...combined,
-        reply: 'I did not make the requested workspace change because no file mutation completed successfully.',
+        reply: 'I did not make the workspace change that the AI task preflight identified as required because no file mutation completed successfully.',
       };
     }
   }
@@ -370,12 +433,16 @@ async function runWithAutonomousAcceptance(
     clean_input.onEvent?.({
       type: 'notice',
       level: 'info',
-      summary: 'Reviewing implementation and verification evidence before completing the software task.',
+      summary: 'Reviewing implementation and verification evidence against the AI-defined task contract.',
       at: Date.now(),
     });
     const checkpointInput: AgentSessionInput = {
       ...clean_input,
-      userInput: buildDevelopmentCompletionCheckpoint(clean_input.userInput, combined),
+      userInput: buildDevelopmentCompletionCheckpoint(
+        clean_input.userInput,
+        combined,
+        taskPreflightPlan(clean_input),
+      ),
       conversation: [
         ...(clean_input.conversation || []),
         { role: 'assistant', content: combined.reply },
@@ -545,7 +612,8 @@ async function persistProjectWorkingContext(
 // Runs one complete agent session, including model calls, tool execution, approvals, limits,
 // persistence, finalization, and the multi-agent acceptance/remediation gate.
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
-  const executionInput = withAutonomousModelExecution(input);
+  const taskInput = await withModelTaskContract(input);
+  const executionInput = withAutonomousModelExecution(taskInput);
   const artifactInput = withAutonomousArtifactCapability(executionInput);
   startAutonomousModelHealth(artifactInput);
   let priorCompacted = '';
