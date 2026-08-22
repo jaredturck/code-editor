@@ -4,9 +4,16 @@
  * runner, policy, tools, and finalization code evolve.
  */
 
+import {
+  buildAcceptanceRemediationPrompt,
+  evaluateAutonomousAcceptance,
+  type AutonomousAcceptanceResult,
+} from '@/platform/agent/autonomousAcceptance';
 import { getToolDefinitions } from '@/platform/agent/toolCatalog';
+import { listAgentWriteLeases } from '@/platform/agent/writeLease';
 import { startModelHealthMonitor } from '@/platform/agent/modelHealthMonitor';
 import { runAgentSession as runAgentSessionImpl } from '@/platform/agent/runtime/sessionRunner';
+import { getAgentRoster } from '@/platform/subAgentRuntime';
 import { loadChatContext, saveCompacted } from '@/platform/chatSessionStore';
 
 export interface AgentSessionInput {
@@ -44,6 +51,8 @@ const PROJECT_CONTEXT_OUTCOME_CHARS = 2400;
 const PROJECT_CONTEXT_ACTIONS = 24;
 const ARTIFACT_TOOL = 'artifact.create';
 const CLOUD_CONSULT_TOOL = 'cloud.consult';
+const AUTONOMOUS_ACCEPTANCE_TODO_ID = 'autonomous-acceptance';
+const MAX_ACCEPTANCE_REMEDIATION_PASSES = 2;
 const ARTIFACT_GUIDANCE = `DURABLE ARTIFACTS: For large outputs that should survive the chat transcript—especially research reports, test reports, architecture/design reports, migration notes, or other long structured results—use artifact.create instead of flooding chat. Use a meaningful filename and summary. If the output exceeds one tool call, append additional chunks to the same artifact. Keep the chat response concise; durable artifact links are attached automatically after the run.`;
 const HYBRID_GUIDANCE = `HYBRID MODEL EXECUTION: A local model may perform the working loop while the configured cloud responder is reserved for synthesis. Use cloud.consult only for a focused second opinion that materially improves the task; send the minimum relevant evidence, never the entire workspace by default, and stay within the shared cloud request budget. Model routing and failover may switch providers/models during the run; continue from verified tool/RAG state rather than restarting completed work.`;
 
@@ -61,6 +70,16 @@ function projectChatId(input: AgentSessionInput) {
 
 function isWorkspaceProjectRun(input: AgentSessionInput) {
   return Boolean(projectChatId(input) && String(input.settings?.agent_working_dir || '').trim());
+}
+
+function multiAgentEnabled(input: AgentSessionInput) {
+  return Boolean(isWorkspaceProjectRun(input) && input.settings?.agent_multi_enabled === true);
+}
+
+function withoutAcceptanceTodo(todos: Array<Record<string, unknown>> | undefined) {
+  return (Array.isArray(todos) ? todos : []).filter(
+    (todo) => String(todo.id || '') !== AUTONOMOUS_ACCEPTANCE_TODO_ID,
+  );
 }
 
 function hasHybridLocalWorker(settings: Record<string, unknown>) {
@@ -152,6 +171,119 @@ function decorateArtifacts(result: AgentSessionResult): AgentSessionResult {
   const artifacts = Array.isArray(result.artifacts) ? result.artifacts : [];
   const reply = appendArtifactLinks(String(result.reply || ''), artifacts);
   return reply === result.reply ? result : { ...result, reply };
+}
+
+function artifactIdentity(record: Record<string, unknown>) {
+  return String(record.id || record.artifactId || record.path || record.filename || JSON.stringify(record));
+}
+
+function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResult): AgentSessionResult {
+  const artifacts = new Map<string, Record<string, unknown>>();
+  for (const artifact of [...(previous.artifacts || []), ...(next.artifacts || [])]) {
+    artifacts.set(artifactIdentity(artifact), artifact);
+  }
+  return {
+    ...next,
+    timeline: [...(previous.timeline || []), ...(next.timeline || [])].slice(-600),
+    stepHistory: [...(previous.stepHistory || []), ...(next.stepHistory || [])].slice(-600),
+    artifacts: [...artifacts.values()],
+    steps: Number(previous.steps || 0) + Number(next.steps || 0),
+    todos: Array.isArray(next.todos) ? next.todos : previous.todos,
+  };
+}
+
+function evaluateResultAcceptance(input: AgentSessionInput, result: AgentSessionResult) {
+  return evaluateAutonomousAcceptance({
+    multi_agent_enabled: multiAgentEnabled(input),
+    todos: Array.isArray(result.todos) ? result.todos : [],
+    step_history: Array.isArray(result.stepHistory) ? result.stepHistory : [],
+    timeline: Array.isArray(result.timeline) ? result.timeline : [],
+    active_agents: getAgentRoster() as unknown as Array<Record<string, unknown>>,
+    write_leases: listAgentWriteLeases(),
+  });
+}
+
+function annotateAcceptance(
+  result: AgentSessionResult,
+  acceptance: AutonomousAcceptanceResult,
+  remediation_passes: number,
+) {
+  const summary = {
+    ...(result.summary || {}),
+    acceptance: {
+      ...acceptance,
+      remediationPasses: remediation_passes,
+    },
+  };
+  if (acceptance.accepted) return { ...result, summary };
+
+  const existing = withoutAcceptanceTodo(result.todos);
+  return {
+    ...result,
+    summary,
+    todos: [
+      ...existing,
+      {
+        id: AUTONOMOUS_ACCEPTANCE_TODO_ID,
+        text: `Autonomous acceptance gate: ${acceptance.blockers.join(' ')}`.slice(0, 1200),
+        status: 'blocked',
+      },
+    ],
+    reply: `${String(result.reply || '').trim()}\n\nThe autonomous acceptance gate remains open, so this run is paused rather than marked complete. ${acceptance.blockers.join(' ')}`.trim(),
+  };
+}
+
+async function runWithAutonomousAcceptance(
+  input: AgentSessionInput,
+): Promise<AgentSessionResult> {
+  const clean_input = {
+    ...input,
+    todos: withoutAcceptanceTodo(input.todos),
+  };
+  let current_input = clean_input;
+  let combined = await (runAgentSessionImpl as RunAgentSessionImplementation)(current_input);
+  if (!multiAgentEnabled(clean_input) || clean_input.abortSignal?.aborted) {
+    return combined;
+  }
+
+  let conversation = [...(clean_input.conversation || [])];
+  let remediation_passes = 0;
+
+  while (remediation_passes < MAX_ACCEPTANCE_REMEDIATION_PASSES) {
+    const acceptance = evaluateResultAcceptance(clean_input, combined);
+    if (acceptance.accepted || clean_input.abortSignal?.aborted) {
+      return annotateAcceptance(combined, acceptance, remediation_passes);
+    }
+
+    remediation_passes += 1;
+    const remediation = buildAcceptanceRemediationPrompt(acceptance);
+    clean_input.onEvent?.({
+      type: 'notice',
+      level: 'warning',
+      summary: `Autonomous acceptance gate requested remediation pass ${remediation_passes}/${MAX_ACCEPTANCE_REMEDIATION_PASSES}: ${acceptance.blockers.join(' ')}`.slice(0, 1000),
+      at: Date.now(),
+    });
+
+    conversation = [
+      ...conversation,
+      { role: 'user', content: current_input.userInput },
+      { role: 'assistant', content: combined.reply },
+    ].slice(-80);
+    current_input = {
+      ...clean_input,
+      userInput: remediation,
+      conversation,
+      todos: withoutAcceptanceTodo(combined.todos),
+    };
+    const next = await (runAgentSessionImpl as RunAgentSessionImplementation)(current_input);
+    combined = mergeAgentResults(combined, next);
+  }
+
+  return annotateAcceptance(
+    combined,
+    evaluateResultAcceptance(clean_input, combined),
+    remediation_passes,
+  );
 }
 
 export function isProjectWorkingContext(value: unknown) {
@@ -267,7 +399,7 @@ async function persistProjectWorkingContext(
 }
 
 // Runs one complete agent session, including model calls, tool execution, approvals, limits,
-// persistence, and finalization.
+// persistence, finalization, and the multi-agent acceptance/remediation gate.
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const executionInput = withAutonomousModelExecution(input);
   const artifactInput = withAutonomousArtifactCapability(executionInput);
@@ -294,7 +426,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     }
   }
 
-  const result = decorateArtifacts(await (runAgentSessionImpl as RunAgentSessionImplementation)(sessionInput));
+  const result = decorateArtifacts(await runWithAutonomousAcceptance(sessionInput));
 
   if (!isWorkspaceProjectRun(artifactInput)) return result;
 
