@@ -23,6 +23,7 @@ export interface AgentSessionInput {
   settings: Record<string, unknown>;
   todos?: Array<Record<string, unknown>>;
   maxSteps?: number | null;
+  onCheckpoint?: (checkpoint: Record<string, unknown>) => void;
   onEvent?: (event: Record<string, unknown>) => void;
   onApprovalRequest?: (request: Record<string, unknown>) => unknown | Promise<unknown>;
   abortSignal?: AbortSignal | null;
@@ -226,7 +227,7 @@ function annotateAcceptance(
       {
         id: AUTONOMOUS_ACCEPTANCE_TODO_ID,
         text: `Autonomous acceptance gate: ${acceptance.blockers.join(' ')}`.slice(0, 1200),
-        status: 'blocked',
+        status: 'in_progress',
       },
     ],
     reply: `${String(result.reply || '').trim()}\n\nThe autonomous acceptance gate remains open, so this run is paused rather than marked complete. ${acceptance.blockers.join(' ')}`.trim(),
