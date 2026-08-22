@@ -136,23 +136,6 @@ export async function getAutomationCapabilities(): Promise<BridgeAutomationCapab
     const objective = agent_vision_objective ||
       'Inspect the current desktop for visible evidence relevant to the active coding task. Identify errors, dialogs, browser or application state, build/test output, or other UI evidence that should influence the next safe action.'
     const vision = await runVisionTask(objective, frame.dataUrl, settings as unknown as Record<string, unknown>)
-    let execution: BridgeRecord | null = null
-
-    if (
-      settings.permissions_mouse_control === true &&
-      settings.vision_auto_execute === true &&
-      vision.actions.length > 0
-    ) {
-      try {
-        execution = await base.executeAutomationActions(vision.actions as unknown as BridgeRecord[], {
-          cwd: String(settings.agent_working_dir || '').trim() || undefined,
-        }) as BridgeRecord
-      } catch (error) {
-        execution = {
-          error: error instanceof Error ? error.message : 'The approved visual action plan failed.',
-        }
-      }
-    }
 
     return {
       ...capabilities,
@@ -160,9 +143,8 @@ export async function getAutomationCapabilities(): Promise<BridgeAutomationCapab
       source: frame.source,
       vision: {
         ...vision,
-        actionsExecuted: Boolean(execution && !execution.error),
+        actionsExecuted: false,
       },
-      ...(execution ? { execution } : {}),
     }
   } catch (error) {
     return {
