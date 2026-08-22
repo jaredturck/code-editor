@@ -100,6 +100,32 @@ export function normalizeApprovalOptions(
   const input = Array.isArray(request?.options) ? request.options : [];
   const requestType = String(request?.requestType || 'permission').toLowerCase();
 
+  const persistentPermission =
+    request?.persistentPermission === true ||
+    (Array.isArray(request?.permissionKeys) && request.permissionKeys.length > 0);
+  if (requestType === 'permission' && persistentPermission) {
+    return [
+      {
+        id: 'allow_once',
+        label: 'Allow once',
+        description: 'Enable this capability for the current project run only.',
+        recommended: true,
+      },
+      {
+        id: 'allow_always',
+        label: 'Always allow',
+        description: 'Enable this capability in Settings for future runs.',
+        recommended: false,
+      },
+      {
+        id: 'deny',
+        label: 'Deny',
+        description: 'Reject this permission request.',
+        recommended: false,
+      },
+    ];
+  }
+
   if (!input.length) return getDefaultApprovalOptions(requestType);
 
   const normalized = input
