@@ -117,11 +117,17 @@ const _DEFAULT_SKILLS_MAX_ACTIVE = 4;
 const _DEFAULT_SKILLS_MIN_RELEVANCE = 3;
 // Card-menu sizing is tier-aware (Phase C). Cards are cheap (id + description), so
 // capable LEAN models see the WHOLE relevant set and judge task-fit from the
-// descriptions themselves — no keyword scorer cuts a relevant skill from the menu.
-// Weak STRUCTURED models already get the top recipes pre-injected as bodies, so a
-// long menu they can't reliably self-pull from is noise — give them a short one.
+// descriptions themselves. Structured models get a bounded but broad enough menu
+// to discover lifecycle support after inspecting a project.
 const _MAX_LEAN_CARD_COUNT = 24;
-const _STRUCTURED_CARD_COUNT = 6;
+const _STRUCTURED_CARD_COUNT = 10;
+
+// Some inherited built-ins predate reflex metadata even though their behavior belongs
+// in the reflex system. Keep this compatibility map small and semantic: it connects an
+// existing reusable skill to an existing generic runtime event, not to a domain error.
+const _LEGACY_REFLEX_TRIGGERS: Readonly<Record<string, SkillReflexTrigger>> = {
+  'orbit-self-correction': { tool: '*', condition: 'error' },
+};
 
 // ── Token estimation (approx 4 chars per token) ───────────────────────────────
 
@@ -257,6 +263,14 @@ export function normalizeSkill(raw: unknown, index: number): NormalizedSkill {
         .filter(Boolean)
         .slice(0, 16)
     : [];
+  const _legacyReflexTrigger = _LEGACY_REFLEX_TRIGGERS[_id] || null;
+  const _reflexTrigger = isRecord(source.reflexTrigger)
+    ? (source.reflexTrigger as SkillReflexTrigger)
+    : _legacyReflexTrigger;
+  const _sourceType =
+    String(source.type || 'standard')
+      .trim()
+      .toLowerCase() || 'standard';
 
   return {
     id: _id,
@@ -270,10 +284,7 @@ export function normalizeSkill(raw: unknown, index: number): NormalizedSkill {
     // Preserved structural fields — previously dropped, which silently disabled
     // guard injection, role targeting, model variants, dependency chaining,
     // and reflex skills.
-    type:
-      String(source.type || 'standard')
-        .trim()
-        .toLowerCase() || 'standard',
+    type: _legacyReflexTrigger ? 'reflex' : _sourceType,
     agentTarget: _normalizeAgentTarget(source),
     modelVariants: isRecord(source.modelVariants)
       ? (source.modelVariants as SkillModelVariants)
@@ -284,9 +295,7 @@ export function normalizeSkill(raw: unknown, index: number): NormalizedSkill {
           .filter(Boolean)
           .slice(0, 12)
       : [],
-    reflexTrigger: isRecord(source.reflexTrigger)
-      ? (source.reflexTrigger as SkillReflexTrigger)
-      : null,
+    reflexTrigger: _reflexTrigger,
   };
 }
 
@@ -408,18 +417,11 @@ export function selectSkillsForPrompt(
     (s) => skillMatchesRole(s, role) && !_offloaded.has(String(s.id)),
   );
 
-  const _modelFamily = (() => {
-    try {
-      const _m = String(settings?.ai_model || '').toLowerCase();
-      const _weak = ['gemma', 'gemma3', 'phi3', 'phi4', 'llama', 'mistral', 'mixtral'];
-      return _weak.some((f) => _m.includes(f)) ? 'weak' : 'default';
-    } catch {
-      return 'default';
-    }
-  })();
-
+  // The structured controller benefits from each skill's compact recipe regardless
+  // of model brand. Capability/toolset determines prompt shape; hard-coded family
+  // names do not. Lean/native models keep the full body available on demand.
   const _resolveInstructions = (skill: NormalizedSkill): string =>
-    _modelFamily === 'weak' && skill.modelVariants?.simple
+    toolset !== 'lean' && skill.modelVariants?.simple
       ? skill.modelVariants.simple
       : skill.instructions || '';
 
@@ -444,8 +446,7 @@ export function selectSkillsForPrompt(
 
   // The card menu the model browses to decide what to skills.load. Guards are
   // always-on (active), so they're never carded. Lean models get the whole
-  // relevant set (so nothing relevant is hidden by a low keyword score); weak
-  // models get a short menu on top of their pre-injected recipe bodies.
+  // relevant set; structured models get a bounded menu plus their pre-injected recipes.
   const _nonGuardRanked = _ranked.filter((e) => e.skill.type !== 'guard');
   const _cardLimit =
     toolset === 'lean'
@@ -482,8 +483,10 @@ export function selectSkillsForPrompt(
 
   const _active: ActiveSkill[] = [];
   let _tokensUsed = 0;
+  let _activeProcedureCount = 0;
 
-  // Guard skills — always-on, injected first
+  // Guard skills are mandatory rails, not optional procedures. They consume tokens
+  // but no longer consume the configurable procedure slots.
   for (const skill of skills.filter((s) => s.type === 'guard' && s.enabled !== false).slice(0, 3)) {
     const _instr = _resolveInstructions(skill);
     const _packed = [skill.title, skill.summary, _instr, ...(skill.examples || [])].join('\n');
@@ -504,15 +507,12 @@ export function selectSkillsForPrompt(
     }
   }
 
-  // Ranked skills — pre-injected (full instructions) only for the 'structured'
-  // tier (weak/local models that benefit from having the steps in-context). The
-  // 'lean' tier (capable models) gets ONLY guard skills pre-injected and relies
-  // on cards + skills.load for the rest (true progressive disclosure — keeps the
-  // per-step prompt small and lets the model pull what the task needs).
+  // Ranked skills — pre-injected only for the structured tier. _maxActive now
+  // represents procedure capacity; guards are tracked separately above.
   for (const entry of toolset === 'lean' ? [] : _ranked) {
-    if (_active.length >= _maxActive) break;
+    if (_activeProcedureCount >= _maxActive) break;
     if (_active.find((a) => a.id === entry.skill.id)) continue;
-    if (entry.skill.type === 'reflex') continue;
+    if (entry.skill.type === 'reflex' || entry.skill.type === 'guard') continue;
 
     const _isStrong = Number(entry.skill.priority || 0) >= 8;
     const _isRelevant = Number(entry.score) >= _minRelevance;
@@ -521,10 +521,11 @@ export function selectSkillsForPrompt(
     const skill = entry.skill;
     const _instr = _resolveInstructions(skill);
 
-    // Chain dependencies
+    // Chain dependencies while reserving room for the selected skill itself.
     for (const depId of Array.isArray(skill.dependencies) ? skill.dependencies : []) {
       const _dep = skills.find((s) => s.id === depId);
       if (!_dep || _active.find((a) => a.id === depId)) continue;
+      if (_dep.type !== 'guard' && _activeProcedureCount >= _maxActive - 1) break;
       const _depInstr = _resolveInstructions(_dep);
       const _depPacked = [_dep.title, _dep.summary, _depInstr, ...(_dep.examples || [])].join('\n');
       const _depCost = _estimateTokens(_depPacked);
@@ -541,6 +542,7 @@ export function selectSkillsForPrompt(
           tokenCost: _depCost,
         });
         _tokensUsed += _depCost;
+        if (_dep.type !== 'guard') _activeProcedureCount += 1;
       }
     }
 
@@ -560,6 +562,7 @@ export function selectSkillsForPrompt(
       tokenCost: _cost,
     });
     _tokensUsed += _cost;
+    _activeProcedureCount += 1;
   }
 
   return {
@@ -574,15 +577,29 @@ export function selectSkillsForPrompt(
 
 // ── Reflex injection (called post-tool-result) ────────────────────────────────
 
+function _toolResultFailed(result: unknown): boolean {
+  if (result instanceof Error) return true;
+  if (!isRecord(result)) return false;
+  const status = String(result.status || result.state || '').trim().toLowerCase();
+  return (
+    result.ok === false ||
+    Boolean(result.error) ||
+    ['error', 'failed', 'failure'].includes(status)
+  );
+}
+
 /**
- * Safely evaluate a reflex condition of the form `result.<path> <op> <number>`.
- * Parses and interprets the comparison without constructing executable code
- * (no `new Function`/`eval`), so stored skill data can never run arbitrary JS.
+ * Safely evaluate a reflex condition. Symbolic success/failure conditions cover
+ * generic tool outcomes; numeric conditions retain the inherited result.path form.
  */
 function _evaluateReflexCondition(condition: unknown, result: unknown): boolean {
-  const match = String(condition || '')
-    .trim()
-    .match(/^result\.([a-zA-Z_][a-zA-Z0-9_.]*)\s*(===|!==|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/);
+  const symbolic = String(condition || '').trim().toLowerCase();
+  if (['error', 'failed', 'failure'].includes(symbolic)) return _toolResultFailed(result);
+  if (['ok', 'success', 'succeeded'].includes(symbolic)) return !_toolResultFailed(result);
+
+  const match = symbolic.match(
+    /^result\.([a-zA-Z_][a-zA-Z0-9_.]*)\s*(===|!==|>=|<=|>|<)\s*(-?\d+(?:\.\d+)?)$/,
+  );
   if (!match) return false;
 
   const [, path, op, rawNum] = match;
@@ -622,10 +639,13 @@ export function checkReflexSkills(
   allSkills: unknown,
 ): NormalizedSkill[] {
   if (!Array.isArray(allSkills)) return [];
-  return (allSkills as NormalizedSkill[]).filter((skill) => {
+  const normalized = (allSkills as unknown[]).map((skill, index) => normalizeSkill(skill, index));
+  const requestedTool = String(toolName || '').trim();
+  return normalized.filter((skill) => {
     if (skill.type !== 'reflex') return false;
-    if (!skill.reflexTrigger?.tool || skill.reflexTrigger.tool !== toolName) return false;
-    const _condition = String(skill.reflexTrigger.condition || '');
+    const triggerTool = String(skill.reflexTrigger?.tool || '').trim();
+    if (!triggerTool || (triggerTool !== '*' && triggerTool !== requestedTool)) return false;
+    const _condition = String(skill.reflexTrigger?.condition || '');
     if (!_condition) return true;
     return _evaluateReflexCondition(_condition, toolResult);
   });
