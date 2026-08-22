@@ -410,15 +410,15 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ### Multi-agent development
 
-- [ ] **Multi-agent orchestration**
+- [x] **Multi-agent orchestration**
   - Orchestrator, Executor, Scout and Reviewer roles
   - Delegation, task bus and parallel execution
   - Peer consultation and result recall
-- [ ] **Multi-agent coding coordination**
+- [x] **Multi-agent coding coordination**
   - File ownership / write leases
   - Agent-agent collision prevention
   - Human-agent collision prevention
-- [ ] **Review and autonomous quality control**
+- [x] **Review and autonomous quality control**
   - Independent review/verification agents
   - Automated remediation and re-review
   - Final acceptance gate
@@ -458,7 +458,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Enable multi-agent orchestration with Orchestrator, Executor, Scout and Reviewer/Overwatcher roles, delegation and result recall.
-2. Add file ownership/write leases and agent-agent collision prevention before allowing parallel coding agents to modify the workspace.
-3. Connect independent review, remediation/re-review and final acceptance gating for autonomous quality control.
-4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem after the remaining capability batches are connected.
+1. Connect audio/voice, vision/screen capabilities and permissioned automation to Agent Chat without reviving the old IRIS panels.
+2. Connect system/runtime visibility and launcher/local-system capabilities so autonomous runs can inspect resources and developer tooling safely.
+3. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
+4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
