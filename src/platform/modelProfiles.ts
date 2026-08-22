@@ -102,6 +102,7 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
     maxOutputCeiling: 32768,
     contextWindow: 128000,
   },
+  // OpenAI open-weight gpt-oss (OpenRouter) — MoE reasoning model, native tools.
   'gpt-oss': {
     toolProtocol: 'native',
     structuredOutput: 'json_schema',
@@ -110,6 +111,7 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
     maxOutputCeiling: 32768,
     contextWindow: 131072,
   },
+  // o-series / GPT-5 Thinking — reasoning models: deliberate internally.
   'openai-o': {
     toolProtocol: 'native',
     structuredOutput: 'json_schema',
@@ -120,6 +122,9 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
   },
 
   // ── NVIDIA / Nemotron ────────────────────────────────────────────────────────
+  // Nemotron 3 Super (OpenRouter) — 1M-context hybrid Mamba-Transformer MoE
+  // reasoning model with native tool-calling. Previously fell through to DEFAULT
+  // (json / 65K), which disabled native tools AND the stateful loop for it.
   nemotron: {
     toolProtocol: 'native',
     structuredOutput: 'json_schema',
@@ -200,6 +205,7 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
     maxOutputCeiling: 32768,
     contextWindow: 65536,
   },
+  // DeepSeek V4 Pro/Flash expose a 1M context window and large tool-capable outputs.
   'deepseek-v4': {
     toolProtocol: 'native',
     structuredOutput: 'json_schema',
@@ -296,18 +302,19 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
   },
 };
 
+// Provider → prompt-caching strategy.
 function _cachingForProvider(provider: unknown): ModelCapabilities['caching'] {
   switch (String(provider || '').toLowerCase()) {
     case 'anthropic':
-      return 'explicit';
+      return 'explicit'; // cache_control breakpoints, 5m / 1h TTL
     case 'openai':
     case 'deepseek':
     case 'opencode':
-      return 'auto';
+      return 'auto'; // automatic — just order static-first
     case 'gemini':
-      return 'implicit';
+      return 'implicit'; // implicit context cache (large prefixes)
     case 'openrouter':
-      return 'passthrough';
+      return 'passthrough'; // depends on the upstream model
     case 'local':
       return 'none';
     default:
@@ -315,6 +322,11 @@ function _cachingForProvider(provider: unknown): ModelCapabilities['caching'] {
   }
 }
 
+/**
+ * Full capability object for a (provider, model) pair. `provider` is optional —
+ * when omitted, only family-derived fields are meaningful (caching falls to none).
+ * @returns {import('./agent/types').ModelCapabilities}
+ */
 export function getModelCapabilities(provider: unknown, model: unknown): ModelCapabilities {
   const family = inferModelFamily(model || '');
   const base = FAMILY_CAPABILITIES[family] || {};
@@ -327,6 +339,12 @@ export function getModelCapabilities(provider: unknown, model: unknown): ModelCa
   };
 }
 
+/**
+ * The true API output-token ceiling for a (provider, model) pair — the most the
+ * user may raise the cap to. For Anthropic the family key is the generic 'claude',
+ * so the real per-model max is resolved from the model string (Opus/Fable support
+ * 128K output, Sonnet/Haiku 64K). Other families use the registry's maxOutputCeiling.
+ */
 export function resolveOutputCeiling(model: unknown, provider: unknown): number {
   const caps = getModelCapabilities(provider, model);
   const m = String(model || '').toLowerCase();
@@ -340,6 +358,12 @@ export function resolveOutputCeiling(model: unknown, provider: unknown): number 
   return caps.maxOutputCeiling || caps.maxOutputTokens;
 }
 
+/**
+ * Per-call output-token cap. Returns the family DEFAULT unless the user set
+ * `agent_max_output_tokens` (the "heavy work" knob), in which case the override is
+ * honored but CLAMPED to the model's real ceiling so we never 400 on a too-large
+ * max_tokens. Pass `settings` to enable the override; omit it for the bare default.
+ */
 export function resolveMaxOutputTokens(
   model: unknown,
   provider: unknown,
@@ -353,14 +377,24 @@ export function resolveMaxOutputTokens(
     return Math.max(1024, Math.min(ceiling, Math.round(override)));
   }
 
+  // Default already sits below the ceiling, but clamp defensively in case a
+  // family default was set above its model-specific ceiling (e.g. a Sonnet run
+  // under the generic 'claude' family whose default is the Opus-safe value).
   return Math.min(ceiling, caps.maxOutputTokens);
 }
 
+/**
+ * Total context window for the active model. Keeps the local-model size heuristic
+ * (70b/405b → larger windows) the runtime relied on previously while honoring
+ * explicit capability families for local models that have their own profile.
+ */
 export function resolveContextWindow(settings: ModelProfileSettings = {}): number {
   const provider = String(settings?.ai_provider || '').toLowerCase();
   const model = String(settings?.ai_model || '');
 
   if (provider === 'local') {
+    const capabilities = getModelCapabilities(provider, model);
+    if (capabilities.family === 'qwen35') return capabilities.contextWindow;
     const m = model.toLowerCase();
     if (/\b(70b|405b|mixtral|qwen2?\.5|deepseek)\b/i.test(m)) return 65536;
     if (/\b(13b|14b|32b|34b)\b/i.test(m)) return 32768;
@@ -370,10 +404,12 @@ export function resolveContextWindow(settings: ModelProfileSettings = {}): numbe
   return getModelCapabilities(provider, model).contextWindow;
 }
 
+/** True when the model family supports native provider function-calling. */
 export function supportsNativeTools(provider: unknown, model: unknown): boolean {
   return getModelCapabilities(provider, model).toolProtocol === 'native';
 }
 
+/** True for reasoning models (o-series, R1) that deliberate internally. */
 export function isReasoningModel(provider: unknown, model: unknown): boolean {
   return getModelCapabilities(provider, model).reasoning === true;
 }
