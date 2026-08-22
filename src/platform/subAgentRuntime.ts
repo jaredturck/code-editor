@@ -43,6 +43,7 @@ import type { JsonSchemaTool } from '@/platform/agent/types';
 import { applyAgentIdentityToSettings, resolveLegacyAgentId } from '@/platform/agent/agentIdentity';
 import { deriveModelTags } from '@/platform/agent/modelTags';
 import { isMeshEnabled } from '@/platform/agent/meshConductor';
+import { releaseTaskWriteLeases } from '@/platform/agent/writeLease';
 import {
   recordModelFailure,
   recordModelSuccess,
@@ -233,6 +234,7 @@ function taskAlreadyExists(taskId: string): boolean {
 // orchestrator to poll and guess a wait time. The single completion path so both
 // the success and error branches notify identically.
 function settleTask(taskId: string, result: SubAgentTaskResult): void {
+  releaseTaskWriteLeases(taskId);
   taskResults.set(taskId, result);
   taskResultTimestamps.set(taskId, Date.now());
   pruneStaleResults();
@@ -654,6 +656,11 @@ async function executeSubAgentTool(
   settings: SubAgentSettings = {},
 ): Promise<unknown> {
   const name = String(toolName || '').trim();
+  const file_operation = {
+    actorId: String(stp?.toAgent || stp?.agentIdentity?.role || 'subagent'),
+    taskId: String(stp?.taskId || ''),
+    holdLease: true,
+  };
 
   // Forbidden tools hard-block
   if (stp.tools.forbidden.includes(name)) {
@@ -758,12 +765,14 @@ async function executeSubAgentTool(
       return readTextFile(assertSubAgentPathSafe(String(safeArgs.path || ''), 'read', settings), {
         startLine: Number(safeArgs.startLine) || 1,
         lineCount: Number(safeArgs.lineCount) || 220,
+        ...file_operation,
       });
 
     case 'files.write':
       return writeTextFile(
         assertSubAgentPathSafe(String(safeArgs.path || ''), 'write', settings),
         String(safeArgs.content || ''),
+        file_operation,
       );
 
     case 'files.diff':
@@ -780,6 +789,7 @@ async function executeSubAgentTool(
         assertSubAgentPathSafe(String(safeArgs.path || ''), 'write', settings),
         patch,
         safeArgs.dryRun === true,
+        file_operation,
       );
     }
 
@@ -790,7 +800,7 @@ async function executeSubAgentTool(
         assertSubAgentPathSafe(String(safeArgs.path || ''), 'write', settings),
         oldText,
         String(safeArgs.newText ?? safeArgs.newString ?? ''),
-        { replaceAll: safeArgs.replaceAll === true },
+        { replaceAll: safeArgs.replaceAll === true, ...file_operation },
       );
     }
 
