@@ -442,7 +442,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Installed application/tool discovery
   - Development-environment management
   - Agent discovery of verified local launcher/tool availability
-- [ ] **Security and autonomous-run policy**
+- [x] **Security and autonomous-run policy**
   - Workspace-scoped autonomous authority
   - Exact-operation approvals and capability tokens
   - Filesystem/network/package/vision/automation policy
@@ -459,6 +459,6 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
-2. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
-3. Add dedicated long-running recovery/stability validation after the remaining product integration is closed.
+1. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
+2. Add dedicated long-running recovery/stability validation.
+3. Run the final dependency-aware verification and packaging audit once dependencies are installed.
