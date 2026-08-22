@@ -1,4 +1,4 @@
-import { clipboard, shell, type WebContents } from 'electron'
+import { clipboard, ipcMain, shell, type WebContents } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
 import { access, cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
@@ -530,3 +530,28 @@ export function stop_workspace_watch(owner_id: number) {
   workspace_watchers.delete(owner_id)
   entry.watcher.close()
 }
+
+
+// Agent file authority is exposed through dedicated IPC channels so renderer-side autonomous
+// tools retain the same canonical workspace/symlink boundary as direct workspace operations.
+ipcMain.handle('workspace:agent-read-file', async (_event, root_path: string, target_path: string) => {
+  return read_agent_workspace_file(root_path, target_path)
+})
+
+ipcMain.handle(
+  'workspace:agent-write-file',
+  async (_event, root_path: string, target_path: string, content: string, expected_revision: string | null) => {
+    return write_agent_workspace_file(root_path, target_path, content, expected_revision)
+  },
+)
+
+ipcMain.handle('workspace:agent-stat', async (_event, root_path: string, target_path: string) => {
+  return stat_agent_workspace_path(root_path, target_path)
+})
+
+ipcMain.handle(
+  'workspace:agent-list',
+  async (_event, root_path: string, target_path: string, depth: number) => {
+    return list_agent_workspace(root_path, target_path, depth)
+  },
+)
