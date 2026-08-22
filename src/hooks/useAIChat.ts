@@ -373,6 +373,12 @@ function useAIChat(
     }
 
     try {
+      if (workspaceRoot && !resume) {
+        set_run_status('Preparing source control…')
+        projectRunController.checkpoint({ last_activity: 'Preparing source control baseline' })
+        await window.editor_api.git.prepare_agent_run(workspaceRoot, run_id)
+      }
+
       const context_messages = await buildConversationContext({
         chatId: chat_id,
         messages: to_agent_conversation(conversation_messages),
@@ -474,6 +480,21 @@ function useAIChat(
       const persisted_timeline = activity.map((item) => ({ ...item }))
       const result_todos = Array.isArray(result.todos) ? result.todos : []
       const assistant_reply = String(result.reply || 'Done.')
+      const unresolved = result_todos.filter((todo) => {
+        const status = String(todo.status || '').toLowerCase()
+        return status === 'pending' || status === 'in_progress'
+      })
+      let git_commit: string | null = null
+      let removed_nested_repositories: string[] = []
+
+      if (workspaceRoot && unresolved.length === 0) {
+        set_run_status('Committing project changes…')
+        projectRunController.checkpoint({ last_activity: 'Creating local source control checkpoint' })
+        const git_result = await window.editor_api.git.commit_agent_changes(workspaceRoot, run_id, goal)
+        git_commit = git_result.commit
+        removed_nested_repositories = git_result.removed_nested_repositories
+      }
+
       const created_at = Date.now()
       const meta = {
         runId: run_id,
@@ -489,6 +510,12 @@ function useAIChat(
         artifacts: Array.isArray(result.artifacts) ? result.artifacts : [],
         provider: descriptor.provider,
         model: descriptor.model,
+        git: workspaceRoot
+          ? {
+              commit: git_commit,
+              removedNestedRepositories: removed_nested_repositories,
+            }
+          : null,
       }
       await appendChatMessage(chat_id, 'assistant', assistant_reply, meta)
       const open_todos = result_todos.filter((todo) => String(todo.status || '').toLowerCase() !== 'done')
@@ -523,10 +550,6 @@ function useAIChat(
         run_id,
       } : message))
 
-      const unresolved = result_todos.filter((todo) => {
-        const status = String(todo.status || '').toLowerCase()
-        return status === 'pending' || status === 'in_progress'
-      })
       const budget_pause = unresolved.length > 0 && /paused here|halted|time budget|stopped after/i.test(assistant_reply)
       if (budget_pause) {
         projectRunController.set_status('paused', { todos: result_todos, steps: result.steps, summary: result.summary, last_activity: 'Paused at runtime budget boundary' })
@@ -548,6 +571,9 @@ function useAIChat(
       const paused = projectRunController.is_pause_requested()
       const stopped = signal.aborted
       const message = paused ? 'Paused. Resume when ready.' : stopped ? 'Stopped.' : runtime_error instanceof Error ? runtime_error.message : 'The agent run failed.'
+      if (!paused) {
+        window.editor_api.git.abandon_agent_run(run_id)
+      }
       try {
         await appendChatMessage(chat_id, 'assistant', message, {
           runId: run_id,
