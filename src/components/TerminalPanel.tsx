@@ -12,6 +12,7 @@ interface TerminalPanelProps {
   terminalListWidth: number
   terminals: TerminalSession[]
   visible: boolean
+  workspaceRoot: string | null
   diagnostics: EditorDiagnostic[]
   onClosePanel: () => void
   onCreateTerminal: () => void
@@ -73,12 +74,14 @@ function TerminalPane({
   onSelectTerminal,
   onTerminalStatusChange,
   visible,
+  workspaceRoot,
 }: {
   active: boolean
   terminal: TerminalSession
   onSelectTerminal: (terminalId: number) => void
   onTerminalStatusChange: TerminalPanelProps['onTerminalStatusChange']
   visible: boolean
+  workspaceRoot: string | null
 }) {
   const container_ref = useRef<HTMLDivElement>(null)
   const terminal_ref = useRef<Terminal | null>(null)
@@ -136,7 +139,7 @@ function TerminalPane({
 
     resize_observer.observe(container_ref.current)
     void window.editor_api.terminal
-      .create(terminal.id, terminal.cwd)
+      .create(terminal.id, terminal.cwd ?? workspaceRoot)
       .then(() => {
         onTerminalStatusChange(terminal.id, 'running', null)
         requestAnimationFrame(() => {
@@ -331,6 +334,7 @@ function TerminalPanel({
   terminalListWidth,
   terminals,
   visible,
+  workspaceRoot,
   diagnostics,
   onClosePanel,
   onCreateTerminal,
@@ -423,6 +427,7 @@ function TerminalPanel({
                       onTerminalStatusChange={onTerminalStatusChange}
                       terminal={terminal}
                       visible={visible && activeTab === 'terminal'}
+                      workspaceRoot={workspaceRoot}
                     />
                     {index < group.length - 1 && (
                       <div className="relative w-px shrink-0 bg-[var(--border)]">
