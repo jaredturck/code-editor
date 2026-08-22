@@ -160,19 +160,16 @@ describe('core agent chat integration', () => {
     expect(tools).not.toContain('artifact.create')
   })
 
-  it('does not advertise file capabilities that are disabled for the autonomous session', () => {
-    const read_only = get_core_agent_tool_allowlist('/workspace', false, false, true, false)
-    expect(read_only).toContain('files.read')
-    expect(read_only).toContain('rag.retrieve')
-    expect(read_only).not.toContain('files.write')
-    expect(read_only).not.toContain('files.edit')
-    expect(read_only).not.toContain('files.patch')
-
-    const no_files = get_core_agent_tool_allowlist('/workspace', false, false, false, false)
-    expect(no_files).not.toContain('files.read')
-    expect(no_files).not.toContain('files.write')
-    expect(no_files).not.toContain('rag.retrieve')
-    expect(no_files).toContain('system.stats')
+  it('advertises gated workspace capabilities so the broker can request permission', () => {
+    const gated = get_core_agent_tool_allowlist('/workspace', false, false, false, false)
+    expect(gated).toContain('files.read')
+    expect(gated).toContain('files.write')
+    expect(gated).toContain('files.edit')
+    expect(gated).toContain('files.patch')
+    expect(gated).toContain('rag.retrieve')
+    expect(gated).toContain('terminal.exec')
+    expect(gated).toContain('launch.run')
+    expect(gated).toContain('system.stats')
   })
 
   it('keeps workspace RAG unavailable when no workspace is open', () => {
@@ -180,9 +177,10 @@ describe('core agent chat integration', () => {
     expect(tools).not.toContain('rag.retrieve')
     expect(tools).not.toContain('files.read')
     expect(tools).not.toContain('search.ripgrep')
+    expect(tools).not.toContain('terminal.exec')
   })
 
-  it('refuses persistent machine-permission grants from the core Chat runtime', () => {
+  it('refuses generic persistent machine-permission grants from the core Chat runtime', () => {
     expect(should_block_core_agent_permission_grant('permission', ['file_read'])).toBe(true)
     expect(should_block_core_agent_permission_grant('permission', ['terminal_exec'])).toBe(true)
     expect(should_block_core_agent_permission_grant('limit', [])).toBe(false)
