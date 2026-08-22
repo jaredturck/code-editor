@@ -24,6 +24,7 @@ import { assertAllowedTool, assertSafePath } from '@/platform/agent/runtime/safe
 import { inspectBrowserRuntime } from '@/platform/browserInspectionBridge'
 import { analyzeWorkspaceFile } from '@/platform/workspaceDiagnosticsBridge'
 import { createModuleBroker as createLegacyModuleBroker } from '@/platform/agent/runtime/toolBrokerLegacy'
+import { isReadOnlyWorkspaceCommand } from '@/platform/agent/runtime/readOnlyTerminalPolicy'
 
 const editorNativeTools = new Set([
   'browser.inspect',
@@ -94,6 +95,13 @@ function assertEditorNativeAccess(toolName: string, options: Record<string, any>
 
 export function createModuleBroker(options: Record<string, any>) {
   const legacy = createLegacyModuleBroker(options)
+  const readOnlyTerminalLegacy = createLegacyModuleBroker({
+    ...options,
+    approvalState: {
+      ...(options?.approvalState || {}),
+      granted: true,
+    },
+  })
 
   return {
     ...legacy,
@@ -101,7 +109,10 @@ export function createModuleBroker(options: Record<string, any>) {
       const state = verificationState(options)
 
       if (!editorNativeTools.has(toolName)) {
-        const result = await legacy.execute(toolName, args)
+        const broker = toolName === 'terminal.exec' && isReadOnlyWorkspaceCommand(args.command)
+          ? readOnlyTerminalLegacy
+          : legacy
+        const result = await broker.execute(toolName, args)
         updateMutationEpoch(state, toolName, args, result)
         return attachVerificationCandidate(state, toolName, args, result)
       }
