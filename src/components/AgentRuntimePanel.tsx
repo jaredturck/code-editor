@@ -1,15 +1,27 @@
 import { useEffect, useState } from 'react'
 import { handleAgentRoster } from '../platform/orchestrationClient'
+import { getRoutingProfile } from '../platform/agent/modelRouting'
 import type { SubAgentRosterEntry } from '../platform/agent/subAgentTypes'
+import type { AgentUsageSummary } from '../types/editor'
 import { useSystemMonitor } from '../platform-features/systemMonitor/useSystemMonitor'
 
 interface AgentRuntimePanelProps {
   generating: boolean
+  provider: string
+  model: string
+  usage?: AgentUsageSummary | null
 }
 
 function format_bytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 GB'
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+}
+
+function format_tokens(tokens: number) {
+  if (!Number.isFinite(tokens) || tokens <= 0) return '0'
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}m`
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`
+  return String(Math.round(tokens))
 }
 
 function format_vram(megabytes: number) {
@@ -22,7 +34,7 @@ function agent_status_label(agent: SubAgentRosterEntry) {
   return `${role} · ${agent.status}${agent.queueDepth ? ` · ${agent.queueDepth} queued` : ''}`
 }
 
-function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
+function AgentRuntimePanel({ generating, provider, model, usage }: AgentRuntimePanelProps) {
   const { stats, procs, err } = useSystemMonitor()
   const [agents, set_agents] = useState<SubAgentRosterEntry[]>([])
 
@@ -41,6 +53,9 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
     return () => window.clearInterval(timer)
   }, [])
 
+  const usage_provider = usage?.provider || provider
+  const usage_model = usage?.model || model
+  const cost_tier = getRoutingProfile(usage_provider, usage_model).costTier
   const active_agents = agents.filter(
     (agent) => agent.status === 'working' || Boolean(agent.currentTaskId),
   ).length
@@ -62,6 +77,7 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
         <span>·</span>
         <span>{active_agents || (generating ? 1 : 0)} active</span>
         {queued_work > 0 && <span>· {queued_work} queued</span>}
+        {usage?.totalTokens ? <span>· {format_tokens(usage.totalTokens)} tokens</span> : null}
       </summary>
 
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
@@ -75,7 +91,26 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
         </span>
         <span>Agents</span>
         <span className="text-right text-[var(--text)]">{agents.length || (generating ? 1 : 0)}</span>
+        <span>Model cost tier</span>
+        <span className="text-right capitalize text-[var(--text)]">{cost_tier}</span>
       </div>
+
+      {usage && (
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-[var(--border)] pt-2">
+          <span>Model requests</span>
+          <span className="text-right text-[var(--text)]">{usage.requests}</span>
+          <span>Tokens</span>
+          <span className="text-right text-[var(--text)]">
+            {format_tokens(usage.promptTokens)} in · {format_tokens(usage.completionTokens)} out
+          </span>
+          <span>Context</span>
+          <span className="text-right text-[var(--text)]">
+            {usage.contextWindow ? `${usage.contextUsedPct.toFixed(1)}% · ${format_tokens(usage.contextRemaining)} left` : '—'}
+          </span>
+          <span>Prompt cache</span>
+          <span className="text-right text-[var(--text)]">{Math.round(usage.cacheHitRatio * 100)}% hit</span>
+        </div>
+      )}
 
       {stats?.gpuDevices?.length ? (
         <div className="mt-2 space-y-1 border-t border-[var(--border)] pt-2">
