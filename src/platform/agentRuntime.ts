@@ -220,10 +220,14 @@ function formatExecutionEvidence(result: AgentSessionResult, limit = 12) {
     .slice(-limit)
     .map((step, index) => {
       const tool = String(step.tool || step.requestedTool || 'unknown');
+      const args = step.args && typeof step.args === 'object'
+        ? step.args as Record<string, unknown>
+        : {};
+      const target = cleanLine(args.path || args.command || args.query || step.path || '', 240);
       const outcome = step.ok === false
         ? `FAILED: ${cleanLine(step.error || step.summary || 'unknown error', 500)}`
         : `OK: ${cleanLine(step.summary || 'completed', 500)}`;
-      return `${index + 1}. ${tool} — ${outcome}`;
+      return `${index + 1}. ${tool}${target ? ` (${target})` : ''} — ${outcome}`;
     })
     .join('\n');
 }
@@ -236,6 +240,31 @@ function buildRecoveryContinuation(originalRequest: string, result: AgentSession
     `Original request:\n${originalRequest}`,
     `Execution evidence from the previous attempt:\n${formatExecutionEvidence(result)}`,
   ].join('\n\n');
+}
+
+function buildDevelopmentCompletionCheckpoint(originalRequest: string, result: AgentSessionResult) {
+  const todos = formatTodoState(Array.isArray(result.todos) ? result.todos : []);
+  return [
+    'SOFTWARE DEVELOPMENT COMPLETION CHECKPOINT: Reassess the work before this project run is allowed to finish.',
+    'Use your own software-engineering judgment. Decide whether the requested implementation is genuinely complete and adequately verified in the project that actually exists. Do not assume a language, framework, package manager, test command, or environment from this instruction.',
+    'If verification is missing or weak, continue working now: inspect the current project/environment as needed, choose the appropriate run/build/test/lint/import or other validation for this ecosystem, and execute it. If validation fails, reason from the exact failure, choose and implement the most appropriate fix, then verify again. The next action and any fix must come from your reasoning, not from a hard-coded recovery recipe.',
+    'If the evidence already demonstrates that the requested work is complete and sufficiently verified, do not redo completed work; return a concise final summary grounded in that evidence.',
+    `Original request:\n${originalRequest}`,
+    todos ? `Current TODO state:\n${todos}` : '',
+    `Execution evidence so far:\n${formatExecutionEvidence(result, 24)}`,
+    `Previous completion summary:\n${cleanLine(result.reply, 1800)}`,
+  ].filter(Boolean).join('\n\n');
+}
+
+function shouldRunDevelopmentCompletionCheckpoint(
+  input: AgentSessionInput,
+  result: AgentSessionResult,
+) {
+  return (
+    requiresToolBackedWorkspaceMutation(input) &&
+    hasSuccessfulWorkspaceMutation(result) &&
+    !input.abortSignal?.aborted
+  );
 }
 
 function shouldRequireIndependentReview(input: AgentSessionInput, result: AgentSessionResult) {
@@ -335,6 +364,26 @@ async function runWithAutonomousAcceptance(
         reply: 'I did not make the requested workspace change because no file mutation completed successfully.',
       };
     }
+  }
+
+  if (shouldRunDevelopmentCompletionCheckpoint(clean_input, combined)) {
+    clean_input.onEvent?.({
+      type: 'notice',
+      level: 'info',
+      summary: 'Reviewing implementation and verification evidence before completing the software task.',
+      at: Date.now(),
+    });
+    const checkpointInput: AgentSessionInput = {
+      ...clean_input,
+      userInput: buildDevelopmentCompletionCheckpoint(clean_input.userInput, combined),
+      conversation: [
+        ...(clean_input.conversation || []),
+        { role: 'assistant', content: combined.reply },
+      ].slice(-80),
+      todos: withoutAcceptanceTodo(combined.todos),
+    };
+    const checked = await (runAgentSessionImpl as RunAgentSessionImplementation)(checkpointInput);
+    combined = mergeAgentResults(combined, checked);
   }
 
   if (!multiAgentEnabled(clean_input) || clean_input.abortSignal?.aborted) {
