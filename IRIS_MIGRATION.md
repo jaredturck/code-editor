@@ -435,13 +435,13 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Automation service and exact-plan approvals
   - Permissioned Vision-to-desktop action execution
   - Scheduled/background project tasks remain a future extension
-- [ ] **System monitoring and runtime visibility**
+- [x] **System monitoring and runtime visibility**
   - CPU/RAM/GPU/process monitoring
   - Model, agent, token and cost visibility
 - [ ] **Launcher and local-system capabilities**
-  - Installed application/tool discovery
-  - Development-environment management
-  - Agent discovery of local developer tooling
+  - [x] Installed application/tool discovery
+  - [ ] Development-environment management
+  - [x] Agent discovery of verified local launcher/tool availability
 - [ ] **Security and autonomous-run policy**
   - Workspace-scoped autonomous authority
   - Exact-operation approvals and capability tokens
@@ -459,7 +459,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect system/runtime visibility to the Code Editor for CPU/RAM/GPU/process plus model, agent, token and cost observability during long autonomous runs.
-2. Connect launcher/local-system capabilities so autonomous runs can safely discover installed developer tools and environments.
-3. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
-4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
+1. Complete launcher/local-system integration by wiring the existing managed development-environment lifecycle into autonomous runs while preserving launcher approvals and execution permissions.
+2. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
+3. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
+4. Add dedicated long-running recovery/stability validation after the remaining product integration is closed.
