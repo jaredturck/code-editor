@@ -541,8 +541,16 @@ if (ipcMain?.handle) {
 
   ipcMain.handle(
     'workspace:agent-write-file',
-    async (_event, root_path: string, target_path: string, content: string, expected_revision: string | null) => {
-      return write_agent_workspace_file(root_path, target_path, content, expected_revision)
+    async (event, root_path: string, target_path: string, content: string, expected_revision: string | null) => {
+      const result = await write_agent_workspace_file(root_path, target_path, content, expected_revision)
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('workspace:changed', {
+          root_path: resolve(root_path),
+          event_type: 'change',
+          file_path: result.path,
+        })
+      }
+      return result
     },
   )
 
