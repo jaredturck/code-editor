@@ -47,6 +47,9 @@ function App() {
     onPathDeleted: editor.mark_document_paths_deleted,
     onNotice: editor.show_notice,
   })
+  const terminal_workspace_root =
+    workspace.root_path || readStorageText(last_workspace_storage_key).trim() || null
+  const agent_follow_suspended_ref = useRef(false)
   const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path, {
     diagnostics: editor.diagnostics,
     file_host: {
@@ -71,12 +74,21 @@ function App() {
         const document = editor.documents.find((item) =>
           item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
         )
-        if (!document || document.kind !== 'text') return
+
+        if (saved) void workspace.refresh()
+
+        if (!document || document.kind !== 'text') {
+          if (saved && !agent_follow_suspended_ref.current) void editor.open_file_path(file_path)
+          return
+        }
         if (saved) {
           document.saved_content = content
           document.deleted = false
         }
         editor.update_document(document.id, content)
+        if (!agent_follow_suspended_ref.current && editor.active_document_id !== document.id) {
+          editor.select_document(document.id)
+        }
       },
     },
   })
@@ -84,6 +96,21 @@ function App() {
   const editor_ref = useRef<CodeEditorHandle>(null)
   const restore_workspace_started_ref = useRef(false)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
+
+  useEffect(() => {
+    if (chat.generating) agent_follow_suspended_ref.current = false
+  }, [chat.generating])
+
+  useEffect(() => {
+    if (!chat.generating || !workspace.root_path) return
+    void workspace.refresh()
+    const refresh_interval = window.setInterval(() => void workspace.refresh(), 1200)
+    return () => window.clearInterval(refresh_interval)
+  }, [chat.generating, workspace.root_path])
+
+  const mark_manual_editor_focus = () => {
+    if (chat.generating) agent_follow_suspended_ref.current = true
+  }
   useEffect(() => {
     document.title = workspace.root_name ? `code-editor — ${workspace.root_name}` : 'code-editor'
   }, [workspace.root_name])
@@ -156,12 +183,18 @@ function App() {
         onCreateTextFile={() => editor.create_text_file()}
         onHoverMenu={editor.hover_menu}
         onLeaveMenus={editor.leave_menus}
-        onOpenFile={() => void editor.open_file_dialog()}
+        onOpenFile={() => {
+          mark_manual_editor_focus()
+          void editor.open_file_dialog()
+        }}
         onOpenFolder={() => {
           editor.select_activity('explorer')
           void workspace.open_folder_dialog()
         }}
-        onOpenRecent={(file_path) => void editor.open_recent_file(file_path)}
+        onOpenRecent={(file_path) => {
+          mark_manual_editor_focus()
+          void editor.open_recent_file(file_path)
+        }}
         onRunEditorCommand={run_editor_command}
         onSave={() => void editor.save_document()}
         onSaveAs={() => void editor.save_document(true)}
@@ -205,7 +238,10 @@ function App() {
           onDropEntry={(source_path, target_path, operation) =>
             void workspace.drop_entry(source_path, target_path, operation)
           }
-          onOpenFile={(file_path) => void editor.open_file_path(file_path)}
+          onOpenFile={(file_path) => {
+            mark_manual_editor_focus()
+            void editor.open_file_path(file_path)
+          }}
           onOpenFolder={() => {
             editor.select_activity('explorer')
             void workspace.open_folder_dialog()
@@ -233,9 +269,15 @@ function App() {
             onCloseDocument={editor.close_document}
             onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
-            onOpenFilePath={(file_path) => void editor.open_file_path(file_path)}
+            onOpenFilePath={(file_path) => {
+              mark_manual_editor_focus()
+              void editor.open_file_path(file_path)
+            }}
             onParserDiagnostics={editor.update_parser_diagnostics}
-            onSelectDocument={editor.select_document}
+            onSelectDocument={(document_id) => {
+              mark_manual_editor_focus()
+              editor.select_document(document_id)
+            }}
             onToggleMarkdownView={editor.toggle_markdown_view}
             onUpdateDocument={editor.update_document}
             settings={editor.settings}
@@ -259,6 +301,7 @@ function App() {
             terminalListWidth={panels.terminal_list_width}
             terminals={editor.terminals}
             visible={editor.bottom_panel_open}
+            workspaceRoot={terminal_workspace_root}
           />
         </main>
 
