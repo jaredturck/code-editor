@@ -24,6 +24,7 @@ export interface BridgePermissionState {
   terminal: boolean;
   launcher: boolean;
   automation: boolean;
+  screenCapture: boolean;
   microphone: boolean;
 }
 
