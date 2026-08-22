@@ -69,7 +69,7 @@ describe('autonomous-run security policy integration', () => {
   it('rechecks privileged launcher, screen and automation authority at bridge routes', () => {
     const launcher_routes = source('backend/desktopBridge/routes/fileRoutes.ts')
     const screen_routes = source('backend/desktopBridge/routes/screenRoutes.ts')
-    const automation_routes = source('backend/desktopBridge/routes/automationRoutes.ts')
+    const automation_routes = source('backend/desktopBridge/routes/automationAiRoutes.ts')
 
     expect(launcher_routes).toContain("requireBridgePermission(securityContext, 'launcher')")
     expect(screen_routes).toContain("requireBridgePermission(securityContext, 'screenCapture')")
