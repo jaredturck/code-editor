@@ -24,6 +24,7 @@ Completed integration milestones:
 - Multi-agent orchestration
 - Multi-agent coding coordination
 - Review and autonomous quality control
+- Audio and voice
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -47,12 +48,16 @@ Parallel coding is guarded at the editor boundary before it is allowed to mutate
 
 Multi-agent completion now has an explicit autonomous acceptance gate. Coding mutations require an independent `agent.review` after the latest main or delegated write; changes-requested, mixed, unknown or stale reviews block completion. Open TODOs, active/queued delegated tasks and outstanding write leases also block the gate. The stable runtime automatically runs bounded remediation continuations to recall outstanding work, resolve collisions, fix reviewer findings, rerun verification and re-review; if the gate still cannot pass, it leaves an in-progress resumable acceptance TODO so Code Editor pauses the project instead of falsely marking it complete.
 
+Agent Chat voice input now uses the migrated IRIS audio controller instead of the legacy Ollama-specific speech IPC path. Local Granite Speech remains the private default, while OpenAI, OpenRouter and Gemini transcription providers can be selected with a model, validated credential slot and explicit local-fallback policy from the Code Editor voice control. Microphone authority still flows through the trusted Electron bridge and persisted capability setting, cloud transcription shows a first-use upload notice before recording, missing local Granite is installed only after an explicit action, cancellation propagates through the bridge, and recordings are converted to bounded mono 16 kHz PCM WAV and kept in memory rather than persisted. The legacy Electron speech helpers remain only as compatibility code for older callers.
+
+Focused audio configuration/integration regression coverage is present. A targeted Vitest run for the new audio tests plus the existing Chat panel test exceeded the execution window before returning a result; implementation work was not blocked on a full-suite run and no explicit test failure was returned before that timeout.
+
 ## Next milestone
 
-**Perception and Automation**
+**Vision and Screen Capabilities**
 
-- audio transcription/provider configuration and voice input for Agent Chat
-- screen capture, vision runtime and permissioned visual verification/actions
-- automation service, approvals and future scheduled/background project tasks
+- screen capture and the migrated vision runtime
+- permissioned visual verification/actions inside autonomous Agent Chat
+- preserve the Code Editor shell rather than reviving the old IRIS Vision panel
 
-System/runtime visibility, launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
+Automation, system/runtime visibility, launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
