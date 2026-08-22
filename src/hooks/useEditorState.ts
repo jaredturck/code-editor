@@ -147,7 +147,7 @@ function useEditorState() {
   const [new_file_modal_open, set_new_file_modal_open] = useState(false)
   const [indent_picker_open, set_indent_picker_open] = useState(false)
   const [language_picker_open, set_language_picker_open] = useState(false)
-  const [ai_chat_open, set_ai_chat_open] = useState(false)
+  const [ai_chat_open, set_ai_chat_open] = useState(true)
   const [settings, set_settings] = useState<EditorSettings>(() => clone_editor_settings(default_editor_settings))
   const [notice, set_notice] = useState<string | null>(null)
   const [system_is_dark, set_system_is_dark] = useState(true)
@@ -697,7 +697,6 @@ function useEditorState() {
       ) {
         return
       }
-
       const next = raw_diagnostics.map((diagnostic, index) => ({
         ...diagnostic,
         id: `${document_id}:${version}:${index}:${diagnostic.source}`,
