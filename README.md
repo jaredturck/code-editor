@@ -16,9 +16,11 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
 - IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace file editing, multi-agent coordination/review, text/image attachments, optional voice transcription, fresh local-only screen verification, permissioned desktop automation, and live runtime visibility
-- Live Agent Chat runtime monitoring for CPU, RAM, GPU/VRAM, top processes, active/queued agents, request/token/context/cache usage, and model cost tier
+- Live Agent Chat runtime monitoring for CPU, RAM, GPU/VRAM, top processes, active/queued agents, request/token/context/cache usage, model cost tier, and effective autonomous authority
 - Read-only autonomous discovery of current system pressure, running processes, and verified local launcher/tool availability; local launching remains gated by the existing execution permission
 - Managed development-environment status plus explicit Start/Stop controls in Runtime, backed by the existing IRIS launcher service and bridge-owned launcher permission
+- Permission-scoped autonomous tool exposure: disabled file read/write and local-execution capabilities are removed from the session tool schema before model execution, with delegated-agent, broker, workspace-containment, approval, and bridge checks still enforced underneath
+- Fail-closed autonomous defaults for machine permissions, sudo and shell networking, with guarded web ingestion, package installation, project-local Python environments, screen capture, and exact-plan desktop automation
 - Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio, Vision, Automation, system-monitor, and launcher/local-system services
 - OS-protected credential storage and encrypted local SQLite platform persistence
 - Authenticated loopback capability bridge with capability permissions and emergency-stop foundation
@@ -31,7 +33,7 @@ This repository contains a bulk migration of the reusable IRIS platform/backend.
 
 The platform source is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some migrated systems are intentionally present before their Code Editor UI integration is complete.
 
-Connected product milestones include autonomous Agent Chat/project runs, editor/terminal/search/RAG integration, encrypted memory and artifacts, multi-agent coding coordination and independent review, voice input, fresh local screen understanding, permissioned exact-plan desktop automation, live system/agent/model usage visibility, local launcher/tool discovery, and managed development-environment controls. The remaining grouped product work is final autonomous-run policy hardening followed by staged test/benchmark and long-run recovery validation.
+Connected product milestones include autonomous Agent Chat/project runs, editor/terminal/search/RAG integration, encrypted memory and artifacts, multi-agent coding coordination and independent review, voice input, fresh local screen understanding, permissioned exact-plan desktop automation, live system/agent/model usage visibility, local launcher/tool discovery, managed development-environment controls, and final autonomous-run policy hardening. The remaining migration work is staged test/benchmark re-enablement plus dedicated long-running recovery and stability validation.
 
 See:
 
