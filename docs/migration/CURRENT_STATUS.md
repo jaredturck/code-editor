@@ -31,6 +31,7 @@ Completed integration milestones:
 - Launcher and local-system capabilities
 - Security and autonomous-run policy
 - Re-enabled compatible migrated IRIS runtime tests
+- Re-enabled local IRIS benchmark suite
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -80,11 +81,12 @@ Focused runtime/local-system and autonomous-policy regressions cover permission-
 
 Compatible migrated IRIS runtime tests are now re-enabled through a dedicated `vitest.iris.config.ts` and are included in the normal `npm test` path. The active migrated surface contains 90 backend/runtime test files spanning agent and multi-agent orchestration, providers and routing, broker/security policy, semantic filesystem/indexing, persistence, bridge services and supporting runtime contracts. The configuration keeps the old IRIS presentation-only tests archived and uses narrow compatibility mappings only for the original `server/` and provider source locations. A static resolution audit over all 90 selected files found no unresolved internal imports. The supplied source snapshot still has no `node_modules`, so this continuation could not execute the newly re-enabled suite and does not claim a passing runtime result.
 
+The preserved IRIS benchmark harness is now re-enabled through the canonical `npm run benchmark` entry point, with `npm run benchmark:iris` retained as a compatibility alias. All 19 benchmark source files already target the migrated Code Editor production paths, and a static source/API audit found no unresolved relative imports or missing imported exports. The suite remains intentionally separate from `verify:full` because it exercises performance workloads, persistent benchmark history, local CLIP runtime state, and configured loopback Ollama models rather than serving as a deterministic correctness gate. The supplied source snapshot does not contain `node_modules`, so this continuation does not claim an executed benchmark result.
+
 ## Next milestone
 
 **Validation and hardening**
 
-- re-enable benchmark commands that remain meaningful in the Code Editor product shell
 - add dedicated long-running run/recovery tests
 - expand multi-agent collision validation
 - run the final repository-wide dependency-aware verification once the environment has installed dependencies
