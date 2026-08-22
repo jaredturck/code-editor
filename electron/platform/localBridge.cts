@@ -7,7 +7,7 @@
 import path = require('node:path');
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import type { App } from 'electron';
+import { desktopCapturer, type App } from 'electron';
 import type { StorageKeyContext } from './storageKeyStore.cjs';
 import {
   createDuckDuckGoSearchWindow,
@@ -56,6 +56,50 @@ interface LocalBridgeServerModule {
 let bridgeHandle: LocalBridgeHandle | null = null;
 let duckDuckGoSearchWindow: DuckDuckGoSearchWindowService | null = null;
 
+interface ScreenCaptureRequest {
+  sourceId?: string;
+  maxWidth?: number;
+  maxHeight?: number;
+}
+
+interface ScreenCaptureResult {
+  dataUrl: string;
+  source: { id: string; name: string; width: number; height: number };
+}
+
+const SCREEN_CAPTURE_PROVIDER_KEY = '__irisScreenCaptureProvider';
+
+function boundedDimension(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const parsed = Math.round(Number(value));
+  return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback;
+}
+
+async function captureDesktopFrame(request: ScreenCaptureRequest = {}): Promise<ScreenCaptureResult> {
+  const width = boundedDimension(request.maxWidth, 1600, 320, 1920);
+  const height = boundedDimension(request.maxHeight, 1000, 180, 1200);
+  const sources = await desktopCapturer.getSources({
+    types: ['screen', 'window'],
+    thumbnailSize: { width, height },
+    fetchWindowIcons: false,
+  });
+  const requested = String(request.sourceId || '').trim();
+  const source =
+    (requested ? sources.find((candidate) => candidate.id === requested) : null) ||
+    sources.find((candidate) => candidate.id.startsWith('screen:')) ||
+    sources[0];
+  if (!source || source.thumbnail.isEmpty()) throw new Error('No capturable desktop source is available.');
+
+  let jpeg = source.thumbnail.toJPEG(82);
+  if (jpeg.byteLength > 4 * 1024 * 1024) jpeg = source.thumbnail.toJPEG(65);
+  if (jpeg.byteLength > 5 * 1024 * 1024) jpeg = source.thumbnail.toJPEG(45);
+  if (jpeg.byteLength > 6 * 1024 * 1024) throw new Error('Captured desktop frame exceeds the safe size limit.');
+  const size = source.thumbnail.getSize();
+  return {
+    dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}`,
+    source: { id: source.id, name: source.name, width: size.width, height: size.height },
+  };
+}
+
 /**
  * Starts the bridge once and reuses the retained handle for every renderer window. Bridge
  * startup occurs only after the encrypted database path and in-memory master key are ready.
@@ -70,6 +114,7 @@ async function ensureLocalBridge(
     const serverUrl = pathToFileURL(
       path.join(__dirname, '..', '..', 'backend-dist', 'bridgeServer.js'),
     ).href;
+    (globalThis as Record<string, unknown>)[SCREEN_CAPTURE_PROVIDER_KEY] = captureDesktopFrame;
     const mod = (await import(serverUrl)) as LocalBridgeServerModule;
     const devOrigin = process.env.CODE_EDITOR_DEV_SERVER_URL
       ? new URL(process.env.CODE_EDITOR_DEV_SERVER_URL).origin
@@ -124,6 +169,7 @@ async function closeLocalBridge(): Promise<void> {
   const browserSearch = duckDuckGoSearchWindow;
   bridgeHandle = null;
   duckDuckGoSearchWindow = null;
+  delete (globalThis as Record<string, unknown>)[SCREEN_CAPTURE_PROVIDER_KEY];
   browserSearch?.close();
   if (!current?.close) return;
   await current.close();
