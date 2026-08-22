@@ -291,6 +291,10 @@ export function assertSafePath(pathInput, { operation = 'read', settings } = {})
   }
 
   const normalizedPath = normalizePathForPolicy(rawPath);
+  const pathSegments = normalizedPath.split('/').filter(Boolean);
+  if (pathSegments.includes('.git')) {
+    throw new Error('Git metadata is managed by Source Control and is not available through agent file tools.');
+  }
 
   // ── Universal hardening (ALL profiles, including power) ───────────────────
   // Secrets must never be read and system/key dirs must never be written, even
@@ -338,6 +342,18 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
   const text = String(command || '').trim();
   if (!text) {
     throw new Error('Command is required.');
+  }
+
+  // Source Control owns repository mutation for the one Git repository at the workspace root.
+  // Agent shell commands may inspect Git state, but Git writes are host-managed so the model
+  // cannot accidentally create nested repositories, bypass the baseline, or rewrite history.
+  // This is deterministic command safety enforcement, not user-intent classification.
+  const mutatesEditorManagedGit =
+    /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[\/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i.test(text);
+  if (mutatesEditorManagedGit) {
+    throw new Error(
+      'Git mutations are managed by Source Control. Agent terminal Git is read-only; use status, diff, log, show, rev-parse, ls-files, grep, or blame for evidence.',
+    );
   }
 
   if (text.length > MAX_TERMINAL_COMMAND_LENGTH) {
