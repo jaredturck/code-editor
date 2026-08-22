@@ -68,6 +68,7 @@ function sourceForTool(toolName: string, args: Record<string, unknown>) {
   if (toolName === 'launch.run') return compactText(args.name || args.command, 500)
   if (toolName === 'browser.inspect') return compactText(args.url, 500)
   if (toolName === 'diagnostics.check') return compactText(args.path, 500)
+  if (toolName === 'agent.review') return compactText(args.focus || args.scope || 'independent peer review', 500)
   return ''
 }
 
@@ -88,6 +89,14 @@ function evaluateCandidateStatus(toolName: string, result: Record<string, unknow
     if (result.supported !== true) return 'unknown' as const
     if (result.ok === true) return 'passed' as const
     if (result.ok === false) return 'failed' as const
+    return 'unknown' as const
+  }
+
+  if (toolName === 'agent.review') {
+    if (result.reviewed !== true) return 'unknown' as const
+    const verdict = String(result.overallVerdict || '').trim().toLowerCase()
+    if (verdict === 'approved') return 'passed' as const
+    if (verdict === 'changes_requested' || verdict === 'mixed' || verdict === 'rejected') return 'failed' as const
     return 'unknown' as const
   }
 
@@ -114,6 +123,12 @@ function candidateDetail(toolName: string, result: Record<string, unknown>) {
       : result.ok === false
         ? 'Editor diagnostics reported one or more errors.'
         : 'Diagnostics did not return a definitive status.'
+  }
+  if (toolName === 'agent.review') {
+    if (result.reviewed !== true) return 'Independent review did not complete successfully.'
+    const verdict = String(result.overallVerdict || 'unknown').trim() || 'unknown'
+    const findings = Array.isArray(result.findings) ? result.findings.length : 0
+    return `Independent review verdict=${verdict}; findings=${findings}.`
   }
   return 'Verification status is unknown.'
 }
@@ -192,7 +207,7 @@ export function addVerificationCandidate(
   args: Record<string, unknown>,
   result: Record<string, unknown>,
 ) {
-  if (!['terminal.exec', 'launch.run', 'browser.inspect', 'diagnostics.check'].includes(toolName)) {
+  if (!['terminal.exec', 'launch.run', 'browser.inspect', 'diagnostics.check', 'agent.review'].includes(toolName)) {
     return null
   }
 

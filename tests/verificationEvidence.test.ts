@@ -39,6 +39,25 @@ describe('verification evidence', () => {
     expect(evaluateVerificationGate(state).passed).toBe(true)
   })
 
+  it('treats independent review as exact evidence and stales it after a later source mutation', () => {
+    const state = createVerificationState('review-evidence', true)
+    declareVerificationRequirements(state, ['independent-review'])
+
+    const review = addVerificationCandidate(
+      state,
+      'agent.review',
+      { focus: 'final implementation review' },
+      { reviewed: true, overallVerdict: 'approved', findings: [] },
+    )!
+    recordVerificationEvidence(state, 'independent-review', review.id)
+    expect(evaluateVerificationGate(state).passed).toBe(true)
+
+    markVerificationMutation(state)
+    const gate = evaluateVerificationGate(state)
+    expect(gate.passed).toBe(false)
+    expect(gate.requirements[0].status).toBe('stale')
+  })
+
   it('never treats missing terminal exit codes or unsupported diagnostics as passing evidence', () => {
     const state = createVerificationState('unknown-results', true)
     declareVerificationRequirements(state, ['runtime', 'diagnostics'])

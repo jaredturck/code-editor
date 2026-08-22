@@ -22,7 +22,7 @@ const verificationRecordDefinition: ToolDefinition = {
   name: 'verification.record',
   module: 'Agent',
   description:
-    'Bind one declared verification requirement to an exact verificationCandidateId returned by terminal.exec, launch.run, browser.inspect, or diagnostics.check. The runtime derives pass/fail from the real result; never provide a passed boolean.',
+    'Bind one declared verification requirement to an exact verificationCandidateId returned by terminal.exec, launch.run, browser.inspect, diagnostics.check, or agent.review. The runtime derives pass/fail from the real result; never provide a passed boolean.',
   args: {
     kind: 'string — one currently declared verification requirement',
     candidateId: 'string — exact verificationCandidateId returned by a real verification tool result',
