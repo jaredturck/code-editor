@@ -21,6 +21,9 @@ Completed integration milestones:
 - Model routing, health and failover
 - Hybrid local + cloud execution
 - Advanced local model runtime integration
+- Multi-agent orchestration
+- Multi-agent coding coordination
+- Review and autonomous quality control
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -34,16 +37,22 @@ Artifacts are also connected to autonomous runs. Persisted chats receive IRIS's 
 
 Autonomous research now uses the migrated `search.web`, `web.fetch` and trusted-source lookup path directly. The project-run contract tells the agent to discover candidate sources, fetch only evidence it needs, preserve source URLs, reconcile conflicting sources and treat fetched content as untrusted evidence rather than executable instructions. IRIS's existing per-site ingestion guard, network/redirect policy and untrusted-content marking remain the enforcement layer; ordinary HTTP links in chat and artifact Markdown continue through the Code Editor's external-link boundary.
 
-Code Editor no longer disables IRIS's configured model execution policy. Complexity-aware routing, adaptive health state, cooldown/recovery and bounded failover can now operate during autonomous runs while multi-agent execution remains explicitly disabled until its dedicated milestone. Hybrid runs may use a configured local worker for the working loop and reserve the selected cloud responder for synthesis; focused `cloud.consult` calls are exposed only when a persisted session actually has both a cloud responder and a local worker, and all remote inference shares the existing cloud request budget.
+Code Editor no longer disables IRIS's configured model execution policy. Complexity-aware routing, adaptive health state, cooldown/recovery and bounded failover operate during autonomous runs. Hybrid runs may use a configured local worker for the working loop and reserve the selected cloud responder for synthesis; focused `cloud.consult` calls are exposed only when a persisted session actually has both a cloud responder and a local worker, and all remote inference shares the existing cloud request budget.
 
-Local execution continues through IRIS's provider-neutral Ollama and OpenAI-compatible/LM Studio adapters. Auto Setup now ranks installed chat models using both agent-role suitability and conservative parameter/quantization-aware VRAM fit before downloading a fallback, preserves unknown custom model names instead of rejecting them, and retains hardware-aware Ollama fallback selection. With multi-agent execution still off, autonomous Code Editor runs schedule one local working model at a time, avoiding concurrent local-agent VRAM contention until the multi-agent coordination milestone introduces explicit worker concurrency policy.
+Local execution continues through IRIS's provider-neutral Ollama and OpenAI-compatible/LM Studio adapters. Auto Setup ranks installed chat models using both agent-role suitability and conservative parameter/quantization-aware VRAM fit before downloading a fallback and preserves unknown custom model names instead of rejecting them. Multi-agent Code Editor sessions keep the persisted roster unchanged but admit at most one local model into the active runtime team, preferring the local Orchestrator or configured required local worker; cloud peers can still work concurrently without allowing several local LLMs to contend for VRAM.
+
+Configured workspace runs can now activate IRIS's multi-agent team instead of forcing single-agent mode. The Orchestrator can discover available members, delegate bounded work to Executor/Scout members, run independent tasks asynchronously, recall one or many results, pull full encrypted sub-agent output on demand, consult peers and use the Reviewer/Overwatcher paths. Omitted delegated tool lists correctly inherit each role's permission-tier defaults while explicit empty lists remain tool-free, so ordinary implementation delegation is capable without widening an explicitly restricted task.
+
+Parallel coding is guarded at the editor boundary before it is allowed to mutate project files. Delegated writers carry distinct actor/task identities, acquire task-scoped file leases and retain those leases until their task settles. Live CodeMirror revisions are remembered per agent rather than globally: another agent cannot inherit a peer's fresh revision, a second writer cannot claim an already leased file, and a human edit invalidates the agent's expected revision so the next write must re-read live content instead of overwriting the user. Lease cleanup runs through the central sub-agent settlement path on success, failure and timeout.
+
+Multi-agent completion now has an explicit autonomous acceptance gate. Coding mutations require an independent `agent.review` after the latest main or delegated write; changes-requested, mixed, unknown or stale reviews block completion. Open TODOs, active/queued delegated tasks and outstanding write leases also block the gate. The stable runtime automatically runs bounded remediation continuations to recall outstanding work, resolve collisions, fix reviewer findings, rerun verification and re-review; if the gate still cannot pass, it leaves an in-progress resumable acceptance TODO so Code Editor pauses the project instead of falsely marking it complete.
 
 ## Next milestone
 
-**Multi-Agent Development**
+**Perception and Automation**
 
-- Orchestrator, Executor, Scout and Reviewer/Overwatcher delegation and result recall
-- file ownership / write leases and agent-agent collision prevention
-- independent review, remediation and final acceptance gating
+- audio transcription/provider configuration and voice input for Agent Chat
+- screen capture, vision runtime and permissioned visual verification/actions
+- automation service, approvals and future scheduled/background project tasks
 
-Audio/vision/automation, system/local-tool capabilities, autonomous-run security hardening and final validation remain later grouped batches.
+System/runtime visibility, launcher/local-system capability integration, autonomous-run security policy hardening and final validation remain later grouped batches.
