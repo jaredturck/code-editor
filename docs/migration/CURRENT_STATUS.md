@@ -30,6 +30,7 @@ Completed integration milestones:
 - System monitoring and runtime visibility
 - Launcher and local-system capabilities
 - Security and autonomous-run policy
+- Re-enabled compatible migrated IRIS runtime tests
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -77,11 +78,13 @@ Runtime now displays the effective autonomous authority alongside system/agent t
 
 Focused runtime/local-system and autonomous-policy regressions cover permission-scoped tool exposure, delegated capability inheritance, fail-closed defaults, web/package guard behavior, managed dev-environment bridge permission, final launcher/screen/automation authorization and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
 
+Compatible migrated IRIS runtime tests are now re-enabled through a dedicated `vitest.iris.config.ts` and are included in the normal `npm test` path. The active migrated surface contains 90 backend/runtime test files spanning agent and multi-agent orchestration, providers and routing, broker/security policy, semantic filesystem/indexing, persistence, bridge services and supporting runtime contracts. The configuration keeps the old IRIS presentation-only tests archived and uses narrow compatibility mappings only for the original `server/` and provider source locations. A static resolution audit over all 90 selected files found no unresolved internal imports. The supplied source snapshot still has no `node_modules`, so this continuation could not execute the newly re-enabled suite and does not claim a passing runtime result.
+
 ## Next milestone
 
 **Validation and hardening**
 
-- re-enable compatible migrated IRIS backend/agent/broker/security/provider/semantic/multi-agent suites incrementally
 - re-enable benchmark commands that remain meaningful in the Code Editor product shell
-- add dedicated long-running run/recovery tests and expand multi-agent collision validation
+- add dedicated long-running run/recovery tests
+- expand multi-agent collision validation
 - run the final repository-wide dependency-aware verification once the environment has installed dependencies
