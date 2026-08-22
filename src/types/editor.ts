@@ -210,6 +210,27 @@ export interface AgentActivityItem {
   at: number
 }
 
+export interface AgentUsageSummary {
+  provider?: string
+  model?: string
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  requests: number
+  contextWindow: number
+  contextRemaining: number
+  contextUsedPct: number
+  estimatedCalls: number
+  providerReportedCalls: number
+  estimatedOnly: boolean
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  cacheHitRatio: number
+  nativeSteps: number
+  jsonSteps: number
+  nativeToolAdoption: number
+}
+
 export interface AIChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -221,4 +242,5 @@ export interface AIChatMessage {
   provider?: string
   model?: string
   run_id?: string
+  usage?: AgentUsageSummary
 }
