@@ -1,4 +1,4 @@
-const workspaceNativeTools = ['diagnostics.check'] as const
+const workspaceNativeTools = ['diagnostics.check', 'verification.require', 'verification.record'] as const
 
 export function withEditorNativeToolScope(settings: Record<string, any> | null | undefined) {
   if (!settings || !String(settings.agent_working_dir || '').trim()) return settings
