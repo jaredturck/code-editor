@@ -10,6 +10,7 @@ export type BridgePermission =
   | 'terminal'
   | 'launcher'
   | 'automation'
+  | 'screenCapture'
   | 'microphone';
 
 export interface BridgePermissionState {
@@ -18,6 +19,7 @@ export interface BridgePermissionState {
   terminal: boolean;
   launcher: boolean;
   automation: boolean;
+  screenCapture: boolean;
   microphone: boolean;
 }
 
@@ -31,6 +33,7 @@ export const DEFAULT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = Objec
   terminal: false,
   launcher: false,
   automation: false,
+  screenCapture: false,
   microphone: false,
 });
 
@@ -40,6 +43,7 @@ export const DEVELOPMENT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = O
   terminal: true,
   launcher: true,
   automation: true,
+  screenCapture: true,
   microphone: true,
 });
 
@@ -54,6 +58,8 @@ export function normalizeBridgePermissions(
     terminal: value?.terminal === undefined ? fallback.terminal : value.terminal === true,
     launcher: value?.launcher === undefined ? fallback.launcher : value.launcher === true,
     automation: value?.automation === undefined ? fallback.automation : value.automation === true,
+    screenCapture:
+      value?.screenCapture === undefined ? fallback.screenCapture : value.screenCapture === true,
     microphone: value?.microphone === undefined ? fallback.microphone : value.microphone === true,
   };
 }
