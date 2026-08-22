@@ -197,8 +197,8 @@ function requiresToolBackedWorkspaceMutation(input: AgentSessionInput) {
   if (!isWorkspaceProjectRun(input) || input.settings?.permissions_file_write !== true) return false;
   const text = String(input.userInput || '').trim();
   if (!text) return false;
-  const action = /\b(create|make|add|write|edit|modify|update|change|fix|implement|delete|remove|rename|move)\b/i.test(text);
-  const target = /\b(file|files|code|script|component|module|page|website|project)\b|\.[a-z0-9]{1,8}\b/i.test(text);
+  const action = /\b(create|make|add|write|edit|modify|update|change|fix|implement|build|develop|refactor|configure|setup|set up|delete|remove|rename|move)\b/i.test(text);
+  const target = /\b(file|files|code|script|component|module|page|website|project|app|application|service|api|frontend|front end|backend|back end)\b|\.[a-z0-9]{1,8}\b/i.test(text);
   const explanatory = /\b(how (do|can|would)|explain|example|show me how|what is|why)\b/i.test(text);
   return action && target && !explanatory;
 }
