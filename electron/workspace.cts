@@ -3,6 +3,19 @@ import { watch, type FSWatcher } from 'node:fs'
 import { access, cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createHash } from 'node:crypto'
+import {
+  abandon_agent_git_run,
+  commit_agent_changes,
+  commit_staged_changes,
+  ensure_workspace_repository,
+  get_git_diff,
+  get_git_history,
+  get_git_status,
+  prepare_agent_git_run,
+  remove_nested_repository,
+  stage_git_paths,
+  unstage_git_paths,
+} from './git.cjs'
 
 export type WorkspaceEntryKind = 'file' | 'directory'
 export type WorkspaceClipboardOperation = 'copy' | 'cut'
@@ -564,4 +577,21 @@ if (ipcMain?.handle) {
       return list_agent_workspace(root_path, target_path, depth)
     },
   )
+}
+
+
+// Git is rooted to the open workspace and exposed as structured IPC so neither the renderer
+// nor an agent needs to construct arbitrary Git shell commands for source-control operations.
+if (ipcMain?.handle) {
+  ipcMain.handle('git:ensure-repository', async (_event, root_path: string) => ensure_workspace_repository(root_path))
+  ipcMain.handle('git:status', async (_event, root_path: string) => get_git_status(root_path))
+  ipcMain.handle('git:history', async (_event, root_path: string, limit: number) => get_git_history(root_path, limit))
+  ipcMain.handle('git:diff', async (_event, root_path: string, file_path: string) => get_git_diff(root_path, file_path))
+  ipcMain.handle('git:stage', async (_event, root_path: string, file_paths: string[]) => stage_git_paths(root_path, file_paths))
+  ipcMain.handle('git:unstage', async (_event, root_path: string, file_paths: string[]) => unstage_git_paths(root_path, file_paths))
+  ipcMain.handle('git:commit', async (_event, root_path: string, message: string) => commit_staged_changes(root_path, message))
+  ipcMain.handle('git:remove-nested-repository', async (_event, root_path: string, git_path: string) => remove_nested_repository(root_path, git_path))
+  ipcMain.handle('git:prepare-agent-run', async (_event, root_path: string, run_id: string) => prepare_agent_git_run(root_path, run_id))
+  ipcMain.handle('git:commit-agent-changes', async (_event, root_path: string, run_id: string, goal: string) => commit_agent_changes(root_path, run_id, goal))
+  ipcMain.handle('git:abandon-agent-run', async (_event, run_id: string) => abandon_agent_git_run(run_id))
 }
