@@ -42,6 +42,17 @@ describe('autonomous multi-agent acceptance', () => {
     expect(delegated.accepted).toBe(false)
   })
 
+  it('does not force independent review when the runtime marks a simple mutation as proportionate', () => {
+    const result = evaluate({
+      require_independent_review: false,
+      step_history: [{ tool: 'files.write', ok: true, summary: 'created main.py' }],
+    })
+
+    expect(result.requires_review).toBe(false)
+    expect(result.accepted).toBe(true)
+    expect(result.blockers).toEqual([])
+  })
+
   it('rejects changes-requested review and a review made stale by later edits', () => {
     const requested = evaluate({
       step_history: [
