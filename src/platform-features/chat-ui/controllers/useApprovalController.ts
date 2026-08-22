@@ -5,6 +5,15 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  buildBridgePermissionState,
+  buildPersistentPermissionPatch,
+  normalizePersistentPermissionKeys,
+  readOrbSettings,
+  writeOrbSettings,
+  type OrbSettings,
+  type PersistentPermissionKey,
+} from '@/platform/settingsStorage';
 import type { ApprovalRequest, ApprovalResolver, ApprovalResolution } from '../types';
 import { isApprovalDecisionApproved, normalizeApprovalDecision } from '../utils/approvals';
 
@@ -21,7 +30,7 @@ export interface ApprovalController {
     requestId: string,
     decision?: string,
     options?: ResolveApprovalOptions,
-  ): void;
+  ): Promise<void>;
   resolveQuestionRequest(requestId: string, answer: string, options?: ResolveApprovalOptions): void;
   clearApprovalRequests(resolution?: Partial<ApprovalResolution>): void;
 }
@@ -37,6 +46,26 @@ export function useApprovalController(
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
   const approvalResolversRef = useRef(new Map<string, ApprovalResolver>());
   const approvalTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const transientPermissionKeysRef = useRef(new Set<PersistentPermissionKey>());
+
+  const syncBridgePermissions = async (settings: OrbSettings): Promise<void> => {
+    const updateBridgePermissions = window.orbitDesktop?.security?.updateBridgePermissions;
+    if (!updateBridgePermissions) throw new Error('The trusted desktop permission bridge is unavailable.');
+    const permissions = {
+      ...buildBridgePermissionState(settings),
+      screenCapture: settings.permissions_screen_capture === true,
+    };
+    const result = await (updateBridgePermissions as unknown as (permissions: typeof permissions) => Promise<{ ok: boolean; error?: string }>)(permissions);
+    if (result?.ok === false) throw new Error(result.error || 'The trusted bridge rejected the permission change.');
+  };
+
+  const restorePersistedBridgePermissions = (): void => {
+    if (!transientPermissionKeysRef.current.size) return;
+    transientPermissionKeysRef.current.clear();
+    void syncBridgePermissions(readOrbSettings()).catch(() => {
+      setStatus('Temporary permission cleanup failed; review permissions in Settings.');
+    });
+  };
 
   // Clears approval requests without disturbing unrelated application state.
   const clearApprovalRequests = (resolution: Partial<ApprovalResolution> = {}): void => {
@@ -51,7 +80,14 @@ export function useApprovalController(
     approvalTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
     approvalTimeoutsRef.current.clear();
     setApprovalRequests([]);
+    restorePersistedBridgePermissions();
   };
+
+  useEffect(() => {
+    void syncBridgePermissions(readOrbSettings()).catch(() => {
+      setStatus('Desktop permissions could not be synchronized.');
+    });
+  }, []);
 
   useEffect(
     () => () => {
@@ -65,19 +101,47 @@ export function useApprovalController(
       approvalResolversRef.current.clear();
       approvalTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
       approvalTimeoutsRef.current.clear();
+      restorePersistedBridgePermissions();
     },
     [],
   );
 
   // Resolves approval request from the available configuration and runtime context.
-  const resolveApprovalRequest = (
+  const resolveApprovalRequest = async (
     requestId: string,
     decision = 'deny',
     options: ResolveApprovalOptions = {},
-  ): void => {
+  ): Promise<void> => {
     const timedOut = options.timedOut === true;
     const normalizedDecision = normalizeApprovalDecision(decision);
-    const approved = isApprovalDecisionApproved(normalizedDecision);
+    const request = approvalRequests.find((item) => item.id === requestId) || null;
+    const requestType = String(request?.requestType || 'permission').toLowerCase();
+    const permissionKeys = normalizePersistentPermissionKeys(request?.permissionKeys);
+    const explicitPermissionDecision =
+      requestType === 'permission' &&
+      permissionKeys.length > 0 &&
+      (normalizedDecision === 'allow_once' || normalizedDecision === 'allow_always');
+    let approved = isApprovalDecisionApproved(normalizedDecision) || explicitPermissionDecision;
+
+    if (approved && explicitPermissionDecision) {
+      const current = readOrbSettings();
+      const requestedPatch = buildPersistentPermissionPatch(permissionKeys);
+      const transientKeys = Array.from(transientPermissionKeysRef.current);
+      const activePatch = buildPersistentPermissionPatch([...transientKeys, ...permissionKeys]);
+      const activeSettings = { ...current, ...activePatch } as OrbSettings;
+      try {
+        await syncBridgePermissions(activeSettings);
+        if (normalizedDecision === 'allow_always') {
+          writeOrbSettings({ ...current, ...requestedPatch });
+        } else {
+          for (const key of permissionKeys) transientPermissionKeysRef.current.add(key);
+        }
+      } catch (error) {
+        approved = false;
+        setStatus(error instanceof Error ? error.message : 'The requested permission could not be enabled.');
+      }
+    }
+
     const resolver = approvalResolversRef.current.get(requestId);
     approvalResolversRef.current.delete(requestId);
 
@@ -87,20 +151,14 @@ export function useApprovalController(
       approvalTimeoutsRef.current.delete(requestId);
     }
 
-    const resolvedRequest: { current: ApprovalRequest | null } = { current: null };
-    setApprovalRequests((previous) => {
-      resolvedRequest.current = previous.find((request) => request.id === requestId) || null;
-      return previous.filter((request) => request.id !== requestId);
-    });
-
-    if (resolver) resolver({ approved: Boolean(approved), decision: normalizedDecision });
+    setApprovalRequests((previous) => previous.filter((item) => item.id !== requestId));
+    if (resolver) resolver({ approved: Boolean(approved), decision: approved ? normalizedDecision : 'deny' });
 
     if (timedOut) {
       setStatus('Approval request timed out.');
       return;
     }
 
-    const requestType = String(resolvedRequest.current?.requestType || 'permission').toLowerCase();
     if (requestType === 'limit') {
       if (!approved) setStatus('Limit extension denied for this session run.');
       else if (normalizedDecision === 'continue')
@@ -112,12 +170,10 @@ export function useApprovalController(
       return;
     }
 
-    const persistentPermission =
-      resolvedRequest.current?.persistentPermission === true ||
-      (Array.isArray(resolvedRequest.current?.permissionKeys) &&
-        resolvedRequest.current.permissionKeys.length > 0);
-    if (persistentPermission) {
-      setStatus(approved ? 'Permission saved in Settings.' : 'Permission denied.');
+    if (permissionKeys.length > 0) {
+      if (!approved) setStatus('Permission denied.');
+      else if (normalizedDecision === 'allow_always') setStatus('Permission enabled in Settings.');
+      else setStatus('Permission allowed for this project run.');
       return;
     }
 
