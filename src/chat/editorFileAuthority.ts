@@ -49,6 +49,58 @@ function split_lines(content: string) {
   return content.replace(/\r\n/g, '\n').split('\n')
 }
 
+function build_pattern_blocks(
+  lines: string[],
+  pattern: string,
+  pattern_regex: boolean,
+  ignore_case: boolean,
+  context_lines: number,
+  max_results: number,
+) {
+  const normalized_context = Math.max(0, Math.min(20, Math.round(context_lines)))
+  const normalized_max_results = Math.max(1, Math.min(200, Math.round(max_results)))
+  const matcher = pattern_regex ? new RegExp(pattern, ignore_case ? 'i' : '') : null
+  const needle = ignore_case ? pattern.toLowerCase() : pattern
+  const matches: number[] = []
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const matched = matcher
+      ? matcher.test(line)
+      : (ignore_case ? line.toLowerCase() : line).includes(needle)
+    if (matched) matches.push(index)
+  }
+
+  const selected_matches = matches.slice(0, normalized_max_results)
+  const ranges = selected_matches.map((index) => ({
+    start: Math.max(0, index - normalized_context),
+    end: Math.min(lines.length - 1, index + normalized_context),
+  }))
+  const merged_ranges: Array<{ start: number; end: number }> = []
+
+  for (const range of ranges) {
+    const previous = merged_ranges[merged_ranges.length - 1]
+    if (previous && range.start <= previous.end + 1) {
+      previous.end = Math.max(previous.end, range.end)
+    } else {
+      merged_ranges.push({ ...range })
+    }
+  }
+
+  return {
+    matchCount: matches.length,
+    truncated: matches.length > selected_matches.length,
+    blocks: merged_ranges.map((range) => ({
+      startLine: range.start + 1,
+      endLine: range.end + 1,
+      lines: lines.slice(range.start, range.end + 1).map((content, offset) => ({
+        line: range.start + offset + 1,
+        content,
+      })),
+    })),
+  }
+}
+
 function build_simple_diff(file_path: string, current: string, proposed: string) {
   if (current === proposed) {
     return { path: file_path, diff: '', added: 0, removed: 0, changed: false }
@@ -259,6 +311,28 @@ export function create_editor_file_authority(
         observed_disk_revisions.set(normalize_path(disk.path), disk.revision)
 
         const lines = split_lines(content)
+        const pattern = args.pattern !== undefined ? String(args.pattern) : ''
+        if (pattern) {
+          const pattern_result = build_pattern_blocks(
+            lines,
+            pattern,
+            args.patternRegex === true || args.useRegex === true,
+            args.ignoreCase !== false,
+            Number.isFinite(Number(args.patternContext)) ? Number(args.patternContext) : 2,
+            Number.isFinite(Number(args.maxResults)) ? Number(args.maxResults) : 50,
+          )
+          return {
+            path: disk.path,
+            isBinary: false,
+            mode: 'pattern',
+            pattern,
+            ...pattern_result,
+            totalLines: lines.length,
+            dirty: Boolean(snapshot?.dirty),
+            revision,
+          }
+        }
+
         const tail = Number(args.tail) || 0
         const start_line = tail > 0 ? Math.max(1, lines.length - tail + 1) : Math.max(1, Number(args.startLine) || 1)
         const line_count = tail > 0 ? tail : Math.max(1, Math.min(2000, Number(args.lineCount) || 950))
@@ -269,12 +343,13 @@ export function create_editor_file_authority(
           path: disk.path,
           content: selected.join('\n'),
           isBinary: false,
+          ...(tail > 0 ? { mode: 'tail' } : {}),
           startLine: start_line,
           endLine: end_line,
           lineCount: selected.length,
           totalLines: lines.length,
-          hasMore: end_line < lines.length,
-          nextStartLine: end_line < lines.length ? end_line + 1 : null,
+          hasMore: tail > 0 ? false : end_line < lines.length,
+          nextStartLine: tail > 0 ? null : end_line < lines.length ? end_line + 1 : null,
           dirty: Boolean(snapshot?.dirty),
           revision,
         }
