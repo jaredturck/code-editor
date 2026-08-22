@@ -1,4 +1,5 @@
 import { getChatSessionState, saveChatSessionState } from '@/platform/chatSessionStore'
+import type { AgentUsageSummary } from '@/types/editor'
 
 export type ProjectRunStatus =
   | 'starting'
@@ -39,6 +40,7 @@ export interface ProjectRunState {
   todos: ProjectRunTodo[]
   steps: number
   summary: string
+  usage: AgentUsageSummary | null
   last_activity: string
   error: string
 }
@@ -96,6 +98,31 @@ function normalize_todo_status(value: unknown): ProjectRunTodo['status'] {
     return status
   }
   return 'pending'
+}
+
+function normalize_project_run_usage(value: unknown): AgentUsageSummary | null {
+  if (!value || typeof value !== 'object') return null
+  const source = value as Record<string, unknown>
+  return {
+    provider: String(source.provider || ''),
+    model: String(source.model || ''),
+    promptTokens: Math.max(0, Number(source.promptTokens) || 0),
+    completionTokens: Math.max(0, Number(source.completionTokens) || 0),
+    totalTokens: Math.max(0, Number(source.totalTokens) || 0),
+    requests: Math.max(0, Number(source.requests) || 0),
+    contextWindow: Math.max(0, Number(source.contextWindow) || 0),
+    contextRemaining: Math.max(0, Number(source.contextRemaining) || 0),
+    contextUsedPct: Math.max(0, Math.min(100, Number(source.contextUsedPct) || 0)),
+    estimatedCalls: Math.max(0, Number(source.estimatedCalls) || 0),
+    providerReportedCalls: Math.max(0, Number(source.providerReportedCalls) || 0),
+    estimatedOnly: source.estimatedOnly === true,
+    cacheReadTokens: Math.max(0, Number(source.cacheReadTokens) || 0),
+    cacheWriteTokens: Math.max(0, Number(source.cacheWriteTokens) || 0),
+    cacheHitRatio: Math.max(0, Math.min(1, Number(source.cacheHitRatio) || 0)),
+    nativeSteps: Math.max(0, Number(source.nativeSteps) || 0),
+    jsonSteps: Math.max(0, Number(source.jsonSteps) || 0),
+    nativeToolAdoption: Math.max(0, Math.min(1, Number(source.nativeToolAdoption) || 0)),
+  }
 }
 
 export function normalize_project_run_todos(value: unknown): ProjectRunTodo[] {
@@ -184,7 +211,8 @@ export function normalize_project_run_state(value: unknown): ProjectRunState | n
     segment_started_at: Math.max(0, Number(source.segment_started_at) || 0),
     todos: normalize_project_run_todos(source.todos),
     steps: Math.max(0, Number(source.steps) || 0),
-    summary: String(source.summary || '').slice(0, 4000),
+    summary: typeof source.summary === 'string' ? source.summary.slice(0, 4000) : '',
+    usage: normalize_project_run_usage(source.usage),
     last_activity: String(source.last_activity || '').slice(0, 300),
     error: String(source.error || '').slice(0, 1000),
   }
@@ -210,7 +238,11 @@ function apply_patch(state: ProjectRunState, patch: ProjectRunPatch) {
     state.steps = Math.max(0, Number(patch.steps) || 0)
   }
   if (Object.hasOwn(patch, 'summary')) {
-    state.summary = String(patch.summary || '').slice(0, 4000)
+    const summary = patch.summary && typeof patch.summary === 'object'
+      ? patch.summary as Record<string, unknown>
+      : null
+    state.summary = typeof patch.summary === 'string' ? patch.summary.slice(0, 4000) : ''
+    state.usage = normalize_project_run_usage(summary?.usage)
   }
   if (Object.hasOwn(patch, 'last_activity')) {
     state.last_activity = String(patch.last_activity || '').slice(0, 300)
@@ -313,6 +345,7 @@ function begin(input: BeginProjectRunInput) {
     todos: normalize_project_run_todos(input.todos),
     steps: 0,
     summary: '',
+    usage: null,
     last_activity: input.mode === 'plan_first' ? 'Planning project run' : 'Starting project run',
     error: '',
   }
