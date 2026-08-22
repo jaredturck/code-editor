@@ -28,6 +28,7 @@ Completed integration milestones:
 - Vision and screen capabilities
 - Permissioned desktop automation
 - System monitoring and runtime visibility
+- Launcher and local-system capabilities
 
 Agent Chat exposes the migrated IRIS `rag.retrieve` capability during workspace runs. Semantic retrieval is scoped to the active Code Editor workspace before candidates are selected; candidate files are then re-read through the editor-aware file authority so dirty CodeMirror buffers are authoritative, and IRIS's existing temporary chunking/ranking returns bounded passages with file and line provenance. The same tool remains callable throughout long autonomous runs, so the agent can refresh project evidence after edits instead of relying on a one-time context snapshot.
 
@@ -65,15 +66,17 @@ System/runtime visibility is now surfaced directly inside the existing Agent Cha
 
 IRIS's existing run-summary telemetry now survives into the encrypted project-run checkpoint instead of being flattened away by the Code Editor adapter. The Runtime view exposes provider/model routing cost tier plus model request count, prompt/completion tokens, context-window use and remaining capacity, and prompt-cache hit ratio. It deliberately does not expose raw chain-of-thought, raw token streams, credentials or environment-variable values, and it does not fabricate dollar costs where provider pricing is not available from the runtime.
 
-Autonomous sessions can now call the existing read-only `system.stats`, `system.processes` and `launcher.list` tools without requesting a new privileged capability. The project-run guidance tells the Orchestrator to inspect current machine pressure and verified launcher/tool availability rather than guessing. `launch.run` is admitted only when the existing workspace terminal/local-execution permission is already enabled, preserving the current broker/launcher safety and approval boundary. Managed development-environment start/stop remains a separate local-system integration item and is not claimed complete here.
+Autonomous sessions can now call the existing read-only `system.stats`, `system.processes` and `launcher.list` tools without requesting a new privileged capability. The project-run guidance tells the Orchestrator to inspect current machine pressure and verified launcher/tool availability rather than guessing. `launch.run` is admitted only when the existing workspace terminal/local-execution permission is already enabled, preserving the current broker/launcher safety and approval boundary.
 
-Focused runtime-visibility regressions cover the read-only discovery allowlist, permission-gated local launching, monitor/roster/usage wiring, durable usage extraction and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
+The remaining migrated launcher/local-system lifecycle is also surfaced without importing the old IRIS Launcher panel. Runtime polls the existing managed development-environment status for the configured working directory and provides explicit Start/Stop controls. Those actions call the existing `startDevEnvironment` / `stopDevEnvironment` bridge clients; the privileged routes continue to require the bridge-owned `launcher` capability, which is synchronized from the existing terminal/local-execution setting. Autonomous coding agents can still start ordinary project commands through their already-brokered terminal path, while the GUI now exposes IRIS's managed-process lifecycle for observation and direct user control.
+
+Focused runtime/local-system regressions cover the read-only discovery allowlist, permission-gated local launching, monitor/roster/usage wiring, durable usage extraction, managed dev-environment bridge permission and continued filtering of raw reasoning events. The supplied source snapshot still does not contain `node_modules`, so these Vitest regressions could not be executed in this continuation.
 
 ## Next milestone
 
-**Launcher/local-system completion and autonomous policy hardening**
+**Security and autonomous-run policy hardening**
 
-- connect the existing managed development-environment start/stop lifecycle to the autonomous local-system surface without bypassing launcher approvals
-- finish sanitized developer-tool discovery where the current launcher menu is insufficient
-- harden the final workspace/network/package/vision/automation autonomous-run authority and exact-operation approval boundaries
-- then move into staged migrated-test/benchmark re-enablement and long-run recovery validation
+- audit workspace-scoped autonomous authority across files, terminal, launcher, Vision and Automation
+- consolidate exact-operation approval and capability-token boundaries where integration exposed gaps
+- verify network/package guard behavior for unattended long-running project runs
+- then move into staged migrated-test/benchmark re-enablement and dedicated long-run recovery/stability validation
