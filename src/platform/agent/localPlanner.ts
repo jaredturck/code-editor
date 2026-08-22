@@ -8,10 +8,13 @@ import { readAgentModels } from '@/platform/agent/agentIdentity';
 
 export interface LocalPreflightPlan {
   taskType: string;
+  developmentTask: boolean;
   needsLocalFiles: boolean;
   needsWebResearch: boolean;
   localQueries: string[];
   webQueries: string[];
+  preflightChecks: string[];
+  verificationChecks: string[];
   steps: string[];
 }
 
@@ -76,7 +79,11 @@ export async function buildLocalPreflightPlan(
     'Create a compact execution preflight for an AI agent. Return JSON only.',
     'Do not expose chain-of-thought. Provide decisions, search queries, and observable steps.',
     'Schema:',
-    '{"taskType":"answer|research|code_change|file_task|other","needsLocalFiles":boolean,"needsWebResearch":boolean,"localQueries":string[],"webQueries":string[],"steps":string[]}',
+    '{"taskType":"answer|research|code_change|file_task|other","developmentTask":boolean,"needsLocalFiles":boolean,"needsWebResearch":boolean,"localQueries":string[],"webQueries":string[],"preflightChecks":string[],"verificationChecks":string[],"steps":string[]}',
+    'Set developmentTask=true when the request creates, changes, fixes, refactors, configures, or extends software rather than merely explaining code.',
+    'For development tasks, plan reconnaissance before substantive implementation: inspect the existing project structure, manifests, conventions, toolchain/environment, and available developer tooling instead of assuming a blank project or a particular ecosystem.',
+    'If the project is new or incomplete, the main agent should establish only the environment, dependency manifest, and structure that are normally appropriate for the ecosystem it actually discovers. Do not prescribe language-specific commands from this planner.',
+    'For development tasks, include verification appropriate to the discovered project. A successful implementation should be run, built, tested, linted, imported, or otherwise checked against reality as appropriate; failures should feed back into diagnosis and another fix/verify cycle.',
     'Use needsLocalFiles when files on the user computer could materially help.',
     'Use needsWebResearch for current/public facts or external sources, not for purely local code work.',
     `Current request: ${userInput}`,
@@ -106,11 +113,14 @@ export async function buildLocalPreflightPlan(
   if (!parsed) return null;
   return {
     taskType: String(parsed.taskType || 'other'),
+    developmentTask: parsed.developmentTask === true,
     needsLocalFiles: parsed.needsLocalFiles === true,
     needsWebResearch: parsed.needsWebResearch === true,
     localQueries: normalizeStrings(parsed.localQueries, 6),
     webQueries: normalizeStrings(parsed.webQueries, 6),
-    steps: normalizeStrings(parsed.steps, 10),
+    preflightChecks: normalizeStrings(parsed.preflightChecks, 8),
+    verificationChecks: normalizeStrings(parsed.verificationChecks, 8),
+    steps: normalizeStrings(parsed.steps, 12),
   };
 }
 
@@ -118,12 +128,21 @@ export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): strin
   if (!plan) return '';
   const parts = [
     `Local preflight: task=${plan.taskType}.`,
+    plan.developmentTask
+      ? 'Development lifecycle: inspect the current project and toolchain first; prepare only what is missing; implement; verify against the real environment; diagnose and fix any failures; then verify again before finishing.'
+      : '',
+    plan.preflightChecks.length
+      ? `Preflight checks: ${plan.preflightChecks.join(' | ')}.`
+      : '',
     plan.needsLocalFiles
       ? `Use filesystem RAG${plan.localQueries.length ? ` for: ${plan.localQueries.join(' | ')}` : ''}.`
       : 'Filesystem RAG is optional.',
     plan.needsWebResearch
       ? `Use web research${plan.webQueries.length ? ` for: ${plan.webQueries.join(' | ')}` : ''}.`
       : 'Web research is not initially required.',
+    plan.verificationChecks.length
+      ? `Verification goals: ${plan.verificationChecks.join(' | ')}.`
+      : '',
     plan.steps.length ? `Plan: ${plan.steps.join(' → ')}.` : '',
   ];
   return parts.filter(Boolean).join(' ');
