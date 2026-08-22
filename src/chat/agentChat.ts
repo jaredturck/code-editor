@@ -116,15 +116,18 @@ function runtime_agent_models(settings: Record<string, unknown>, multi_agent_ena
 
 export function get_core_agent_tool_allowlist(
   workspace_root: string | null,
-  terminal_enabled = false,
+  _terminal_enabled = false,
   multi_agent_enabled = false,
-  file_read_enabled = true,
-  file_write_enabled = true,
+  _file_read_enabled = true,
+  _file_write_enabled = true,
 ) {
   const tools = [...core_agent_tools, ...local_system_read_tools]
-  if (workspace_root && file_read_enabled) tools.push(...editor_workspace_read_tools)
-  if (workspace_root && file_write_enabled) tools.push(...editor_workspace_write_tools)
-  if (workspace_root && terminal_enabled) tools.push(...agent_terminal_tools)
+  if (workspace_root) {
+    // Advertise workspace-scoped capabilities even while disabled so the broker can stop a
+    // requested action at the permission boundary and ask the user to allow it. Tool exposure
+    // never grants authority: session policy plus the Electron bridge remain the final gate.
+    tools.push(...editor_workspace_read_tools, ...editor_workspace_write_tools, ...agent_terminal_tools)
+  }
   if (workspace_root && multi_agent_enabled) tools.push(...multi_agent_tools)
   return tools
 }
