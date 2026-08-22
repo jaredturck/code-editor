@@ -149,8 +149,12 @@ export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): strin
     plan.developmentTask
       ? 'Development lifecycle: inspect the current project and toolchain first; prepare only what is missing; implement; verify against the real environment; diagnose and fix any failures; then verify again before finishing.'
       : '',
-    plan.workspaceMutationExpected ? 'Task contract: workspace mutation is expected.' : '',
-    plan.verificationRequired ? 'Task contract: completion requires real verification.' : '',
+    plan.workspaceMutationExpected
+      ? 'Task contract: workspace mutation is required for completion. Make the requested change with the available workspace tools; do not finish with only a proposed snippet, example, or explanation. Remain in the current agent loop until the mutation succeeds or a genuine blocker prevents it.'
+      : '',
+    plan.verificationRequired
+      ? 'Task contract: completion requires real verification. Continue the current agent loop until appropriate verification evidence exists; if verification fails, diagnose the observed failure, choose the next action, fix it, and verify again.'
+      : '',
     plan.successCriteria.length ? `Success criteria: ${plan.successCriteria.join(' | ')}.` : '',
     plan.preflightChecks.length
       ? `Preflight checks: ${plan.preflightChecks.join(' | ')}.`
