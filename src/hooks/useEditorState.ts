@@ -697,6 +697,7 @@ function useEditorState() {
       ) {
         return
       }
+
       const next = raw_diagnostics.map((diagnostic, index) => ({
         ...diagnostic,
         id: `${document_id}:${version}:${index}:${diagnostic.source}`,
