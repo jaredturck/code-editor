@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { projectRunController } from '../chat/projectRunController'
 import type { ProjectRunState } from '../chat/projectRunController'
+import {
+  getDevEnvironmentStatus,
+  startDevEnvironment,
+  stopDevEnvironment,
+  type BridgeDevEnvironmentStatus,
+} from '../platform/desktopBridge'
 import { handleAgentRoster } from '../platform/orchestrationClient'
 import { getRoutingProfile } from '../platform/agent/modelRouting'
 import type { SubAgentRosterEntry } from '../platform/agent/subAgentTypes'
@@ -33,10 +39,23 @@ function agent_status_label(agent: SubAgentRosterEntry) {
   return `${role} · ${agent.status}${agent.queueDepth ? ` · ${agent.queueDepth} queued` : ''}`
 }
 
+function dev_status_label(status: BridgeDevEnvironmentStatus | null) {
+  if (!status) return 'Checking'
+  if (status.running) return `Running${status.projectName ? ` · ${status.projectName}` : ''}`
+  if (status.available) return `Ready${status.projectName ? ` · ${status.projectName}` : ''}`
+  return status.reason || 'Unavailable'
+}
+
 function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
   const { stats, procs, err } = useSystemMonitor()
   const [agents, set_agents] = useState<SubAgentRosterEntry[]>([])
   const [project_run, set_project_run] = useState<ProjectRunState | null>(() => projectRunController.get_state())
+  const [dev_status, set_dev_status] = useState<BridgeDevEnvironmentStatus | null>(null)
+  const [dev_busy, set_dev_busy] = useState(false)
+  const [dev_error, set_dev_error] = useState('')
+  const settings = readOrbSettings()
+  const working_dir = String(settings.agent_working_dir || '').trim()
+  const launcher_enabled = settings.permissions_terminal === true
 
   useEffect(() => projectRunController.subscribe(set_project_run), [])
 
@@ -55,7 +74,30 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
     return () => window.clearInterval(timer)
   }, [])
 
-  const settings = readOrbSettings()
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const status = await getDevEnvironmentStatus(working_dir)
+        if (!cancelled) {
+          set_dev_status(status)
+          set_dev_error('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          set_dev_error(error instanceof Error ? error.message : 'Development environment status failed.')
+        }
+      }
+    }
+
+    void poll()
+    const timer = window.setInterval(() => void poll(), 3000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [working_dir])
+
   const usage = project_run?.usage || null
   const usage_provider = usage?.provider || project_run?.provider || String(settings.ai_provider || '')
   const usage_model = usage?.model || project_run?.model || String(settings.ai_model || '')
@@ -64,6 +106,28 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
     (agent) => agent.status === 'working' || Boolean(agent.currentTaskId),
   ).length
   const queued_work = agents.reduce((total, agent) => total + Math.max(0, Number(agent.queueDepth) || 0), 0)
+
+  const start_dev_environment = async () => {
+    set_dev_busy(true)
+    set_dev_error('')
+    try {
+      set_dev_status(await startDevEnvironment(working_dir))
+    } catch (error) {
+      set_dev_error(error instanceof Error ? error.message : 'Development environment failed to start.')
+    }
+    set_dev_busy(false)
+  }
+
+  const stop_dev_environment = async () => {
+    set_dev_busy(true)
+    set_dev_error('')
+    try {
+      set_dev_status(await stopDevEnvironment())
+    } catch (error) {
+      set_dev_error(error instanceof Error ? error.message : 'Development environment failed to stop.')
+    }
+    set_dev_busy(false)
+  }
 
   return (
     <details className="shrink-0 border-b border-[var(--border)] bg-black/[0.03] px-3 py-2 text-[9px] text-[var(--muted)]">
@@ -115,6 +179,35 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
           <span className="text-right text-[var(--text)]">{Math.round(usage.cacheHitRatio * 100)}% hit</span>
         </div>
       )}
+
+      <div className="mt-2 border-t border-[var(--border)] pt-2">
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 font-medium text-[var(--text)]">Dev environment</span>
+          <span className="max-w-[55%] truncate" title={dev_status_label(dev_status)}>{dev_status_label(dev_status)}</span>
+        </div>
+        <div className="mt-1.5 flex justify-end gap-1.5">
+          <button
+            className="rounded border border-[var(--border)] px-2 py-1 hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={dev_busy || !launcher_enabled || !working_dir || !dev_status?.available || dev_status.running}
+            onClick={() => void start_dev_environment()}
+            type="button"
+          >
+            Start
+          </button>
+          <button
+            className="rounded border border-[var(--border)] px-2 py-1 hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={dev_busy || !launcher_enabled || !dev_status?.running}
+            onClick={() => void stop_dev_environment()}
+            type="button"
+          >
+            Stop
+          </button>
+        </div>
+        {!launcher_enabled && (
+          <div className="mt-1">Enable terminal/local execution in Settings → AI to manage the development environment.</div>
+        )}
+        {dev_error && <div className="mt-1 text-amber-300">{dev_error}</div>}
+      </div>
 
       {stats?.gpuDevices?.length ? (
         <div className="mt-2 space-y-1 border-t border-[var(--border)] pt-2">
