@@ -7,6 +7,7 @@
 import crypto = require('node:crypto');
 import fs = require('node:fs');
 import path = require('node:path');
+import '../navigationBootstrap.cjs';
 import type {
   App,
   BrowserWindow as ElectronBrowserWindow,
