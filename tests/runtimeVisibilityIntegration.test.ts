@@ -39,6 +39,18 @@ describe('runtime visibility and local-system integration', () => {
     expect(run_controller).toContain('state.usage = normalize_project_run_usage(summary?.usage)')
   })
 
+  it('reuses the permissioned managed development-environment lifecycle', () => {
+    const monitor = source('src/components/AgentRuntimePanel.tsx')
+    const launcher_routes = source('backend/desktopBridge/routes/fileRoutes.ts')
+
+    expect(monitor).toContain('startDevEnvironment(working_dir)')
+    expect(monitor).toContain('stopDevEnvironment()')
+    expect(monitor).toContain('settings.permissions_terminal === true')
+    expect(launcher_routes).toContain("pathname === '/api/local/launcher/dev/start'")
+    expect(launcher_routes).toContain("pathname === '/api/local/launcher/dev/stop'")
+    expect(launcher_routes.match(/requireBridgePermission\(securityContext, 'launcher'\)/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
   it('does not surface raw reasoning events in Agent Chat activity', () => {
     expect(normalize_agent_activity_event({ type: 'thinking', text: 'private reasoning' })).toBeNull()
     expect(normalize_agent_activity_event({ type: 'thinking_stream', text: 'private reasoning' })).toBeNull()
