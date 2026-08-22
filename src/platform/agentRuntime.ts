@@ -213,6 +213,31 @@ function hasSuccessfulWorkspaceMutation(result: AgentSessionResult) {
   });
 }
 
+function formatExecutionEvidence(result: AgentSessionResult, limit = 12) {
+  const history = Array.isArray(result.stepHistory) ? result.stepHistory : [];
+  if (!history.length) return '- No tool actions were recorded.';
+  return history
+    .slice(-limit)
+    .map((step, index) => {
+      const tool = String(step.tool || step.requestedTool || 'unknown');
+      const outcome = step.ok === false
+        ? `FAILED: ${cleanLine(step.error || step.summary || 'unknown error', 500)}`
+        : `OK: ${cleanLine(step.summary || 'completed', 500)}`;
+      return `${index + 1}. ${tool} — ${outcome}`;
+    })
+    .join('\n');
+}
+
+function buildRecoveryContinuation(originalRequest: string, result: AgentSessionResult) {
+  return [
+    'Continue the original request from the evidence already gathered. The previous attempt did not achieve the required workspace change.',
+    'Diagnose why progress stalled using the exact tool outcomes below, then decide the next action yourself. Do not blindly repeat an unchanged failed action; retry only when you have a concrete reason the outcome may now differ.',
+    'Reconcile any stale TODOs if the evidence invalidated an earlier assumption. Do not claim success unless the requested workspace work actually completes.',
+    `Original request:\n${originalRequest}`,
+    `Execution evidence from the previous attempt:\n${formatExecutionEvidence(result)}`,
+  ].join('\n\n');
+}
+
 function shouldRequireIndependentReview(input: AgentSessionInput, result: AgentSessionResult) {
   const mode = String(input.settings?.agent_peer_review || 'off').toLowerCase();
   if (mode === 'always') return true;
@@ -294,7 +319,7 @@ async function runWithAutonomousAcceptance(
   ) {
     const correctionInput: AgentSessionInput = {
       ...clean_input,
-      userInput: `Continue the original request and execute it in the workspace. No successful file mutation was recorded in the previous attempt. Use files.write/files.edit/files.patch to make the requested change; do not claim a file was created or edited unless the tool succeeds. Verify only what is useful, then reply briefly.\n\nOriginal request: ${clean_input.userInput}`,
+      userInput: buildRecoveryContinuation(clean_input.userInput, combined),
       conversation: [
         ...(clean_input.conversation || []),
         { role: 'assistant', content: combined.reply },
@@ -326,7 +351,7 @@ async function runWithAutonomousAcceptance(
     }
 
     remediation_passes += 1;
-    const remediation = buildAcceptanceRemediationPrompt(acceptance);
+    const remediation = `${buildAcceptanceRemediationPrompt(acceptance)}\n\nExecution evidence from earlier attempts:\n${formatExecutionEvidence(combined)}\n\nUse this evidence to reason about what remains. Reconcile stale TODOs or assumptions as needed instead of repeating failed actions without a reason.`;
     clean_input.onEvent?.({
       type: 'notice',
       level: 'warning',
