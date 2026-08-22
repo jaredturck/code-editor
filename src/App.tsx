@@ -18,7 +18,10 @@ import useAIChat from './hooks/useAIChat'
 import useEditorState from './hooks/useEditorState'
 import usePanelSizes from './hooks/usePanelSizes'
 import useWorkspace from './hooks/useWorkspace'
+import { readStorageText, removeStorageKey, writeStorageText } from './platform/localStorageStore'
 import type { EditorCommandId, EditorDiagnostic } from './types/editor'
+
+const last_workspace_storage_key = 'editor:last-workspace'
 
 const initial_editor_command_state: EditorCommandState = {
   can_undo: false,
@@ -79,10 +82,40 @@ function App() {
   })
   const panels = usePanelSizes(editor.ai_chat_open)
   const editor_ref = useRef<CodeEditorHandle>(null)
+  const restore_workspace_started_ref = useRef(false)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
   useEffect(() => {
     document.title = workspace.root_name ? `code-editor — ${workspace.root_name}` : 'code-editor'
   }, [workspace.root_name])
+  useEffect(() => {
+    if (restore_workspace_started_ref.current) return
+    restore_workspace_started_ref.current = true
+
+    const saved_workspace = readStorageText(last_workspace_storage_key).trim()
+    if (!saved_workspace) return
+
+    void window.editor_api.file
+      .check_paths([saved_workspace])
+      .then((path_status) => {
+        if (!path_status[saved_workspace]) {
+          removeStorageKey(last_workspace_storage_key)
+          return
+        }
+        void workspace.open_workspace(saved_workspace)
+      })
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    if (workspace.root_path) {
+      writeStorageText(last_workspace_storage_key, workspace.root_path)
+    }
+  }, [workspace.root_path])
+
+  const close_workspace = () => {
+    removeStorageKey(last_workspace_storage_key)
+    workspace.close_workspace()
+  }
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
@@ -164,7 +197,7 @@ function App() {
           clipboard={workspace.clipboard}
           expandedPaths={workspace.expanded_paths}
           nodes={workspace.nodes}
-          onCloseWorkspace={workspace.close_workspace}
+          onCloseWorkspace={close_workspace}
           onCollapseAll={workspace.collapse_all}
           onCopyPath={workspace.copy_path}
           onCreateEntry={workspace.create_entry}
