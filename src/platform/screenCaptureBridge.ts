@@ -10,7 +10,7 @@ function bridgeParam(name: string): string {
   return new URLSearchParams(window.location.search).get(name) || '';
 }
 
-async function syncScreenCapturePermission(): Promise<void> {
+export async function syncScreenCapturePermission(): Promise<void> {
   const security = window.orbitDesktop?.security;
   if (!security?.updateBridgePermissions) return;
   const settings = readOrbSettings();
@@ -61,3 +61,17 @@ export async function captureAgentScreen(
   }
   return { dataUrl, source };
 }
+
+let screenPermissionListenerInstalled = false;
+
+export function installScreenCapturePermissionSync(): void {
+  if (typeof window === 'undefined' || screenPermissionListenerInstalled) return;
+  screenPermissionListenerInstalled = true;
+  const synchronize = () => {
+    void syncScreenCapturePermission().catch(() => undefined);
+  };
+  window.addEventListener('iris:settings-updated', synchronize);
+  synchronize();
+}
+
+installScreenCapturePermissionSync();
