@@ -4,7 +4,7 @@ import { hasKeyFor } from '@/platform/keyStore'
 import { findAIProvider } from '@/platform/providers/providerRegistry'
 import { stripTerminalControlCharacters } from '@/platform/security'
 import type { OrbSettings } from '@/platform/settingsStorage'
-import type { AIAttachment, AgentActivityItem, AIChatMessage } from '@/types/editor'
+import type { AIAttachment, AgentActivityItem, AgentUsageSummary, AIChatMessage } from '@/types/editor'
 import type { ProjectRunMode } from '@/chat/projectRunController'
 
 export interface AgentChatDescriptor {
@@ -344,12 +344,38 @@ export function normalize_persisted_attachment(value: unknown): AIAttachment | n
   }
 }
 
+export function normalize_agent_usage(value: unknown): AgentUsageSummary | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const source = value as Record<string, unknown>
+  return {
+    provider: String(source.provider || ''),
+    model: String(source.model || ''),
+    promptTokens: Math.max(0, Number(source.promptTokens) || 0),
+    completionTokens: Math.max(0, Number(source.completionTokens) || 0),
+    totalTokens: Math.max(0, Number(source.totalTokens) || 0),
+    requests: Math.max(0, Number(source.requests) || 0),
+    contextWindow: Math.max(0, Number(source.contextWindow) || 0),
+    contextRemaining: Math.max(0, Number(source.contextRemaining) || 0),
+    contextUsedPct: Math.max(0, Math.min(100, Number(source.contextUsedPct) || 0)),
+    estimatedCalls: Math.max(0, Number(source.estimatedCalls) || 0),
+    providerReportedCalls: Math.max(0, Number(source.providerReportedCalls) || 0),
+    estimatedOnly: source.estimatedOnly === true,
+    cacheReadTokens: Math.max(0, Number(source.cacheReadTokens) || 0),
+    cacheWriteTokens: Math.max(0, Number(source.cacheWriteTokens) || 0),
+    cacheHitRatio: Math.max(0, Math.min(1, Number(source.cacheHitRatio) || 0)),
+    nativeSteps: Math.max(0, Number(source.nativeSteps) || 0),
+    jsonSteps: Math.max(0, Number(source.jsonSteps) || 0),
+    nativeToolAdoption: Math.max(0, Math.min(1, Number(source.nativeToolAdoption) || 0)),
+  }
+}
+
 export function normalize_persisted_chat_message(value: unknown, index = 0): AIChatMessage | null {
   if (!value || typeof value !== 'object') return null
   const source = value as Record<string, unknown>
   const role = String(source.role || '')
   if (role !== 'user' && role !== 'assistant') return null
   const meta = source.meta && typeof source.meta === 'object' ? (source.meta as Record<string, unknown>) : {}
+  const summary = meta.summary && typeof meta.summary === 'object' ? (meta.summary as Record<string, unknown>) : {}
   const attachments = Array.isArray(source.attachments)
     ? source.attachments
         .map(normalize_persisted_attachment)
@@ -365,5 +391,6 @@ export function normalize_persisted_chat_message(value: unknown, index = 0): AIC
     provider: String(meta.provider || ''),
     model: String(meta.model || ''),
     run_id: String(meta.runId || ''),
+    usage: normalize_agent_usage(meta.usage || summary.usage),
   }
 }
