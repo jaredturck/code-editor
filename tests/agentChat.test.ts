@@ -107,8 +107,8 @@ describe('core agent chat integration', () => {
     expect(settings.agent_tool_allowlist).toContain('files.write')
     expect(settings.agent_tool_allowlist).toContain('rag.retrieve')
     expect(settings.agent_tool_allowlist).toContain('terminal.exec')
+    expect(settings.agent_tool_allowlist).toContain('system.processes')
     expect(settings.agent_tool_allowlist).not.toContain('agent.delegate')
-    expect(settings.agent_tool_allowlist).not.toContain('system.processes')
   })
 
   it('supports plan-first runs without widening the core Chat capability boundary', () => {
@@ -140,7 +140,7 @@ describe('core agent chat integration', () => {
     expect(input).toContain('chat.remember')
   })
 
-  it('enables workspace search and RAG while keeping host-inspection tools out of Agent Chat', () => {
+  it('enables workspace context plus deliberate read-only runtime discovery', () => {
     const tools = get_core_agent_tool_allowlist('/workspace')
     expect(tools).toContain('search.web')
     expect(tools).toContain('chat.remember')
@@ -153,9 +153,26 @@ describe('core agent chat integration', () => {
     expect(tools).toContain('search.find')
     expect(tools).toContain('search.fd')
     expect(tools).toContain('rag.retrieve')
+    expect(tools).toContain('system.stats')
+    expect(tools).toContain('system.processes')
+    expect(tools).toContain('launcher.list')
     expect(tools).not.toContain('memory.query')
-    expect(tools).not.toContain('system.stats')
     expect(tools).not.toContain('artifact.create')
+  })
+
+  it('does not advertise file capabilities that are disabled for the autonomous session', () => {
+    const read_only = get_core_agent_tool_allowlist('/workspace', false, false, true, false)
+    expect(read_only).toContain('files.read')
+    expect(read_only).toContain('rag.retrieve')
+    expect(read_only).not.toContain('files.write')
+    expect(read_only).not.toContain('files.edit')
+    expect(read_only).not.toContain('files.patch')
+
+    const no_files = get_core_agent_tool_allowlist('/workspace', false, false, false, false)
+    expect(no_files).not.toContain('files.read')
+    expect(no_files).not.toContain('files.write')
+    expect(no_files).not.toContain('rag.retrieve')
+    expect(no_files).toContain('system.stats')
   })
 
   it('keeps workspace RAG unavailable when no workspace is open', () => {
