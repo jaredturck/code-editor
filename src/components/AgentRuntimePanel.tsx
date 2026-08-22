@@ -34,6 +34,10 @@ function format_vram(megabytes: number) {
   return `${(megabytes / 1024).toFixed(1)} GB`
 }
 
+function on_off(enabled: boolean) {
+  return enabled ? 'on' : 'off'
+}
+
 function agent_status_label(agent: SubAgentRosterEntry) {
   const role = String(agent.role || agent.id).split('#')[0]
   return `${role} · ${agent.status}${agent.queueDepth ? ` · ${agent.queueDepth} queued` : ''}`
@@ -179,6 +183,28 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
           <span className="text-right text-[var(--text)]">{Math.round(usage.cacheHitRatio * 100)}% hit</span>
         </div>
       )}
+
+      <div className="mt-2 border-t border-[var(--border)] pt-2">
+        <div className="mb-1 font-medium text-[var(--text)]">Autonomous authority</div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+          <span>Workspace files</span>
+          <span className="text-right text-[var(--text)]">
+            read {on_off(settings.permissions_file_read === true)} · write {on_off(settings.permissions_file_write === true)}
+          </span>
+          <span>Local execution</span>
+          <span className="text-right text-[var(--text)]">{on_off(settings.permissions_terminal === true)}</span>
+          <span>Screen / desktop</span>
+          <span className="text-right text-[var(--text)]">
+            {on_off(settings.permissions_screen_capture === true)} / {on_off(settings.permissions_mouse_control === true)}
+          </span>
+          <span>Shell network</span>
+          <span className="text-right text-[var(--text)]">{on_off(settings.agent_allow_network_commands === true)}</span>
+          <span>Web site guard</span>
+          <span className="text-right text-[var(--text)]">{on_off(settings.agent_web_site_guard !== false)}</span>
+          <span>Package guard</span>
+          <span className="text-right text-[var(--text)]">{on_off(settings.agent_package_install_guard !== false)}</span>
+        </div>
+      </div>
 
       <div className="mt-2 border-t border-[var(--border)] pt-2">
         <div className="flex items-center gap-2">
