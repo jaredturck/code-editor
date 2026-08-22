@@ -28,6 +28,8 @@ export interface VerificationState {
   evidence: Record<string, VerificationEvidenceRecord>
 }
 
+const MAX_PERSISTED_CANDIDATES = 80
+
 export interface VerificationGateResult {
   required: boolean
   configured: boolean
@@ -140,6 +142,45 @@ function candidateDetail(toolName: string, result: Record<string, unknown>) {
   return 'Verification status is unknown.'
 }
 
+
+function pruneVerificationCandidates(state: VerificationState) {
+  const entries = Object.values(state.candidates)
+  if (entries.length <= MAX_PERSISTED_CANDIDATES) return
+
+  const retained = new Set(
+    Object.values(state.evidence)
+      .map((item) => String(item.candidateId || '').trim())
+      .filter(Boolean),
+  )
+  for (const candidate of entries
+    .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
+    .slice(0, MAX_PERSISTED_CANDIDATES)) {
+    retained.add(candidate.id)
+  }
+  state.candidates = Object.fromEntries(
+    Object.entries(state.candidates).filter(([id]) => retained.has(id)),
+  )
+}
+
+export function snapshotVerificationState(state: VerificationState): VerificationState {
+  pruneVerificationCandidates(state)
+  return {
+    version: 1,
+    contractKey: state.contractKey,
+    required: state.required,
+    mutationEpoch: state.mutationEpoch,
+    nextCandidate: state.nextCandidate,
+    requirements: [...state.requirements],
+    candidates: Object.fromEntries(
+      Object.entries(state.candidates).map(([id, candidate]) => [id, { ...candidate }]),
+    ),
+    evidence: Object.fromEntries(
+      Object.entries(state.evidence).map(([requirement, evidence]) => [requirement, { ...evidence }]),
+    ),
+  }
+}
+
+
 export function buildVerificationContractKey(plan: Record<string, unknown> | null | undefined) {
   if (!plan) return 'none'
   const payload = JSON.stringify({
@@ -186,6 +227,7 @@ export function ensureVerificationState(
   state.requirements = uniqueRequirements(state.requirements)
   state.candidates = state.candidates && typeof state.candidates === 'object' ? state.candidates : {}
   state.evidence = state.evidence && typeof state.evidence === 'object' ? state.evidence : {}
+  pruneVerificationCandidates(state)
   return state
 }
 
@@ -231,6 +273,7 @@ export function addVerificationCandidate(
     detail: candidateDetail(toolName, result),
   }
   state.candidates[id] = candidate
+  pruneVerificationCandidates(state)
   return candidate
 }
 

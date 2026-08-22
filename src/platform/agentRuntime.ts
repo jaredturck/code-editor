@@ -12,6 +12,7 @@ import {
   buildVerificationContractKey,
   ensureVerificationState,
   evaluateVerificationGate,
+  snapshotVerificationState,
   type VerificationGateResult,
   type VerificationState,
 } from '@/platform/agent/verificationEvidence'
@@ -21,7 +22,7 @@ import {
   type AgentSessionInput,
   type AgentSessionResult,
 } from '@/platform/agentRuntimeLegacy'
-import { loadChatContext, saveCompacted } from '@/platform/chatSessionStore'
+import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/chatSessionStore'
 
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const MAX_VERIFICATION_REMEDIATION_PASSES = 2
@@ -91,8 +92,14 @@ function withVerificationState(input: AgentSessionInput): AgentSessionInput {
   if (!plan || !isWorkspaceProjectRun(input)) return input
   const required = plan.developmentTask === true && plan.verificationRequired === true
   const contractKey = buildVerificationContractKey(plan as unknown as Record<string, unknown>)
+  const projectRun = getChatSessionState(projectChatId(input))?.projectRun
+  const projectSummary = projectRun?.summary && typeof projectRun.summary === 'object'
+    ? projectRun.summary as Record<string, unknown>
+    : null
+  const persistedState = input.settings?.agent_verification_state
+    || projectSummary?.verificationState
   const state = ensureVerificationState(
-    input.settings?.agent_verification_state,
+    persistedState,
     contractKey,
     required,
   )
@@ -179,6 +186,7 @@ function annotateVerification(
   result: AgentSessionResult,
   gate: VerificationGateResult | null,
   remediationPasses: number,
+  state: VerificationState | null,
 ) {
   if (!gate) return result
   const summary = {
@@ -187,6 +195,7 @@ function annotateVerification(
       ...gate,
       remediationPasses,
     },
+    verificationState: state ? snapshotVerificationState(state) : null,
   }
   if (gate.passed) return { ...result, summary }
 
@@ -262,7 +271,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     gate = state ? evaluateVerificationGate(state) : null
   }
 
-  const finalResult = annotateVerification(combined, gate, remediationPasses)
+  const finalResult = annotateVerification(combined, gate, remediationPasses, state)
   try {
     await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
   } catch (error) {

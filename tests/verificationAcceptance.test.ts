@@ -4,6 +4,7 @@ const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
   load_context: vi.fn(),
   save_compacted: vi.fn(),
+  sessions: new Map<string, Record<string, unknown>>(),
 }))
 
 vi.mock('@/platform/agentRuntimeLegacy', () => ({
@@ -12,6 +13,7 @@ vi.mock('@/platform/agentRuntimeLegacy', () => ({
 }))
 
 vi.mock('@/platform/chatSessionStore', () => ({
+  getChatSessionState: (id: string) => runtime_state.sessions.get(id) || null,
   loadChatContext: runtime_state.load_context,
   saveCompacted: runtime_state.save_compacted,
 }))
@@ -57,6 +59,7 @@ describe('project verification acceptance', () => {
     runtime_state.run.mockReset()
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
+    runtime_state.sessions.clear()
     runtime_state.load_context.mockResolvedValue({ messages: [], memory: '', compacted: '' })
     runtime_state.save_compacted.mockResolvedValue(undefined)
   })
@@ -135,5 +138,8 @@ describe('project verification acceptance', () => {
       mutationEpoch: 1,
     })
     expect(output.todos.some((todo) => todo.id === 'verification-gate')).toBe(false)
+    const persisted = output.summary.verificationState as VerificationState
+    expect(persisted.requirements).toEqual(['tests', 'browser-runtime'])
+    expect(persisted.mutationEpoch).toBe(1)
   })
 })

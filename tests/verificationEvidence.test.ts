@@ -4,9 +4,11 @@ import {
   addVerificationCandidate,
   createVerificationState,
   declareVerificationRequirements,
+  ensureVerificationState,
   evaluateVerificationGate,
   markVerificationMutation,
   recordVerificationEvidence,
+  snapshotVerificationState,
 } from '../src/platform/agent/verificationEvidence'
 
 describe('verification evidence', () => {
@@ -78,6 +80,21 @@ describe('verification evidence', () => {
     const gate = evaluateVerificationGate(state)
     expect(gate.passed).toBe(false)
     expect(gate.requirements[0].status).toBe('unknown')
+  })
+
+
+  it('snapshots bounded verification state and restores it only for the same task contract', () => {
+    const state = createVerificationState('persistent-contract', true)
+    declareVerificationRequirements(state, ['tests'])
+
+    for (let index = 0; index < 90; index += 1) {
+      addVerificationCandidate(state, 'terminal.exec', { command: `test-${index}` }, { exitCode: 0 })
+    }
+
+    const snapshot = snapshotVerificationState(state)
+    expect(Object.keys(snapshot.candidates).length).toBeLessThanOrEqual(80)
+    expect(ensureVerificationState(snapshot, 'persistent-contract', true).requirements).toEqual(['tests'])
+    expect(ensureVerificationState(snapshot, 'different-contract', true).requirements).toEqual([])
   })
 
   it('never treats missing terminal exit codes or unsupported diagnostics as passing evidence', () => {
