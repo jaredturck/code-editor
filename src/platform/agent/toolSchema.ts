@@ -34,7 +34,11 @@ function hintToSchema(hint: unknown): JsonSchemaObject {
   else if (/\bobject\b/.test(normalized)) type = 'object';
 
   const schema: JsonSchemaObject = { type, description: raw };
-  if (type === 'array') schema.items = { type: 'string' };
+  if (type === 'array') {
+    schema.items = /object\s*\[\]/.test(normalized)
+      ? { type: 'object', properties: {}, additionalProperties: true }
+      : { type: 'string' };
+  }
   if (type === 'object') {
     schema.properties = {};
     schema.additionalProperties = true;
