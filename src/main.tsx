@@ -1,4 +1,3 @@
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { hydrateDurableStore } from '@/platform/localStorageStore'
@@ -33,11 +32,7 @@ async function start_renderer() {
     return
   }
 
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  )
+  createRoot(document.getElementById('root')!).render(<App />)
 }
 
 void start_renderer()
