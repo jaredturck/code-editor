@@ -5,6 +5,7 @@ import { project_run_progress } from '../chat/projectRunController'
 import type { ProjectRunState } from '../chat/projectRunController'
 import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
+import AgentChatVoiceControls from './AgentChatVoiceControls'
 
 interface AIChatPanelProps {
   chat: ReturnType<typeof useAIChat>
@@ -500,29 +501,18 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             >
               Attach…
             </button>
-            <button
-              aria-label={chat.recording ? 'Stop recording' : 'Record voice prompt'}
-              className={`rounded px-2 py-1 text-[10px] ${
-                chat.recording ? 'bg-red-500/15 text-red-300' : 'text-[var(--muted)] hover:bg-[var(--hover)]'
-              }`}
-              disabled={chat.transcribing || chat.generating || project_run_needs_resolution}
-              onClick={() => (chat.recording ? chat.stop_recording() : void chat.begin_recording())}
-              type="button"
-            >
-              {chat.recording
-                ? `Stop ${format_seconds(chat.recording_seconds)}`
-                : chat.transcribing
-                  ? 'Transcribing…'
-                  : 'Mic'}
-            </button>
+            <AgentChatVoiceControls
+              disabled={chat.generating || project_run_needs_resolution}
+              setPrompt={chat.set_prompt}
+            />
 
             {chat.generating ? (
               <button
                 className="ml-auto rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400"
                 onClick={chat.stop_generation}
                 type="button"
-              >
-                Stop
+                >
+                  Stop
               </button>
             ) : (
               <button
