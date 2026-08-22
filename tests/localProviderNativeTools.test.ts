@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { callLocalLLM } from '../src/platform/providers/localProvider'
 import { getModelCapabilities, supportsNativeTools } from '../src/platform/modelProfiles'
+import { useStatefulLoop } from '../src/platform/agent/runtime/config'
 
 function response_json(body: unknown) {
   return {
@@ -13,12 +14,19 @@ function response_json(body: unknown) {
 }
 
 describe('local Qwen native tool calling', () => {
-  it('routes qwen3.5 through the native tool protocol', () => {
+  it('routes qwen3.5 through the native stateful tool protocol', () => {
     const capabilities = getModelCapabilities('local', 'qwen3.5:9b')
 
     expect(capabilities.family).toBe('qwen35')
     expect(capabilities.toolProtocol).toBe('native')
     expect(supportsNativeTools('local', 'qwen3.5:9b')).toBe(true)
+    expect(
+      useStatefulLoop({
+        ai_provider: 'local',
+        ai_model: 'qwen3.5:9b',
+        agent_stateful_loop: 'auto',
+      }),
+    ).toBe(true)
   })
 
   it('round-trips Ollama tool calls and persistent tool-result history', async () => {
