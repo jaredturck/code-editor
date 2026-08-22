@@ -453,13 +453,15 @@ This checklist tracks the remaining product integration work. An unchecked item 
   - Backend, agent, broker/security and provider suites
   - Semantic-index and multi-agent suites
   - 90 compatible migrated runtime/backend files wired through `npm test`; obsolete IRIS presentation tests remain archived
-- [ ] **Re-enable benchmarks**
+- [x] **Re-enable benchmarks**
+  - Canonical `npm run benchmark` entry point restored; `benchmark:iris` retained as a compatibility alias
+  - 19 benchmark source files audited against migrated production paths and exports
 - [x] **Add Code Editor + agent integration tests**
 - [ ] **Add long-running run/recovery tests**
 - [ ] **Add multi-agent collision tests**
 
 ## Next integration priorities
 
-1. Re-enable benchmark commands that remain meaningful in the Code Editor product shell.
-2. Add dedicated long-running run/recovery validation and expand multi-agent collision coverage.
+1. Add dedicated long-running run/recovery validation.
+2. Expand multi-agent collision coverage.
 3. Run the final dependency-aware verification and packaging audit once dependencies are installed.
