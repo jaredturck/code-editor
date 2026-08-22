@@ -44,12 +44,21 @@ import {
 
 function configured_settings() {
   return {
+    ai_provider: 'openai',
+    ai_model: 'gpt-test',
     agent_multi_enabled: true,
     agent_peer_consult_enabled: true,
     agent_peer_review: 'closing',
     agent_overwatch_continuous: true,
     agent_execution_policy: 'hybrid',
     agent_model_routing: 'on',
+    agent_required_local_model: 'qwen-local-a',
+    agent_models: [
+      { id: 'orchestrator:openai:gpt-test:1', role: 'orchestrator', provider: 'openai', model: 'gpt-test', primary: true },
+      { id: 'executor:local:qwen-local-a:1', role: 'executor', provider: 'local', model: 'qwen-local-a', primary: true },
+      { id: 'scout:local:qwen-local-b:1', role: 'scout', provider: 'local', model: 'qwen-local-b', primary: true },
+      { id: 'scout:anthropic:claude-test:1', role: 'scout', provider: 'anthropic', model: 'claude-test', primary: false },
+    ],
     agent_permission_tier_orchestrator: 3,
     permissions_file_read: true,
     permissions_file_write: true,
@@ -87,6 +96,17 @@ describe('multi-agent Agent Chat integration', () => {
     expect(no_workspace.agent_tool_allowlist).not.toContain('agent.delegate')
   })
 
+  it('keeps cloud peers but admits at most one local model to a parallel runtime roster', () => {
+    const workspace = build_core_agent_settings(configured_settings() as never, '/workspace')
+    const models = workspace.agent_models as Array<Record<string, unknown>>
+    const local_models = models.filter((entry) => entry.provider === 'local')
+    const cloud_models = models.filter((entry) => entry.provider !== 'local')
+
+    expect(local_models).toHaveLength(1)
+    expect(local_models[0].model).toBe('qwen-local-a')
+    expect(cloud_models.map((entry) => entry.model)).toEqual(expect.arrayContaining(['gpt-test', 'claude-test']))
+  })
+
   it('teaches long autonomous runs safe parallelism and reviewed completion', () => {
     const prompt = build_project_run_input('Refactor the project autonomously', 'automatic')
     expect(prompt).toContain('agent.available')
@@ -95,6 +115,7 @@ describe('multi-agent Agent Chat integration', () => {
     expect(prompt).toContain('Never assign overlapping write scopes')
     expect(prompt).toContain('file leases')
     expect(prompt).toContain('re-read the live file')
+    expect(prompt).toContain('changed-file paths')
     expect(prompt).toContain('agent.review')
     expect(prompt).toContain('re-review')
   })
