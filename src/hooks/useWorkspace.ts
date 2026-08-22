@@ -220,6 +220,16 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
     pending_refresh_paths_ref.current.clear()
 
     try {
+      const git_state = await window.editor_api.git.ensure_repository(folder_path)
+      if (git_state.nested_repositories.length > 0) {
+        onNotice('Nested Git metadata detected. Open Source Control to reconcile it before running the agent.')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to initialize source control for this workspace.'
+      onNotice(`Source control unavailable: ${message}`)
+    }
+
+    try {
       await window.editor_api.workspace.watch(folder_path)
       await load_directory(folder_path)
     } catch (error) {
