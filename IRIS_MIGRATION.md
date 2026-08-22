@@ -428,12 +428,13 @@ This checklist tracks the remaining product integration work. An unchecked item 
 - [x] **Audio and voice**
   - Transcription backend and provider configuration
   - Voice input for Agent Chat
-- [ ] **Vision and screen capabilities**
+- [x] **Vision and screen capabilities**
   - Screen capture and vision runtime
   - Permissioned visual verification/actions
-- [ ] **Automation**
-  - Automation service and approvals
-  - Future scheduled/background project tasks
+- [x] **Automation**
+  - Automation service and exact-plan approvals
+  - Permissioned Vision-to-desktop action execution
+  - Scheduled/background project tasks remain a future extension
 - [ ] **System monitoring and runtime visibility**
   - CPU/RAM/GPU/process monitoring
   - Model, agent, token and cost visibility
@@ -458,7 +459,7 @@ This checklist tracks the remaining product integration work. An unchecked item 
 
 ## Next integration priorities
 
-1. Connect vision/screen capabilities and permissioned visual verification/actions to Agent Chat without reviving the old IRIS Vision panel.
-2. Connect permissioned automation, then system/runtime visibility and launcher/local-system capabilities for safe autonomous local work.
+1. Connect system/runtime visibility to the Code Editor for CPU/RAM/GPU/process plus model, agent, token and cost observability during long autonomous runs.
+2. Connect launcher/local-system capabilities so autonomous runs can safely discover installed developer tools and environments.
 3. Harden the final workspace/network/package/vision/automation autonomous-run policy and exact-operation approval boundaries.
 4. Re-enable compatible migrated IRIS tests and benchmark commands subsystem-by-subsystem, including long-run recovery and multi-agent collision coverage.
