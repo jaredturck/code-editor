@@ -6,6 +6,7 @@ import { create_editor_file_authority } from '../src/chat/editorFileAuthority'
 
 vi.mock('electron', () => ({
   clipboard: { writeText: vi.fn() },
+  ipcMain: { handle: vi.fn() },
   shell: { showItemInFolder: vi.fn(), trashItem: vi.fn() },
 }))
 
