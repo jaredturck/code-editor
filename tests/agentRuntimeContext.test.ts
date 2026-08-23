@@ -16,6 +16,7 @@ vi.mock('@/platform/agent/runtime/sessionRunner', () => ({
 }))
 
 vi.mock('@/platform/chatSessionStore', () => ({
+  getChatSessionState: () => null,
   loadChatContext: runtime_state.load_context,
   saveCompacted: runtime_state.save_compacted,
 }))
