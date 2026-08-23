@@ -17,12 +17,8 @@ export async function syncScreenCapturePermission(): Promise<void> {
   const permissions = {
     ...buildBridgePermissionState(settings),
     screenCapture: settings.permissions_screen_capture === true,
-  } as ReturnType<typeof buildBridgePermissionState> & { screenCapture: boolean }
-  const result = await (
-    security.updateBridgePermissions as unknown as (
-      permissions: Record<string, boolean>,
-    ) => Promise<{ ok: boolean; error?: string }>
-  )(permissions)
+  }
+  const result = await security.updateBridgePermissions(permissions)
   if (result?.ok === false) throw new Error(result.error || 'Screen-capture permission sync failed.')
 }
 
