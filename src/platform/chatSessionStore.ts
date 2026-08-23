@@ -165,6 +165,10 @@ function trimChatMeta(meta?: Record<string, unknown> | null): Record<string, unk
   return out
 }
 
+function toAttachmentRecord(attachment: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(attachment))
+}
+
 // Appends chat message while preserving the storage and size rules owned by the chat persistence
 // service. `meta` (the run timeline + model attribution) is bounded then persisted so previous
 // timelines can be restored on reload.
@@ -177,11 +181,12 @@ export async function appendChatMessage(
 ) {
   if (!id) return
   const trimmedMeta = trimChatMeta(meta)
+  const persistedAttachments = Array.isArray(attachments) ? attachments.slice(0, 4).map(toAttachmentRecord) : []
   await chatsAppend(id, {
     role: String(role || 'user'),
     content: String(content ?? ''),
     ...(trimmedMeta ? { meta: trimmedMeta } : {}),
-    ...(Array.isArray(attachments) && attachments.length ? { attachments: attachments.slice(0, 4) } : {}),
+    ...(persistedAttachments.length ? { attachments: persistedAttachments } : {}),
   })
 }
 
