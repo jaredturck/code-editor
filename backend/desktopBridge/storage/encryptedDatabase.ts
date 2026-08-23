@@ -623,7 +623,7 @@ function sanitizeChatAttachments(value: unknown): Array<Record<string, unknown>>
     const name = String(input.name || '').slice(0, 240)
     const type = String(input.type || '').toLowerCase()
     const content = String(input.content || '')
-    if (!name || !content || !type.startsWith('image/')) continue
+    if (!name || !content || (!type.startsWith('image/') && type !== 'text/plain')) continue
     if (content.length > MAX_CHAT_ATTACHMENT_BASE64_CHARS) continue
     if (totalChars + content.length > MAX_CHAT_ATTACHMENT_TOTAL_CHARS) break
     totalChars += content.length
@@ -1441,7 +1441,13 @@ export async function readEncryptedFileIndexMeta(): Promise<Record<string, unkno
      FROM file_index_meta WHERE id = 1`,
   )
   if (!row) return null
-  return decryptJson<Record<string, unknown>>(db.masterKey, 'file-index-meta', '1', 'payload', db.payloadFromRow(row))
+  return decryptJson<Record<string, unknown>>(
+    db.masterKey,
+    'file-index-meta',
+    '1',
+    'payload',
+    db.payloadFromRow(row),
+  )
 }
 
 /** Inserts or updates encrypted filesystem tree nodes in parent-before-child order. */
