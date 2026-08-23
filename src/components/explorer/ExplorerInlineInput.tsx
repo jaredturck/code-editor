@@ -23,12 +23,12 @@ function ExplorerInlineInput({ initialValue, selectBaseName = false, onCancel, o
     input.focus()
 
     if (selectBaseName) {
-      const extension_index = value.lastIndexOf('.')
-      input.setSelectionRange(0, extension_index > 0 ? extension_index : value.length)
+      const extension_index = initialValue.lastIndexOf('.')
+      input.setSelectionRange(0, extension_index > 0 ? extension_index : initialValue.length)
     } else {
       input.select()
     }
-  }, [])
+  }, [initialValue, selectBaseName])
 
   const submit = async () => {
     if (submitting_ref.current) {
