@@ -1441,13 +1441,7 @@ export async function readEncryptedFileIndexMeta(): Promise<Record<string, unkno
      FROM file_index_meta WHERE id = 1`,
   )
   if (!row) return null
-  return decryptJson<Record<string, unknown>>(
-    db.masterKey,
-    'file-index-meta',
-    '1',
-    'payload',
-    db.payloadFromRow(row),
-  )
+  return decryptJson<Record<string, unknown>>(db.masterKey, 'file-index-meta', '1', 'payload', db.payloadFromRow(row))
 }
 
 /** Inserts or updates encrypted filesystem tree nodes in parent-before-child order. */
