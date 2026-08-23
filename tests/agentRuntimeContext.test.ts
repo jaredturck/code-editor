@@ -6,7 +6,8 @@ const runtime_state = vi.hoisted(() => ({
   save_compacted: vi.fn(),
 }))
 
-vi.mock('@/platform/agent/toolCatalog', () => ({
+vi.mock('@/platform/agent/toolCatalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/agent/toolCatalog')>()),
   getToolDefinitions: () => [],
 }))
 
