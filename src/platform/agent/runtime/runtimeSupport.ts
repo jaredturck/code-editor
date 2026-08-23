@@ -17,10 +17,12 @@ export * from '@/platform/agent/runtime/safetyPolicy'
 import { withEditorNativeToolScope } from '@/platform/agent/editorNativeToolScope'
 import { buildCapabilitySnapshot as buildBaseCapabilitySnapshot } from '@/platform/agent/runtime/capabilityPolicy'
 
+type CapabilitySnapshotInput = Parameters<typeof buildBaseCapabilitySnapshot>[0]
+
 /** Keeps editor-native workspace verification tools in the same permission/capability pipeline. */
-export function buildCapabilitySnapshot(input: Record<string, any>) {
+export function buildCapabilitySnapshot(input: CapabilitySnapshotInput) {
   return buildBaseCapabilitySnapshot({
     ...input,
-    settings: withEditorNativeToolScope(input?.settings),
+    settings: withEditorNativeToolScope(input.settings),
   })
 }
