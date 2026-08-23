@@ -173,7 +173,7 @@ export async function appendChatMessage(
   role: string,
   content: unknown,
   meta?: Record<string, unknown> | null,
-  attachments?: Array<Record<string, unknown>> | null,
+  attachments?: object[] | null,
 ) {
   if (!id) return
   const trimmedMeta = trimChatMeta(meta)
