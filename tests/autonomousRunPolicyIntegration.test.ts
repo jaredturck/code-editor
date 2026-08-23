@@ -24,19 +24,26 @@ describe('autonomous-run security policy integration', () => {
     expect(DEFAULT_IRIS_SETTINGS.vision_auto_execute).toBe(false)
   })
 
-  it('advertises only file capabilities granted to the current project run', () => {
+  it('advertises workspace capabilities without treating tool exposure as authority', () => {
     const read_only = get_core_agent_tool_allowlist('/workspace', false, false, true, false)
     expect(read_only).toContain('files.read')
     expect(read_only).toContain('rag.retrieve')
-    expect(read_only).not.toContain('files.write')
-    expect(read_only).not.toContain('files.patch')
-    expect(read_only).not.toContain('terminal.exec')
+    expect(read_only).toContain('files.write')
+    expect(read_only).toContain('files.patch')
+    expect(read_only).toContain('terminal.exec')
 
     const locked = get_core_agent_tool_allowlist('/workspace', false, false, false, false)
-    expect(locked).not.toContain('files.read')
-    expect(locked).not.toContain('files.write')
-    expect(locked).not.toContain('rag.retrieve')
-    expect(locked).toContain('system.stats')
+    expect(locked).toContain('files.read')
+    expect(locked).toContain('files.write')
+    expect(locked).toContain('terminal.exec')
+    expect(locked).toContain('rag.retrieve')
+
+    const no_workspace = get_core_agent_tool_allowlist(null, false, false, false, false)
+    expect(no_workspace).not.toContain('files.read')
+    expect(no_workspace).not.toContain('files.write')
+    expect(no_workspace).not.toContain('terminal.exec')
+    expect(no_workspace).not.toContain('rag.retrieve')
+    expect(no_workspace).toContain('system.stats')
   })
 
   it('prevents autonomous sessions from persisting machine-permission grants', () => {
@@ -57,7 +64,7 @@ describe('autonomous-run security policy integration', () => {
   it('keeps guarded web/package operations fail-closed without user approval', () => {
     const broker = source('src/platform/agent/runtime/toolBrokerLegacy.ts')
     expect(broker).toContain('if (settings?.agent_web_site_guard === false) return true')
-    expect(broker).toContain('if (!onApprovalRequest) return false; // guard on, unknown package, no UI → fail closed')
+    expect(broker).toContain('if (!onApprovalRequest) return false')
     expect(broker).toContain('agent_package_require_venv')
     expect(broker).toContain("requestType: 'web_site_access'")
     expect(broker).toContain("requestType: 'package_install'")
