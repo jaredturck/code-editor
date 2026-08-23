@@ -1,4 +1,8 @@
 import '@testing-library/jest-dom/vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach } from 'vitest'
+
+afterEach(cleanup)
 
 if (typeof window !== 'undefined') {
   class ResizeObserverMock {
@@ -29,6 +33,10 @@ if (typeof window !== 'undefined') {
       },
     },
   })
+}
+
+if (typeof Element !== 'undefined' && typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = () => undefined
 }
 
 if (typeof Range !== 'undefined') {
