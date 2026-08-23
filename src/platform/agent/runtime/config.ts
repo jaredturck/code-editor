@@ -50,21 +50,8 @@ export const SEARCH_WEB_DEFAULT_CALL_BUDGET = 2
 export const SEARCH_WEB_MAX_CALL_BUDGET = 4
 export const SEARCH_WEB_UNLIMITED_CALL_BUDGET = 9999
 export const WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER = 'duckduckgo'
-export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = [
-  'google_cse',
-  'tavily',
-  'exa',
-  'serper',
-  'brave',
-  'serpapi',
-]
-export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set([
-  'tavily',
-  'exa',
-  'serper',
-  'brave',
-  'serpapi',
-])
+export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = ['google_cse', 'tavily', 'exa', 'serper', 'brave', 'serpapi']
+export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set(['tavily', 'exa', 'serper', 'brave', 'serpapi'])
 export const SESSION_STEP_BUDGET_HARD_CAP = AGENT_STEP_HARD_CAP
 export const SESSION_STEP_BUDGET_CONTINUE_INCREMENT = 1
 export const SESSION_STEP_BUDGET_EXTEND_INCREMENT = 3
@@ -89,7 +76,7 @@ export const AGENT_STATES = {
 }
 
 // ── Context Budget ───────────────────────────────────────────────────────────
-export const CONTEXT_BUDGET_WARN_RATIO = 0.15; // auto-summarize at 15% remaining
+export const CONTEXT_BUDGET_WARN_RATIO = 0.15 // auto-summarize at 15% remaining
 
 // ── Per-agent search budget ───────────────────────────────────────────────────
 export const WEB_SEARCH_BUDGET_BY_ROLE = {
@@ -123,14 +110,7 @@ export const TIER_3_APPROVAL_PATTERNS = [
   /(^|\s)(dd|mkfs|fdisk)\b/i,
 ]
 
-export const ALLOWED_MODULES = new Set([
-  'files',
-  'terminal',
-  'notes',
-  'screen',
-  'search',
-  'launch',
-])
+export const ALLOWED_MODULES = new Set(['files', 'terminal', 'notes', 'screen', 'search', 'launch'])
 
 export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)rm\s+-rf\s+\/$/i,
@@ -142,23 +122,14 @@ export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)dd\s+if=/i,
 ]
 
-export const NETWORK_COMMAND_PATTERNS = [
-  /(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i,
-]
+export const NETWORK_COMMAND_PATTERNS = [/(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i]
 
 export const PIPE_TO_SHELL_PATTERNS = [/(curl|wget)[^\n]{0,500}\|\s*(sh|bash|zsh|fish)\b/i]
 
 export const SUDO_COMMAND_PATTERN = /(^|\s)sudo(\s|$)/i
 export const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*;\s*\}\s*;\s*:/
 export const PATH_TRAVERSAL_PATTERN = /(^|\/)\.\.(\/|$)/
-export const DOCUMENTS_ALIAS_TOKENS = new Set([
-  'doc',
-  'docs',
-  'document',
-  'documents',
-  'mydocument',
-  'mydocuments',
-])
+export const DOCUMENTS_ALIAS_TOKENS = new Set(['doc', 'docs', 'document', 'documents', 'mydocument', 'mydocuments'])
 
 export const BLOCKED_READ_PATH_PATTERNS = [
   /^\/etc\/shadow(\/|$)/i,
@@ -245,8 +216,7 @@ export function resolveAgentToolset(settings) {
   const mode = String(settings?.agent_toolset || 'auto').toLowerCase()
   if (mode === 'lean' || mode === 'structured') return mode
   const capable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
-    settings?.native_tools_enabled !== false
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
   return capable ? 'lean' : 'structured'
 }
 
@@ -264,8 +234,7 @@ export function useStatefulLoop(settings) {
   const mode = String(settings?.agent_stateful_loop || 'auto').toLowerCase()
   if (mode === 'off') return false
   const nativeCapable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
-    settings?.native_tools_enabled !== false
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
   return nativeCapable && (mode === 'on' || mode === 'auto')
 }
 
@@ -275,10 +244,7 @@ export function useStatefulLoop(settings) {
 // telling the model how much was cut and how to page the rest — so it can recover
 // from truncation instead of reasoning blind (the core "doesn't bounce back from
 // truncations" fix). Honors a tool result's own pagination hints when present.
-export function toToolResultContent(
-  result,
-  { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {},
-) {
+export function toToolResultContent(result, { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {}) {
   const rawText = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
   const text = markUntrustedExternalContent(toolName, rawText)
   if (!text) return '(no output)'
@@ -293,8 +259,7 @@ export function toToolResultContent(
     : Number.isFinite(Number(result?.offset))
       ? Number(result.offset) + 1
       : cap
-  const hasMoreHint =
-    result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true
+  const hasMoreHint = result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true
   const guidance = hasMoreHint
     ? `\n\n…[truncated ${remaining} more chars — there is more output. Continue from offset ${nextOffset} (re-read with a higher offset / next page) if you need the rest.]`
     : `\n\n…[truncated ${remaining} more chars.]`

@@ -9,16 +9,10 @@
 
 import { toPreview } from '@/platform/agent/agentJsonUtils'
 
-
 // Converts todo status into the canonical representation expected by later code.
 export function normalizeTodoStatus(value) {
   const status = String(value || '').toLowerCase()
-  if (
-    status === 'pending' ||
-    status === 'in_progress' ||
-    status === 'done' ||
-    status === 'blocked'
-  ) {
+  if (status === 'pending' || status === 'in_progress' || status === 'done' || status === 'blocked') {
     return status
   }
 
@@ -126,7 +120,7 @@ export function createTodoTool(initialTodos = [], traceTool, onTodosChanged) {
     if (firstPending) {
       return setStatus(firstPending.id, 'in_progress', firstPending.text)
     }
-    return null; // no real todo to advance — do not invent one
+    return null // no real todo to advance — do not invent one
   }
 
   // Marks the model's in-progress (or next pending) todo complete; no-op if there is none.
@@ -286,23 +280,13 @@ export function createTraceTool(timeline, onEvent, getTodosSnapshot) {
               kind: String(meta.chart.kind || 'metric').slice(0, 60),
               label: String(meta.chart.label || '').slice(0, 180),
               value: Number.isFinite(Number(meta.chart.value)) ? Number(meta.chart.value) : 0,
-              max: Number.isFinite(Number(meta.chart.max))
-                ? Math.max(1, Number(meta.chart.max))
-                : 1,
-              linesRead: Number.isFinite(Number(meta.chart.linesRead))
-                ? Number(meta.chart.linesRead)
-                : undefined,
-              charsRead: Number.isFinite(Number(meta.chart.charsRead))
-                ? Number(meta.chart.charsRead)
-                : undefined,
+              max: Number.isFinite(Number(meta.chart.max)) ? Math.max(1, Number(meta.chart.max)) : 1,
+              linesRead: Number.isFinite(Number(meta.chart.linesRead)) ? Number(meta.chart.linesRead) : undefined,
+              charsRead: Number.isFinite(Number(meta.chart.charsRead)) ? Number(meta.chart.charsRead) : undefined,
               status: String(meta.chart.status || '').slice(0, 40),
               url: String(meta.chart.url || '').slice(0, 320),
-              index: Number.isFinite(Number(meta.chart.index))
-                ? Number(meta.chart.index)
-                : undefined,
-              total: Number.isFinite(Number(meta.chart.total))
-                ? Number(meta.chart.total)
-                : undefined,
+              index: Number.isFinite(Number(meta.chart.index)) ? Number(meta.chart.index) : undefined,
+              total: Number.isFinite(Number(meta.chart.total)) ? Number(meta.chart.total) : undefined,
             }
           : undefined
 
@@ -348,10 +332,7 @@ export function createTraceTool(timeline, onEvent, getTodosSnapshot) {
         tool,
         module: moduleName,
         status,
-        outputPreview:
-          status === 'ok'
-            ? toPreview(output, 900)
-            : toPreview(errorMessage || 'Unknown tool error', 900),
+        outputPreview: status === 'ok' ? toPreview(output, 900) : toPreview(errorMessage || 'Unknown tool error', 900),
         ...diffFields,
         step: Number.isFinite(Number(meta.step)) ? Number(meta.step) : undefined,
         durationMs: Number.isFinite(Number(meta.durationMs)) ? Number(meta.durationMs) : undefined,

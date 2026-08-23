@@ -83,15 +83,7 @@ export function normalizeWebProviderId(value, fallback = WEB_SEARCH_DEFAULT_PRIM
   if (token === 'google') return 'google_cse'
   if (token === 'ddg') return 'duckduckgo'
 
-  const known = new Set([
-    'duckduckgo',
-    'google_cse',
-    'tavily',
-    'exa',
-    'serper',
-    'brave',
-    'serpapi',
-  ])
+  const known = new Set(['duckduckgo', 'google_cse', 'tavily', 'exa', 'serper', 'brave', 'serpapi'])
 
   return known.has(token) ? token : fallback
 }
@@ -102,10 +94,7 @@ export function normalizeWebProviderId(value, fallback = WEB_SEARCH_DEFAULT_PRIM
  * request is attempted.
  */
 
-export function normalizeWebProviderList(
-  value,
-  fallbackList = WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
-) {
+export function normalizeWebProviderList(value, fallbackList = WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS) {
   const input = Array.isArray(value) ? value : String(value || '').split(',')
 
   const seen = new Set()
@@ -192,10 +181,8 @@ export function buildWebSearchProviderPolicy(settings, approvalState) {
     WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
   ).filter((providerId) => providerId !== primaryProvider)
 
-  const requirePaidFallbackConfirmation =
-    settings?.search_web_require_paid_fallback_confirmation !== false
-  const allowPaidFallback =
-    !requirePaidFallbackConfirmation || Boolean(approvalState?.allowPaidSearchFallback)
+  const requirePaidFallbackConfirmation = settings?.search_web_require_paid_fallback_confirmation !== false
+  const allowPaidFallback = !requirePaidFallbackConfirmation || Boolean(approvalState?.allowPaidSearchFallback)
 
   const providerSettings = normalizeWebProviderSettings(settings)
 

@@ -10,10 +10,7 @@
 import { addNote, pruneNotesByCategory } from '@/platform/notesStorage'
 
 import * as config from '@/platform/agent/runtime/config'
-const {
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
-} = Object.assign({}, config)
+const { CONTINUITY_NOTE_CHAR_LIMIT, MAX_CONTINUITY_NOTES } = Object.assign({}, config)
 
 // Formats date key for stable display or serialization without changing its underlying meaning.
 export function formatDateKey(timestamp = Date.now()) {
@@ -70,12 +67,7 @@ export function getContinuityContext({ userInput }) {
 
 // Evaluates whether should persist continuity note for the supplied value and current runtime
 // state.
-export function shouldPersistContinuityNote({
-  userInput,
-  stepHistory,
-  continuityContext,
-  chatMemoryActive = false,
-}) {
+export function shouldPersistContinuityNote({ userInput, stepHistory, continuityContext, chatMemoryActive = false }) {
   // Continuity now lives in the per-chat chat_memory (memory.md) the agent maintains
   // via chat.remember, plus the persisted transcript. So a cross-session continuity
   // NOTE is only worth writing when (a) the user is explicitly resuming earlier work,
@@ -86,9 +78,7 @@ export function shouldPersistContinuityNote({
   if (continuityContext?.resumeIntent) return true
   if (chatMemoryActive) return false
   if (!String(userInput || '').trim()) return false
-  const okToolSteps = Array.isArray(stepHistory)
-    ? stepHistory.filter((s) => s?.ok && s.tool).length
-    : 0
+  const okToolSteps = Array.isArray(stepHistory) ? stepHistory.filter((s) => s?.ok && s.tool).length : 0
   return okToolSteps >= 2
 }
 
@@ -156,9 +146,7 @@ export function persistContinuityNote({
   continuityContext,
   chatMemoryActive = false,
 }) {
-  if (
-    !shouldPersistContinuityNote({ userInput, stepHistory, continuityContext, chatMemoryActive })
-  ) {
+  if (!shouldPersistContinuityNote({ userInput, stepHistory, continuityContext, chatMemoryActive })) {
     return null
   }
 

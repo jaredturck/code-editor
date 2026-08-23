@@ -34,23 +34,10 @@ export function normalizeApprovalDecisionToken(value) {
     .toLowerCase()
   if (!token) return ''
 
-  if (['approve', 'approved', 'allow', 'grant', 'yes', 'ok', 'proceed'].includes(token))
-    return 'approve'
-  if (['continue', 'continue_once', 'continue-once', 'once', 'retry'].includes(token))
-    return 'continue'
-  if (
-    ['extend', 'extend_budget', 'extend-budget', 'increase_budget', 'more_budget'].includes(token)
-  )
-    return 'extend'
-  if (
-    [
-      'unlimited',
-      'unlimited_session',
-      'unlimited-for-session',
-      'no_limits',
-      'disable_limits',
-    ].includes(token)
-  )
+  if (['approve', 'approved', 'allow', 'grant', 'yes', 'ok', 'proceed'].includes(token)) return 'approve'
+  if (['continue', 'continue_once', 'continue-once', 'once', 'retry'].includes(token)) return 'continue'
+  if (['extend', 'extend_budget', 'extend-budget', 'increase_budget', 'more_budget'].includes(token)) return 'extend'
+  if (['unlimited', 'unlimited_session', 'unlimited-for-session', 'no_limits', 'disable_limits'].includes(token))
     return 'unlimited'
   if (['deny', 'denied', 'disapprove', 'reject', 'stop', 'no'].includes(token)) return 'deny'
 
@@ -69,9 +56,7 @@ export function normalizeApprovalResponse(rawResponse) {
       rawResponse.decision || rawResponse.choice || rawResponse.selection || rawResponse.action,
     )
 
-    const approved =
-      rawResponse.approved === true ||
-      ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
+    const approved = rawResponse.approved === true || ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
 
     return {
       approved,

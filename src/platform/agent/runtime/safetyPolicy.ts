@@ -126,7 +126,9 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
   // cannot accidentally create nested repositories, bypass the baseline, or rewrite history.
   // This is deterministic command safety enforcement, not user-intent classification.
   const mutatesEditorManagedGit =
-    /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i.test(text)
+    /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i.test(
+      text,
+    )
   if (mutatesEditorManagedGit) {
     throw new Error(
       'Git mutations are managed by Source Control. Agent terminal Git is read-only; use status, diff, log, show, rev-parse, ls-files, grep, or blame for evidence.',

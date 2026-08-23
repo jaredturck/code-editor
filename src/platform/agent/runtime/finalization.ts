@@ -15,12 +15,8 @@ import { trimMessageContent } from '@/platform/agent/agentJsonUtils'
 import { TOOL_DEFINITIONS, isLeanTool } from '@/platform/agent/toolCatalog'
 
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
-const {
-  MAX_AGENT_STEPS,
-  SEARCH_WEB_DEFAULT_CALL_BUDGET,
-  INSUFFICIENT_ACCESS_REPLY,
-  isCapabilityOrPermissionError,
-} = runtimeSupport
+const { MAX_AGENT_STEPS, SEARCH_WEB_DEFAULT_CALL_BUDGET, INSUFFICIENT_ACCESS_REPLY, isCapabilityOrPermissionError } =
+  runtimeSupport
 
 // Determines whether the final reply incorrectly claims that no user request was provided.
 export function looksLikeMissingRequestReply(text, userInput) {
@@ -141,25 +137,24 @@ export function buildControllerPayload({
 }) {
   const recentSteps = stepHistory.slice(-8)
   const latestStep = recentSteps[recentSteps.length - 1] || null
-  const recoveryContext = latestStep?.ok === false
-    ? {
-        status: 'action_failed',
-        original_goal: userInput,
-        failed_action: {
-          tool: String(latestStep.tool || latestStep.requestedTool || ''),
-          error: String(latestStep.error || 'Tool execution failed.'),
-        },
-        recent_evidence: recentSteps.slice(-6).map((item) => ({
-          tool: String(item.tool || item.requestedTool || ''),
-          ok: item.ok !== false,
-          result: item.ok === false
-            ? String(item.error || '')
-            : String(item.summary || ''),
-        })),
-        instruction:
-          'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
-      }
-    : null
+  const recoveryContext =
+    latestStep?.ok === false
+      ? {
+          status: 'action_failed',
+          original_goal: userInput,
+          failed_action: {
+            tool: String(latestStep.tool || latestStep.requestedTool || ''),
+            error: String(latestStep.error || 'Tool execution failed.'),
+          },
+          recent_evidence: recentSteps.slice(-6).map((item) => ({
+            tool: String(item.tool || item.requestedTool || ''),
+            ok: item.ok !== false,
+            result: item.ok === false ? String(item.error || '') : String(item.summary || ''),
+          })),
+          instruction:
+            'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
+        }
+      : null
 
   return {
     user_request: userInput,
@@ -181,8 +176,7 @@ export function buildControllerPayload({
       const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
         ? capabilitySnapshot.advertisedTools
         : capabilitySnapshot?.availableTools
-      const allowed =
-        alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
+      const allowed = alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
       if (!allowed) return false
       if (toolset === 'lean' && !alwaysOn) return isLeanTool(tool.name)
       return true
@@ -223,9 +217,7 @@ export function buildControllerPayload({
     // sight of the plan; maintained via chat.remember; earlier history via chat.recall.
     chat_memory: String(chatMemory || ''),
     memory_hygiene: {
-      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed))
-        ? Number(webSearchState.callsUsed)
-        : 0,
+      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed)) ? Number(webSearchState.callsUsed) : 0,
       web_search_call_budget: Number.isFinite(Number(webSearchState?.maxCalls))
         ? Number(webSearchState.maxCalls)
         : SEARCH_WEB_DEFAULT_CALL_BUDGET,
@@ -274,24 +266,18 @@ export function buildRunSummary({
   const toolResults = timeline.filter((event) => event.type === 'tool_result')
   const toolSuccesses = toolResults.filter((event) => event.status === 'ok').length
   const toolFailures = toolResults.filter((event) => event.status !== 'ok').length
-  const capabilityBlocks = stepHistory.filter(
-    (step) => !step.ok && isCapabilityOrPermissionError(step.error),
-  ).length
+  const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
   const toolRetries = stepHistory.filter((step) => step.retried).length
   // Invalid-argument failures → a signal that a tool's description/schema needs
   // sharpening (per Anthropic's "analyze tool-calling metrics" guidance).
   const invalidArgErrors = stepHistory.filter(
     (step) =>
-      !step.ok &&
-      /invalid|argument|required|missing|schema|expected|must be|parse/i.test(
-        String(step.error || ''),
-      ),
+      !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
   ).length
   // Consecutive same-tool calls — a proxy for redundant/thrashing tool use.
   let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {
-    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool)
-      redundantToolCalls += 1
+    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool) redundantToolCalls += 1
   }
 
   return {
@@ -313,9 +299,7 @@ export function buildRunSummary({
     sudoBlocked: safetyConfig?.blockSudo !== false,
     explicitApprovalRequired: Boolean(safetyConfig?.requireExplicitApproval),
     explicitApprovalGranted: Boolean(userApprovalGranted),
-    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps))
-      ? Number(safetyConfig.maxSteps)
-      : MAX_AGENT_STEPS,
+    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps)) ? Number(safetyConfig.maxSteps) : MAX_AGENT_STEPS,
     usage: usage || buildUsageSummary(null),
   }
 }
