@@ -446,6 +446,8 @@ export const projectRunController = {
   set_status: transition,
   subscribe(listener: Listener) {
     listeners.add(listener)
-    return () => listeners.delete(listener)
+    return () => {
+      listeners.delete(listener)
+    }
   },
 }
