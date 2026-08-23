@@ -8,12 +8,13 @@ function source(path: string) {
 }
 
 describe('runtime visibility and local-system integration', () => {
-  it('exposes read-only system/tool discovery without granting local execution', () => {
-    const read_only = get_core_agent_tool_allowlist('/workspace', false, false)
-    expect(read_only).toContain('system.stats')
-    expect(read_only).toContain('system.processes')
-    expect(read_only).toContain('launcher.list')
-    expect(read_only).not.toContain('launch.run')
+  it('advertises workspace execution tools without treating exposure as local execution authority', () => {
+    const gated = get_core_agent_tool_allowlist('/workspace', false, false)
+    expect(gated).toContain('system.stats')
+    expect(gated).toContain('system.processes')
+    expect(gated).toContain('launcher.list')
+    expect(gated).toContain('launch.run')
+    expect(gated).toContain('terminal.exec')
 
     const executable = get_core_agent_tool_allowlist('/workspace', true, false)
     expect(executable).toContain('launch.run')
