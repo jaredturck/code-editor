@@ -9,14 +9,16 @@ interface BrowserPanelProps {
 
 function BrowserPanel({ document, visible }: BrowserPanelProps) {
   const browser_host_ref = useRef<HTMLDivElement>(null)
+  const browser_url_ref = useRef(document.url)
   const [address, set_address] = useState(document.url)
+  browser_url_ref.current = document.url
 
   useEffect(() => {
     set_address(document.url)
   }, [document.url])
 
   useEffect(() => {
-    void window.editor_api.browser.create(document.id, document.url)
+    void window.editor_api.browser.create(document.id, browser_url_ref.current)
 
     return () => {
       window.editor_api.browser.set_visible(document.id, false)
