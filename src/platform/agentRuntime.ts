@@ -294,15 +294,17 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
   }
 
   const finalResult = annotateVerification(combined, gate, remediationPasses, state, taskPreflightPlan(executionInput))
-  try {
-    await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
-  } catch (error) {
-    input.onEvent?.({
-      type: 'notice',
-      level: 'error',
-      summary: `Project working context could not be normalized after verification (${cleanLine(error instanceof Error ? error.message : error, 180)}).`,
-      at: Date.now(),
-    })
+  if (state) {
+    try {
+      await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
+    } catch (error) {
+      input.onEvent?.({
+        type: 'notice',
+        level: 'error',
+        summary: `Project working context could not be normalized after verification (${cleanLine(error instanceof Error ? error.message : error, 180)}).`,
+        at: Date.now(),
+      })
+    }
   }
   return finalResult
 }
