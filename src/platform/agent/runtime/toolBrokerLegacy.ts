@@ -1,8 +1,7 @@
 // @ts-nocheck
 // Transitional extraction: behavior is preserved verbatim while runtime contracts are typed incrementally.
 import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
-import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
+import { recordDelegationMetrics } from '@/platform/skillRewards'
 import {
   listDirectory,
   findFiles,
@@ -30,7 +29,6 @@ import {
   powerClipboardRead,
   powerClipboardWrite,
   powerScript,
-  chatsReadMemory,
   chatsWriteMemory,
   chatsRecall,
   subagentReadOutput,
@@ -41,34 +39,13 @@ import {
   resolveLauncherEntry,
   type LauncherEntry,
 } from '@/platform/launcherCatalog'
-import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
-  recallRelevantNotes,
-  pruneNotesByCategory,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
+import { addNote, deleteNote, readNotes, updateNote, queryNotes } from '@/platform/notesStorage'
+import { resolveActiveSkillProfile } from '@/platform/skillProfiles'
 import { rankRagPassages } from '@/platform/agent/ragRetrieval'
 import { lookupTrustedSources } from '@/platform/trustedSources'
 import { synthesizeWebResearch } from '@/platform/agent/webResearchTask'
 import { readOrbSettings, writeOrbSettings } from '@/platform/settingsStorage'
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { createToolGuard } from '@/platform/agent/toolGuard'
-import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
-import {
-  normalizeDecision,
-  mapNativeMetaToDecision,
-  looksLikeControllerSchemaText,
-  recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
+import { estimateTokens } from '@/platform/agent/usageMetrics'
 import {
   handleAgentDelegate,
   handleAgentRecall,
@@ -76,13 +53,8 @@ import {
   handleAgentRoster,
   handleAgentBroadcast,
   handleAgentVerify,
-  evaluateDelegationResult,
-  ensureSubAgentLoop,
   reassignFailedPart,
-  resolveAgentId,
-  detectOrchestrationMode,
   resolveCurrentRole,
-  subscribeSubAgentEvents,
 } from '@/platform/orchestrationClient'
 import {
   handleAgentFind,
@@ -92,161 +64,38 @@ import {
   runOverwatch,
 } from '@/platform/agent/meshClient'
 import { createMeshConductor } from '@/platform/agent/meshConductor'
-import {
-  extractJsonObject,
-  toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
-  TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog'
+import { DEFAULT_AGENT_READ_LINE_COUNT, getToolPermissionKey } from '@/platform/agent/toolCatalog'
 
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
 const {
-  MAX_AGENT_STEPS,
-  AGENT_STEP_HARD_CAP,
-  MAX_PROMPT_MESSAGE_CHARS,
-  MAX_TOOL_RESULT_CHARS,
-  STATEFUL_TOOL_RESULT_CHAR_CAP,
-  DEFAULT_SKILLS_TOKEN_BUDGET,
-  DEFAULT_SKILLS_MAX_ACTIVE,
-  DEFAULT_SKILLS_MIN_RELEVANCE_SCORE,
-  MAX_TERMINAL_COMMAND_LENGTH,
   MAX_FILE_WRITE_LENGTH,
   ARTIFACT_PREVIEW_CHARS,
   MAX_NOTE_CONTENT_LENGTH,
   MAX_SKILL_CARD_COUNT,
   MAX_AGENT_READ_LINE_COUNT,
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
   SEARCH_WEB_DEFAULT_RESULTS,
   SEARCH_WEB_MAX_RESULTS,
   SEARCH_WEB_DEFAULT_SOURCES,
   SEARCH_WEB_MAX_SOURCES,
   SEARCH_WEB_DEFAULT_CALL_BUDGET,
-  SEARCH_WEB_MAX_CALL_BUDGET,
-  SEARCH_WEB_UNLIMITED_CALL_BUDGET,
-  WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER,
-  WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
-  WEB_SEARCH_PAID_PROVIDER_IDS,
-  SESSION_STEP_BUDGET_HARD_CAP,
-  SESSION_STEP_BUDGET_CONTINUE_INCREMENT,
-  SESSION_STEP_BUDGET_EXTEND_INCREMENT,
-  SEARCH_BUDGET_CONTINUE_INCREMENT,
-  SEARCH_BUDGET_EXTEND_INCREMENT,
-  TOOL_TIMEOUT_CONTINUE_BOOST_MS,
-  TOOL_TIMEOUT_EXTEND_BOOST_MS,
-  TOOL_TIMEOUT_UNLIMITED_MS,
-  INSUFFICIENT_ACCESS_REPLY,
   AGENT_STATES,
-  CONTEXT_BUDGET_WARN_RATIO,
   WEB_SEARCH_BUDGET_BY_ROLE,
-  USER_CORRECTION_PATTERNS,
-  TIER_2_BLOCKED_PATTERNS,
-  TIER_3_APPROVAL_PATTERNS,
-  ALLOWED_MODULES,
-  DANGEROUS_COMMAND_PATTERNS,
-  NETWORK_COMMAND_PATTERNS,
   PIPE_TO_SHELL_PATTERNS,
-  SUDO_COMMAND_PATTERN,
-  FORK_BOMB_PATTERN,
-  PATH_TRAVERSAL_PATTERN,
-  DOCUMENTS_ALIAS_TOKENS,
-  BLOCKED_READ_PATH_PATTERNS,
-  BLOCKED_WRITE_PATH_PATTERNS,
-  detectUserCorrection,
-  estimateContextTokensUsed,
-  resolveModelContextWindow,
-  resolveAgentToolset,
-  useStatefulLoop,
-  toToolResultContent,
-  normalizeTodoStatus,
-  normalizeTodo,
-  summarizeRequestForTodo,
-  buildSeedTodos,
-  formatDateKey,
-  formatTimeKey,
-  cleanSingleLine,
-  isResumeIntent,
-  getContinuityContext,
-  shouldPersistContinuityNote,
-  deriveContinuityTags,
-  buildStepHistoryLabel,
-  persistContinuityNote,
-  createTodoTool,
-  createTraceTool,
-  summarizeTree,
-  clampNumber,
-  resolveSafetyConfig,
-  hasExplicitUserApproval,
-  inferToolNameFromAliasKey,
-  resolveToolRequest,
+  normalizeApprovalResponse,
   evaluateToolAccess,
   buildCapabilitySnapshot,
-  isCapabilityOrPermissionError,
   isMissingPathError,
-  buildInsufficientAccessReply,
-  looksLikeInsufficientAccessReply,
-  looksLikeToolAccessLimitationReply,
-  isImperativeActionRequest,
-  extractLaunchTargetFromRequest,
-  escapeSingleQuotedShellArg,
-  buildExecutableProbeCommand,
-  fallbackForcedToolAction,
-  inferForcedToolActionForRequest,
-  extractFindQueryFromText,
   inferFindQuery,
   shouldUseGlobalPathFallback,
-  extractFirstPathFromSummary,
-  buildBestEffortToolSummaryReply,
-  normalizePathForPolicy,
-  normalizePathToken,
-  isLikelyRelativePath,
   dedupeStrings,
   normalizeWebSearchQueryKey,
-  normalizeWebProviderId,
-  normalizeWebProviderList,
-  normalizeWebProviderSettings,
-  hasConfiguredProviderCredentials,
   hasConfiguredPaidFallbackProviders,
   buildWebSearchProviderPolicy,
-  resolveWebSearchCallBudget,
-  createWebSearchSessionState,
   rememberWebSearchQuery,
   getWebSearchCache,
   setWebSearchCache,
-  normalizeApprovalDecisionToken,
-  normalizeApprovalResponse,
-  classifyLimitIssue,
-  buildLimitDecisionOptions,
-  resolveToolTimeoutMs,
-  runWithTimeout,
-  waitMs,
   buildFindFallbackPaths,
   resolveAgentRootBase,
-  applyAgentRoot,
   assertSafePath,
   assertSafeCommand,
   assertAllowedTool,
@@ -873,7 +722,7 @@ export function createModuleBroker({
   return {
     // Executes execute after the required policy checks have passed.
     async execute(toolName, args = {}) {
-      const tool = assertAllowedTool(toolName)
+      assertAllowedTool(toolName)
       const safeArgs = args && typeof args === 'object' ? args : {}
       // Current step for trace metadata. The broker isn't passed a step directly; the runtime
       // tracks it on approvalState.currentStep. Defined once here so every `{ step }` trace tag
@@ -1085,7 +934,7 @@ export function createModuleBroker({
         if (!Array.isArray(skillState.context.active)) skillState.context.active = []
         const loaded = []
         for (const id of requested) {
-          if (skillState.context.active.find((s) => String(s.id) === id)) continue // already active
+          if (skillState.context.active.find((s) => String(s.id) === id)) continue
           const entry = pool[id]
           if (!entry) continue
           const tokenCost = estimateTokens(
@@ -1093,10 +942,8 @@ export function createModuleBroker({
           )
           skillState.context.active.push({ ...entry, tokenCost })
           loaded.push(id)
-          // Un-offload so a freshly-loaded skill isn't pruned by the per-step filter.
           if (skillState.offloadedIds instanceof Set) skillState.offloadedIds.delete(id)
         }
-        // Cap active to avoid runaway growth.
         if (skillState.context.active.length > MAX_SKILL_CARD_COUNT) {
           skillState.context.active = skillState.context.active.slice(-MAX_SKILL_CARD_COUNT)
         }
@@ -1105,12 +952,6 @@ export function createModuleBroker({
             `Loaded ${loaded.length} skill(s) into context: ${loaded.join(', ')}${safeArgs.reason ? ` — ${String(safeArgs.reason).slice(0, 160)}` : ''}.`,
           )
         }
-        // Return the full instructions BODY of each freshly loaded skill, not just
-        // the ids. In the stateful loop the per-step state header is built once, so
-        // mutating skillState.context.active alone never reaches the model — the body
-        // must travel back as this tool result to persist in the transcript (the
-        // Anthropic "pull the card, then read it" flow). The legacy loop also
-        // re-renders active bodies into its next payload; both paths now work.
         const loadedBodies = loaded.map((id) => {
           const entry = pool[id] || {}
           const examples = Array.isArray(entry.examples) ? entry.examples.slice(0, 6) : []
@@ -1286,7 +1127,7 @@ export function createModuleBroker({
           requestedPath: pathInput,
           pathResolution,
           attemptedPaths,
-          summary: summarizeTree(result.tree),
+          summary: runtimeSupport.summarizeTree(result.tree),
         }
       }
 
@@ -1522,8 +1363,6 @@ export function createModuleBroker({
         const lineCount = Number.isFinite(Number(safeArgs.lineCount))
           ? Math.max(1, Math.min(MAX_AGENT_READ_LINE_COUNT, Math.round(Number(safeArgs.lineCount))))
           : DEFAULT_AGENT_READ_LINE_COUNT
-        // Line numbers are on by default so the model can cite exact lines and target files.edit
-        // precisely; pass lineNumbers:false for raw bytes.
         const showLineNumbers = safeArgs.lineNumbers !== false
         const numberContent = (text, firstLine) => {
           if (!showLineNumbers || !text) return text
@@ -1552,8 +1391,6 @@ export function createModuleBroker({
 
         const result = await readTextFile(path, readOptions)
 
-        // In-file pattern search — return only the matching lines (+context), numbered, with a
-        // gap marker between non-adjacent blocks.
         if (result?.mode === 'pattern') {
           const blocks = Array.isArray(result.blocks) ? result.blocks : []
           const lastLine = blocks.length ? blocks[blocks.length - 1].endLine : 0
@@ -1578,7 +1415,6 @@ export function createModuleBroker({
           }
         }
 
-        // Tail — last N lines, numbered from their true position.
         if (result?.mode === 'tail') {
           const tailText = String(result.content || '')
           return {
@@ -1651,9 +1487,6 @@ export function createModuleBroker({
           )
         }
 
-        // Compute a green/red diff for the timeline BEFORE writing (pre vs post image).
-        // QoL only — never blocks or fails the write. Append is purely additive, so we
-        // synthesize an all-additions diff rather than paying for a full file diff.
         let writeDiff: { diff: string; added: number; removed: number } | null = null
         try {
           if (append) {
@@ -1790,9 +1623,6 @@ export function createModuleBroker({
           }
         }
 
-        // Web access guard: the web-research skill often prefers curl/wget over the
-        // search tools for speed, so gate any site the command would fetch from
-        // (explicit http(s) URLs) with the same per-site approval before running.
         const commandHosts = extractCommandFetchHosts(command)
         for (const host of commandHosts) {
           const siteOk = await requestSiteApproval(host, {
@@ -1807,11 +1637,9 @@ export function createModuleBroker({
           }
         }
 
-        // ── Package-install guard: confirm each dependency, keep pip in a .venv ──
         if (settings?.agent_package_install_guard !== false) {
           const pkgInfo = detectPackageInstall(command)
           if (pkgInfo) {
-            // Raw pip into the global interpreter → steer toward a project .venv.
             if (pkgInfo.isGlobalPython && settings?.agent_package_require_venv !== false) {
               const globalOk = await requestGlobalPipApproval(pkgInfo)
               if (!globalOk) {
@@ -1822,9 +1650,6 @@ export function createModuleBroker({
                 }
               }
             }
-            // Per-package confirmation. When the names can't be enumerated (e.g.
-            // `npm install` from package.json, `pip install -r requirements.txt`),
-            // confirm the install as a single manifest action.
             const toConfirm = pkgInfo.packages.length
               ? pkgInfo.packages
               : pkgInfo.installsFromManifest
@@ -1845,8 +1670,6 @@ export function createModuleBroker({
           }
         }
 
-        // Default the working directory to the agent root (home, or the /dir
-        // working directory) so commands run where the user expects.
         const cwd = safeArgs.cwd
           ? assertSafePath(String(safeArgs.cwd), { operation: 'cwd', settings })
           : resolveAgentRootBase(settings)
@@ -1897,7 +1720,6 @@ export function createModuleBroker({
         const query = String(safeArgs.query || '').trim()
         if (!query) throw new Error('Query is required for search.web.')
 
-        // ── Per-role search budget check ──────────────────────────────────
         const currentRole = (() => {
           try {
             return resolveCurrentRole(settings)
@@ -1976,7 +1798,6 @@ export function createModuleBroker({
 
         const webProviderConfig = buildWebSearchProviderPolicy(settings, approvalState)
 
-        // Executes web search after the required policy checks have passed.
         const executeWebSearch = (allowPaidFallbackOverride = null, allowedDomains = null) =>
           searchWebResearch(query, {
             maxResults,
@@ -1999,11 +1820,7 @@ export function createModuleBroker({
             providerSettings: webProviderConfig.providerSettings,
           })
 
-        // ── Web access guard (search.web): two-phase. Discover candidate sites
-        // WITHOUT reading any page, get per-site approval, then fetch content only
-        // from approved domains. Skipped when the guard is off or the user already
-        // approved all sites for this session.
-        let allowedDomainsForFetch = null // null = no restriction
+        let allowedDomainsForFetch = null
         if (settings?.agent_web_site_guard !== false && !approvalState.allowAllSitesForSession) {
           let discovered = null
           try {
@@ -2031,7 +1848,7 @@ export function createModuleBroker({
 
           const approvedHosts = []
           for (const host of candidateHosts) {
-            if (approvalState.allowAllSitesForSession) break // user flipped the blanket switch
+            if (approvalState.allowAllSitesForSession) break
             const ok = await requestSiteApproval(host, {
               action: `read ${host} (search result for "${query}")`,
               reason: `A top search result for "${query}" is on ${host}. Approve reading its content?`,
@@ -2040,11 +1857,8 @@ export function createModuleBroker({
           }
 
           if (approvalState.allowAllSitesForSession) {
-            allowedDomainsForFetch = null // blanket approval → read all top sources
+            allowedDomainsForFetch = null
           } else if (approvedHosts.length === 0) {
-            // Nothing approved → hand back the engine candidates (titles + links) so
-            // the model can still act (approve a site, web.fetch an allowed source)
-            // without us reading any unapproved page.
             return {
               query,
               discoverOnly: true,
@@ -2237,8 +2051,6 @@ export function createModuleBroker({
       }
 
       if (toolName === 'launch.run') {
-        // Resolve a launcher menu entry by name so the agent can launch a known app/shortcut
-        // without knowing the command. Falls back to a raw command when no name is given.
         const launcherName = String(safeArgs.name || safeArgs.app || '').trim()
         const workingDirectory = String(settings.agent_working_dir || '').trim()
         let resolvedEntry: LauncherEntry | null = null
@@ -2324,8 +2136,6 @@ export function createModuleBroker({
       }
 
       if (toolName === 'launcher.list') {
-        // Read-only: expose the user's verified launcher menu so the agent can launch by name
-        // instead of guessing or searching for commands. Raw commands stay out of context.
         const workingDirectory = String(settings.agent_working_dir || '').trim()
         await refreshLauncherCatalog(workingDirectory, false)
         const catalog = getLauncherCatalog({
@@ -2343,8 +2153,6 @@ export function createModuleBroker({
         }
       }
 
-      // ── Multi-Agent Orchestration Tools ────────────────────────────────────────
-
       if (toolName === 'agent.delegate') {
         const currentRole = (() => {
           try {
@@ -2354,8 +2162,6 @@ export function createModuleBroker({
           }
         })()
         if (currentRole !== 'orchestrator') {
-          // Soft-redirect instead of a hard error: only the orchestrator delegates, but every
-          // model can get help via the peer tools — so steer it there rather than failing.
           traceTool.thinking(
             `Not the orchestrator, so delegation isn't available — use agent.consult / agent.review to get peer help instead.`,
             { step },
@@ -2367,24 +2173,18 @@ export function createModuleBroker({
               'Only the orchestrator can agent.delegate. To get help, use agent.consult (ask a peer a focused question) or agent.review (multi-model review) — those are available to you. Do not retry agent.delegate.',
           }
         }
-        // MUST await — handleAgentDelegate is async (it waits for agent availability); without the
-        // await `delegateResult.taskId` is undefined, so the inline pause/recall below is skipped and
-        // the orchestrator never gets the sub-agent's result inline (a real cause of teamwork chaos).
         const delegateResult = await handleAgentDelegate(safeArgs, settings)
 
-        // ── ASYNC PAUSE — suspend loop until sub-agent completes ──────────────
-        const waitMs = safeArgs.waitMs !== undefined ? Number(safeArgs.waitMs) : 45000
-        if (delegateResult?.taskId && waitMs !== 0) {
+        const delegationWaitMs = safeArgs.waitMs !== undefined ? Number(safeArgs.waitMs) : 45000
+        if (delegateResult?.taskId && delegationWaitMs !== 0) {
           agentState.current = AGENT_STATES.DELEGATED_PAUSE
-          // Show the RESOLVED member (e.g. "executor#2") + its model — the actual model that ran —
-          // not the raw role the orchestrator asked for (we delegate per-MODEL now, not per-role).
           const _memberLabel = String(delegateResult.toAgent || safeArgs.toAgent || 'sub-agent')
           const _modelLabel = delegateResult.model ? ` (${delegateResult.model})` : ''
           traceTool.thinking(
             `Delegated task ${delegateResult.taskId} to ${_memberLabel}${_modelLabel}. Pausing loop to await result.`,
             { step },
           )
-          const waitLimit = Math.max(1000, Math.min(120000, waitMs))
+          const waitLimit = Math.max(1000, Math.min(120000, delegationWaitMs))
           const _roleLabel = `${_memberLabel.charAt(0).toUpperCase()}${_memberLabel.slice(1)}${_modelLabel}`
           try {
             const pollResult = await handleAgentRecall({
@@ -2392,7 +2192,6 @@ export function createModuleBroker({
               waitMs: waitLimit,
             })
             agentState.current = AGENT_STATES.RUNNING
-            // Explicit handoff note so the orchestrator's reasoning shows the outcome.
             const _status = String(pollResult?.status || 'unknown')
             const _steps = Number(pollResult?.stepsUsed || 0)
             const _tools = Array.isArray(pollResult?.toolsUsed) ? pollResult.toolsUsed.length : 0
@@ -2416,8 +2215,6 @@ export function createModuleBroker({
               /* non-fatal */
             }
 
-            // Planning-mode fallback (§F4): a teammate's part failed → reassign it to another
-            // HEALTHY teammate (once) and keep the plan, instead of the lead absorbing it solo.
             if (!_ok && settings?.agent_planning_mode === true) {
               const reassign = reassignFailedPart(String(delegateResult.toAgent || safeArgs.toAgent || ''), settings)
               if (reassign && reassign.memberId !== delegateResult.toAgent) {
@@ -2570,8 +2367,6 @@ export function createModuleBroker({
         }
       }
 
-      // ── Cloud policy compatibility ─────────────────────────────────────────────
-
       if (toolName === 'cloud.consult') {
         if (typeof requestCloudConsult !== 'function') {
           return {
@@ -2592,16 +2387,11 @@ export function createModuleBroker({
         })
       }
 
-      // ── Tagged Model Mesh (Workstream D) ────────────────────────────────────────
-
       if (toolName === 'agent.find') {
-        // Read-only: rank configured peers by ability-tag / topic match. No model call.
         return handleAgentFind(safeArgs, settings)
       }
 
       if (toolName === 'agent.consult') {
-        // Resolve which peer to ask first, excluding everything already on this chain so we
-        // can give a precise cycle / depth / budget reason and never consult ourselves.
         const target = resolveConsultTarget(safeArgs, settings, [])
         if (!target) {
           return {
@@ -2613,8 +2403,6 @@ export function createModuleBroker({
           }
         }
 
-        // Enablement plus total, depth, self-cycle, and per-peer repetition gates. A consulted peer
-        // runs tool-free, while the conductor remains the final emergency brake for orchestration loops.
         let gate = mesh.canConsult(target.role, Number(safeArgs.depth) || 1)
         if (gate.reason === 'budget_exhausted' && onApprovalRequest) {
           try {
@@ -2759,7 +2547,6 @@ export function createModuleBroker({
           maxResults: Number.isFinite(Number(safeArgs.maxResults)) ? Number(safeArgs.maxResults) : 40,
         })
 
-        // Shape the response per mode so the model gets exactly what it asked for.
         if (mode === 'files') {
           return {
             pattern,
@@ -2811,8 +2598,6 @@ export function createModuleBroker({
         const result = await powerStat(safePaths)
         return { files: Array.isArray(result?.files) ? result.files : [] }
       }
-
-      // ── Memory & Context Tools ─────────────────────────────────────────────────
 
       if (toolName === 'memory.query') {
         const query = String(safeArgs.query || '').trim()
@@ -2875,7 +2660,6 @@ export function createModuleBroker({
         const focus = String(safeArgs.focus || '').trim()
         const maxChars = Number.isFinite(Number(safeArgs.maxChars)) ? Math.max(200, Number(safeArgs.maxChars)) : 2000
 
-        // Build a compact digest of stepHistory for the model to summarize
         const historyDigest = stepHistory
           .map((step, index) => {
             const toolLabel = step.tool || 'unknown'
@@ -2917,9 +2701,6 @@ export function createModuleBroker({
         }
       }
 
-      // ── Extended Power Tool Handlers ─────────────────────────────────────────
-
-      // search.find — structured find wrapper
       if (toolName === 'search.find') {
         const safePath = assertSafePath(String(safeArgs.path || '.'), {
           operation: 'read',
@@ -2940,7 +2721,6 @@ export function createModuleBroker({
         return result
       }
 
-      // search.fd — fd-find fast search
       if (toolName === 'search.fd') {
         const safePath = assertSafePath(String(safeArgs.path || '.'), {
           operation: 'read',
@@ -2959,7 +2739,6 @@ export function createModuleBroker({
         return result
       }
 
-      // search.locate — system locate database
       if (toolName === 'search.locate') {
         const pattern = String(safeArgs.pattern || '').trim()
         if (!pattern) throw new Error('pattern is required for search.locate')
@@ -2971,7 +2750,6 @@ export function createModuleBroker({
         return result
       }
 
-      // files.diff — unified diff between current and new content
       if (toolName === 'files.diff') {
         const safePath = assertSafePath(String(safeArgs.path || ''), {
           operation: 'read',
@@ -2983,7 +2761,6 @@ export function createModuleBroker({
         return result
       }
 
-      // files.patch — apply a patch atomically
       if (toolName === 'files.patch') {
         const safePath = assertSafePath(String(safeArgs.path || ''), {
           operation: 'write',
@@ -2996,7 +2773,6 @@ export function createModuleBroker({
         return result
       }
 
-      // files.edit — exact string replacement, auto-saved (the precise, reliable file editor)
       if (toolName === 'files.edit') {
         const safePath = assertSafePath(String(safeArgs.path || ''), {
           operation: 'write',
@@ -3016,12 +2792,10 @@ export function createModuleBroker({
         return result
       }
 
-      // web.fetch — direct URL fetch with Readability
       if (toolName === 'web.fetch') {
         const url = String(safeArgs.url || '').trim()
         if (!url || !/^https?:\/\//.test(url)) throw new Error('valid https url required for web.fetch')
 
-        // Web access guard: approve the site before reading its content.
         const fetchHost = extractWebHost(url)
         const siteOk = await requestSiteApproval(fetchHost, {
           action: `fetch ${url}`,
@@ -3038,7 +2812,6 @@ export function createModuleBroker({
         const maxChars = Number.isFinite(Number(safeArgs.maxChars)) ? Number(safeArgs.maxChars) : 20000
         const result = await powerWebFetch(url, { extract, maxChars })
 
-        // Auto-cache as session-scoped knowledge note
         try {
           const domain = new URL(url).hostname
           addNote({
@@ -3055,7 +2828,6 @@ export function createModuleBroker({
         return result
       }
 
-      // env.inspect — system snapshot
       if (toolName === 'sources.lookup') {
         const topic = String(safeArgs.topic || safeArgs.query || '').trim()
         if (!topic) throw new Error('sources.lookup needs a topic.')
@@ -3077,7 +2849,6 @@ export function createModuleBroker({
         return result
       }
 
-      // skills.search — fuzzy search skill library
       if (toolName === 'skills.search') {
         const query = String(safeArgs.query || '').trim()
         if (!query) throw new Error('query is required for skills.search')
@@ -3101,20 +2872,17 @@ export function createModuleBroker({
         return { query, matches, total: matches.length }
       }
 
-      // clipboard.read
       if (toolName === 'clipboard.read') {
         const result = await powerClipboardRead()
         return result
       }
 
-      // clipboard.write
       if (toolName === 'clipboard.write') {
         const content = String(safeArgs.content || '')
         const result = await powerClipboardWrite(content)
         return result
       }
 
-      // terminal.script — run a named built-in script
       if (toolName === 'terminal.script') {
         const scriptName = String(safeArgs.script || '').trim()
         const allowedScripts = new Set([
@@ -3130,6 +2898,7 @@ export function createModuleBroker({
         if (!allowedScripts.has(scriptName)) {
           throw new Error(`Unknown script "${scriptName}". Available: ${[...allowedScripts].join(', ')}`)
         }
+        const safety = runtimeSupport.resolveSafetyConfig(settings, null)
         if (safety.tier1ReadOnly) {
           throw new Error('Scripts are blocked in read-only permission tier.')
         }
@@ -3137,32 +2906,25 @@ export function createModuleBroker({
         return result
       }
 
-      // terminal.pipe — safe pipeline assembler
       if (toolName === 'terminal.pipe') {
         const commands = Array.isArray(safeArgs.commands) ? safeArgs.commands.map(String).filter(Boolean) : []
         if (!commands.length) throw new Error('commands array required for terminal.pipe')
         if (commands.length > 8) throw new Error('terminal.pipe: max 8 commands per pipeline')
 
-        // Validate each command individually
         for (const cmd of commands) {
           assertSafeCommand(cmd, settings, 'terminal', approvalState)
         }
 
-        // Pipe-to-shell check
         const pipeStr = commands.join(' | ')
         if (PIPE_TO_SHELL_PATTERNS.some((p) => p.test(pipeStr))) {
           throw new Error('terminal.pipe: pipe-to-shell pattern detected and blocked.')
         }
 
         const cwd = safeArgs.cwd ? assertSafePath(String(safeArgs.cwd), { operation: 'cwd', settings }) : undefined
-        const timeoutMs = Number.isFinite(Number(safeArgs.timeout)) ? Math.min(Number(safeArgs.timeout), 120000) : 30000
-
         const result = await executeTerminalCommand(pipeStr, cwd)
         return result
       }
 
-      // Keep the unknown-handler fallback after every concrete dispatch branch. Placing it
-      // earlier makes later handlers (including web.fetch) present in source but unreachable.
       throw new Error(`Tool handler not implemented: ${toolName}`)
     },
   }
