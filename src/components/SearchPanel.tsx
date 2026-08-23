@@ -29,6 +29,10 @@ type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media' | 'conce
 
 const document_extensions = new Set(['.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.zip'])
 
+function is_not_null<T>(value: T | null): value is T {
+  return value !== null
+}
+
 function normalize_path(value: string) {
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
   return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
@@ -235,7 +239,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                 const path = String(source.path || '')
                 return path ? { path, line: null, content: '', document: is_document_path(path) } : null
               })
-              .filter((item): item is SearchResult => item !== null)
+              .filter(is_not_null)
           : []
         set_results(next_results)
         set_result_label('File-name matches')
@@ -312,7 +316,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                     }
                   : null
               })
-              .filter((item): item is SearchResult => item !== null)
+              .filter(is_not_null)
           : []
         set_results(next_results)
         set_result_label('Text matches')
