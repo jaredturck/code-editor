@@ -33,15 +33,12 @@ const {
   STRICT_WRITE_PATH_PATTERNS,
   resolveSafetyConfig,
   normalizePathForPolicy,
-} = Object.assign(
-  {},
-  config,
-  continuity,
-  todoTrace,
-  capabilityPolicy,
-  webSearchPolicy,
-  limitPolicy,
-)
+} = Object.assign({}, config, continuity, todoTrace, capabilityPolicy, webSearchPolicy, limitPolicy)
+
+interface SafePathOptions {
+  operation?: 'read' | 'write' | 'cwd'
+  settings?: any
+}
 
 // Selects or derives agent root base from the available settings, input, and runtime context.
 export function resolveAgentRootBase(settings) {
@@ -54,7 +51,7 @@ export function resolveAgentRootBase(settings) {
 export function applyAgentRoot(rawPath, settings) {
   const base = resolveAgentRootBase(settings)
   const p = String(rawPath || '').trim()
-  if (!p) return p; // let the caller decide on empty
+  if (!p) return p // let the caller decide on empty
   if (p === '.' || p === './') return base
   if (p.startsWith('/') || p.startsWith('~')) return p
   const sep = base.endsWith('/') ? '' : '/'
@@ -66,7 +63,7 @@ export function applyAgentRoot(rawPath, settings) {
  * applying the configured working root.
  */
 
-export function assertSafePath(pathInput, { operation = 'read', settings } = {}) {
+export function assertSafePath(pathInput, { operation = 'read', settings }: SafePathOptions = {}) {
   const requested = String(pathInput || '').trim()
   if (!requested) {
     throw new Error('Path is required.')
@@ -89,22 +86,15 @@ export function assertSafePath(pathInput, { operation = 'read', settings } = {})
   // Secrets must never be read and system/key dirs must never be written, even
   // with elevated capability — these are the exfiltration / persistence vectors
   // we lock down before sudo. Independent of the safety profile.
-  if (
-    operation === 'read' &&
-    BLOCKED_READ_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))
-  ) {
-    throw new Error(
-      'Reading secret/key paths (e.g. .ssh, .gnupg, /etc/shadow) is blocked for safety.',
-    )
+  if (operation === 'read' && BLOCKED_READ_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
+    throw new Error('Reading secret/key paths (e.g. .ssh, .gnupg, /etc/shadow) is blocked for safety.')
   }
   if (operation === 'write' || operation === 'cwd') {
     if (PATH_TRAVERSAL_PATTERN.test(normalizedPath)) {
       throw new Error('Path traversal on write is blocked for safety.')
     }
     if (BLOCKED_WRITE_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
-      throw new Error(
-        'Writing to system or key directories (e.g. /etc, /usr, .ssh) is blocked for safety.',
-      )
+      throw new Error('Writing to system or key directories (e.g. /etc, /usr, .ssh) is blocked for safety.')
     }
   }
 
@@ -112,9 +102,7 @@ export function assertSafePath(pathInput, { operation = 'read', settings } = {})
   const safety = resolveSafetyConfig(settings, MAX_AGENT_STEPS)
   if (safety.profile === 'strict' && (operation === 'write' || operation === 'cwd')) {
     if (STRICT_WRITE_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
-      throw new Error(
-        'Writing to shell startup / autostart files is blocked by the strict safety profile.',
-      )
+      throw new Error('Writing to shell startup / autostart files is blocked by the strict safety profile.')
     }
   }
 
@@ -138,7 +126,7 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
   // cannot accidentally create nested repositories, bypass the baseline, or rewrite history.
   // This is deterministic command safety enforcement, not user-intent classification.
   const mutatesEditorManagedGit =
-    /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[\/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i.test(text)
+    /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i.test(text)
   if (mutatesEditorManagedGit) {
     throw new Error(
       'Git mutations are managed by Source Control. Agent terminal Git is read-only; use status, diff, log, show, rev-parse, ls-files, grep, or blame for evidence.',
@@ -161,11 +149,9 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
     throw new Error('Terminal commands are blocked in read-only permission tier (Tier 0/1).')
   }
   if (safety.permissionTier <= PERMISSION_TIER.STANDARD) {
-    const tier2Blocked = TIER_2_BLOCKD_PATTERNS.some((p) => p.test(text))
+    const tier2Blocked = TIER_2_BLOCKED_PATTERNS.some((pattern) => pattern.test(text))
     if (tier2Blocked) {
-      throw new Error(
-        'Command blocked by Tier 2 policy. Network-/disk-/user-management commands require Tier 3.',
-      )
+      throw new Error('Command blocked by Tier 2 policy. Network-/disk-/user-management commands require Tier 3.')
     }
   }
   if (safety.auditLog) {
