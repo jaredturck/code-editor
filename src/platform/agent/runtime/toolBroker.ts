@@ -33,7 +33,9 @@ const editorNativeTools = new Set([
   'verification.record',
 ])
 
-function verificationState(options: Record<string, any>) {
+type LegacyBrokerOptions = Parameters<typeof createLegacyModuleBroker>[0]
+
+function verificationState(options: LegacyBrokerOptions) {
   const state = options?.settings?.agent_verification_state
   if (!state || typeof state !== 'object' || Array.isArray(state)) return null
   return state as VerificationState
@@ -74,7 +76,7 @@ function updateMutationEpoch(
   }
 }
 
-function assertEditorNativeAccess(toolName: string, options: Record<string, any>) {
+function assertEditorNativeAccess(toolName: string, options: LegacyBrokerOptions) {
   assertAllowedTool(toolName)
   const approvalState = options?.approvalState || {}
   const access = evaluateToolAccess(toolName, {
@@ -88,7 +90,7 @@ function assertEditorNativeAccess(toolName: string, options: Record<string, any>
   }
 }
 
-export function createModuleBroker(options: Record<string, any>) {
+export function createModuleBroker(options: LegacyBrokerOptions) {
   const legacy = createLegacyModuleBroker(options)
   const readOnlyTerminalLegacy = createLegacyModuleBroker({
     ...options,
@@ -149,6 +151,7 @@ export function createModuleBroker(options: Record<string, any>) {
       return attachVerificationCandidate(state, toolName, args, result)
     },
     verificationState() {
+      const state = verificationState(options)
       return state ? evaluateVerificationGate(state) : null
     },
   }
