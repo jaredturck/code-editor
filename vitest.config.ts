@@ -1,16 +1,31 @@
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { transformWithOxc } from 'vite'
+import { defineConfig, type Plugin } from 'vitest/config'
+
+function transform_cts(): Plugin {
+  return {
+    name: 'transform-cts-as-typescript',
+    enforce: 'pre',
+    async transform(code, id) {
+      const file_path = id.split('?', 1)[0]
+      if (!file_path.endsWith('.cts')) return null
+
+      const result = await transformWithOxc(code, file_path, { lang: 'ts' })
+      return {
+        code: result.code,
+        map: result.map,
+      }
+    },
+  }
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [transform_cts(), react()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
-  },
-  oxc: {
-    include: /\.[cm]?[jt]sx?$/,
   },
   test: {
     environment: 'jsdom',

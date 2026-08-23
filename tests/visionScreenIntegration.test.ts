@@ -27,10 +27,12 @@ describe('Vision and screen integration boundary', () => {
   })
 
   it('exposes fresh local-first visual inspection to autonomous Agent Chat', () => {
-    const chat = source('src/chat/agentChat.ts')
+    const chatFacade = source('src/chat/agentChat.ts')
+    const chat = source('src/chat/agentChatLegacy.ts')
     const desktopBridge = source('src/platform/desktopBridge.ts')
     const vision = source('src/platform/agent/visionTask.ts')
 
+    expect(chatFacade).toContain("export * from '@/chat/agentChatLegacy'")
     expect(chat).toContain("'screen.capabilities'")
     expect(chat).toContain('bound.permissions_screen_capture === true')
     expect(chat).toContain('bound.permissions_mouse_control === true')
