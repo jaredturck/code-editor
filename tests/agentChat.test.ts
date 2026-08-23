@@ -85,7 +85,7 @@ describe('core agent chat integration', () => {
     expect(ready.key_id).toBe('2')
   })
 
-  it('binds configured workspace and terminal authority without enabling multi-agent execution', () => {
+  it('binds configured workspace, terminal, and multi-agent authority', () => {
     key_state.keys.set('openai:2', 'secret-key')
     const settings = build_core_agent_settings(agent_settings(), '/workspace')
 
@@ -93,7 +93,7 @@ describe('core agent chat integration', () => {
     expect(settings.ai_model).toBe('gpt-test')
     expect(settings.ai_runtime_api_key).toBe('secret-key')
     expect(settings.agent_working_dir).toBe('/workspace')
-    expect(settings.agent_multi_enabled).toBe(false)
+    expect(settings.agent_multi_enabled).toBe(true)
     expect(settings.agent_permission_tier_orchestrator).toBe(3)
     expect(settings.permissions_file_read).toBe(true)
     expect(settings.permissions_file_write).toBe(true)
@@ -108,7 +108,7 @@ describe('core agent chat integration', () => {
     expect(settings.agent_tool_allowlist).toContain('rag.retrieve')
     expect(settings.agent_tool_allowlist).toContain('terminal.exec')
     expect(settings.agent_tool_allowlist).toContain('system.processes')
-    expect(settings.agent_tool_allowlist).not.toContain('agent.delegate')
+    expect(settings.agent_tool_allowlist).toContain('agent.delegate')
   })
 
   it('supports plan-first runs without widening the core Chat capability boundary', () => {
