@@ -116,7 +116,7 @@ export interface GeminiToolDefinition {
 // Sanitizes Gemini schema before it is logged, displayed, or passed across a trust boundary.
 function sanitizeGeminiSchema(schema: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
   if (!schema || typeof schema !== 'object') return undefined
-  const { additionalProperties, _drop, ...rest } = schema as Record<string, unknown>
+  const { additionalProperties: _additionalProperties, _drop, ...rest } = schema as Record<string, unknown>
   const out: Record<string, unknown> = { ...rest }
 
   if (out.properties && typeof out.properties === 'object') {

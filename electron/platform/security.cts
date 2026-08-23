@@ -6,11 +6,9 @@
 
 const REDACTED_VALUE = '[REDACTED]'
 const SAFE_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:'])
-
-const ANSI_OSC_PATTERN = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g
-const ANSI_CSI_PATTERN = /(?:\u001B\[|\u009B)[0-?]*[ -/]*[@-~]/g
-const ANSI_SINGLE_PATTERN = /\u001B[@-_]/g
-const UNSAFE_CONTROL_PATTERN = /[\u0000-\u0008\u000B\u000C\u000D\u000E-\u001F\u007F-\u009F]/g
+const ESCAPE_CODE = 0x1b
+const BELL_CODE = 0x07
+const CSI_CODE = 0x9b
 
 const SENSITIVE_FIELD_PATTERN =
   /^(?:authorization|proxy-authorization|cookie|set-cookie|x[-_]?api[-_]?key|x[-_]?goog[-_]?api[-_]?key|api[-_]?key|apikey|access[-_]?token|refresh[-_]?token|auth[-_]?token|id[-_]?token|session[-_]?token|bearer|token|credentials?|password|passphrase|secret|client[-_]?secret|private[-_]?key|prompt|system[-_]?prompt|user[-_]?prompt|messages?|request[-_]?body|response[-_]?body|file[-_]?content|contents?)$/i
@@ -31,13 +29,87 @@ const WHOLE_SECRET_PATTERNS = [
   /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g,
 ]
 
+function consumeCsiSequence(text: string, start: number): number {
+  let index = start
+  while (index < text.length) {
+    const code = text.charCodeAt(index)
+    if (code >= 0x30 && code <= 0x3f) {
+      index += 1
+      continue
+    }
+    break
+  }
+  while (index < text.length) {
+    const code = text.charCodeAt(index)
+    if (code >= 0x20 && code <= 0x2f) {
+      index += 1
+      continue
+    }
+    break
+  }
+  if (index < text.length) {
+    const code = text.charCodeAt(index)
+    if (code >= 0x40 && code <= 0x7e) return index + 1
+  }
+  return start
+}
+
+function consumeAnsiSequence(text: string, start: number): number {
+  const code = text.charCodeAt(start)
+  if (code === CSI_CODE) {
+    const end = consumeCsiSequence(text, start + 1)
+    return end > start + 1 ? end : start + 1
+  }
+  if (code !== ESCAPE_CODE || start + 1 >= text.length) return start
+
+  const nextCode = text.charCodeAt(start + 1)
+  if (nextCode === 0x5d) {
+    let index = start + 2
+    while (index < text.length) {
+      const current = text.charCodeAt(index)
+      if (current === BELL_CODE) return index + 1
+      if (current === ESCAPE_CODE && text.charCodeAt(index + 1) === 0x5c) return index + 2
+      index += 1
+    }
+  }
+  if (nextCode === 0x5b) {
+    const end = consumeCsiSequence(text, start + 2)
+    if (end > start + 2) return end
+  }
+  if (nextCode >= 0x40 && nextCode <= 0x5f) return start + 2
+  return start
+}
+
+function isUnsafeControlCode(code: number): boolean {
+  return (
+    code <= 0x08 ||
+    code === 0x0b ||
+    code === 0x0c ||
+    code === 0x0d ||
+    (code >= 0x0e && code <= 0x1f) ||
+    (code >= 0x7f && code <= 0x9f)
+  )
+}
+
 // Removes unsupported or unsafe terminal control characters from the supplied value.
 function stripTerminalControlCharacters(value: unknown): string {
-  return String(value ?? '')
-    .replace(ANSI_OSC_PATTERN, '')
-    .replace(ANSI_CSI_PATTERN, '')
-    .replace(ANSI_SINGLE_PATTERN, '')
-    .replace(UNSAFE_CONTROL_PATTERN, '')
+  const text = String(value ?? '')
+  let output = ''
+  let index = 0
+
+  while (index < text.length) {
+    const sequenceEnd = consumeAnsiSequence(text, index)
+    if (sequenceEnd > index) {
+      index = sequenceEnd
+      continue
+    }
+
+    const code = text.charCodeAt(index)
+    if (!isUnsafeControlCode(code)) output += text[index]
+    index += 1
+  }
+
+  return output
 }
 
 // Redacts sensitive sensitive text before it can reach logs or user-visible output.

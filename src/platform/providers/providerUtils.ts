@@ -81,7 +81,7 @@ export function normalizeOpenAICompatibleBaseUrl(baseUrl: unknown): string {
   let raw = String(baseUrl || '').trim()
   if (!raw) return ''
 
-  raw = raw.replace(/^['\"]+|['\"]+$/g, '')
+  raw = raw.replace(/^['"]+|['"]+$/g, '')
   if (!raw) return ''
 
   if (!/^[a-z][a-z\d+.-]*:\/\//i.test(raw)) {
@@ -120,7 +120,7 @@ export function normalizeOpenAICompatibleBaseUrl(baseUrl: unknown): string {
 export function normalizeApiKey(apiKey: unknown): string {
   const trimmed = String(apiKey || '')
     .trim()
-    .replace(/^['\"]+|['\"]+$/g, '')
+    .replace(/^['"]+|['"]+$/g, '')
   if (!trimmed) return ''
   return trimmed.replace(/^Bearer\s+/i, '').trim()
 }
