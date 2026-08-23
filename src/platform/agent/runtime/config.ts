@@ -7,103 +7,10 @@
 
 // Behavior-preserving extraction from the legacy runtime; contracts will be tightened incrementally.
 import { markUntrustedExternalContent } from '@/platform/security'
-import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
-import {
-  listDirectory,
-  findFiles,
-  readTextFile,
-  writeTextFile,
-  executeTerminalCommand,
-  launchLocalCommand,
-  getAutomationCapabilities,
-  searchWebResearch,
-  listSkillDefinitions,
-  powerRipgrep,
-  powerStat,
-  powerFind,
-  powerFd,
-  powerLocate,
-  powerDiff,
-  powerPatch,
-  powerWebFetch,
-  powerEnvInspect,
-  powerClipboardRead,
-  powerClipboardWrite,
-  powerScript,
-  chatsReadMemory,
-  chatsWriteMemory,
-  chatsRecall,
-  subagentReadOutput,
-} from '@/platform/desktopBridge'
-import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
-  recallRelevantNotes,
-  pruneNotesByCategory,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
+
 import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { createToolGuard } from '@/platform/agent/toolGuard'
-import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
-import {
-  normalizeDecision,
-  mapNativeMetaToDecision,
-  looksLikeControllerSchemaText,
-  recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
-import {
-  handleAgentDelegate,
-  handleAgentRecall,
-  handleAgentStatus,
-  handleAgentRoster,
-  handleAgentBroadcast,
-  handleAgentVerify,
-  evaluateDelegationResult,
-  ensureSubAgentLoop,
-  resolveAgentId,
-  detectOrchestrationMode,
-  resolveCurrentRole,
-  subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient'
-import {
-  extractJsonObject,
-  toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
-  TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog'
+
+import { estimateTokens } from '@/platform/agent/usageMetrics'
 
 export const MAX_AGENT_STEPS = 12
 export const AGENT_STEP_HARD_CAP = 60
@@ -143,8 +50,21 @@ export const SEARCH_WEB_DEFAULT_CALL_BUDGET = 2
 export const SEARCH_WEB_MAX_CALL_BUDGET = 4
 export const SEARCH_WEB_UNLIMITED_CALL_BUDGET = 9999
 export const WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER = 'duckduckgo'
-export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = ['google_cse', 'tavily', 'exa', 'serper', 'brave', 'serpapi']
-export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set(['tavily', 'exa', 'serper', 'brave', 'serpapi'])
+export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = [
+  'google_cse',
+  'tavily',
+  'exa',
+  'serper',
+  'brave',
+  'serpapi',
+]
+export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set([
+  'tavily',
+  'exa',
+  'serper',
+  'brave',
+  'serpapi',
+])
 export const SESSION_STEP_BUDGET_HARD_CAP = AGENT_STEP_HARD_CAP
 export const SESSION_STEP_BUDGET_CONTINUE_INCREMENT = 1
 export const SESSION_STEP_BUDGET_EXTEND_INCREMENT = 3
@@ -157,7 +77,7 @@ export const TOOL_TIMEOUT_UNLIMITED_MS = 300000
 export const INSUFFICIENT_ACCESS_REPLY =
   "I don't have the permissions or tools to effectively complete your request right now."
 
-// ── Agent State Machine ──────────────────────────────────────────────────────
+// ── Agent State Machine ─────────────────────────────────────────────────────
 export const AGENT_STATES = {
   IDLE: 'idle',
   RUNNING: 'running',
@@ -169,7 +89,7 @@ export const AGENT_STATES = {
 }
 
 // ── Context Budget ───────────────────────────────────────────────────────────
-export const CONTEXT_BUDGET_WARN_RATIO = 0.15 // auto-summarize at 15% remaining
+export const CONTEXT_BUDGET_WARN_RATIO = 0.15; // auto-summarize at 15% remaining
 
 // ── Per-agent search budget ───────────────────────────────────────────────────
 export const WEB_SEARCH_BUDGET_BY_ROLE = {
@@ -178,7 +98,7 @@ export const WEB_SEARCH_BUDGET_BY_ROLE = {
   scout: 1,
 }
 
-// ── User Correction Detection ────────────────────────────────────────────────
+// ── User Correction Detection ───────────────────────────────────────────────
 export const USER_CORRECTION_PATTERNS = [
   /\b(no[,.]?\s|don't|dont|instead|actually|wrong|not like that|that's not)\b/i,
   /\bi (want|prefer|need) it to\b/i,
@@ -203,7 +123,14 @@ export const TIER_3_APPROVAL_PATTERNS = [
   /(^|\s)(dd|mkfs|fdisk)\b/i,
 ]
 
-export const ALLOWED_MODULES = new Set(['files', 'terminal', 'notes', 'screen', 'search', 'launch'])
+export const ALLOWED_MODULES = new Set([
+  'files',
+  'terminal',
+  'notes',
+  'screen',
+  'search',
+  'launch',
+])
 
 export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)rm\s+-rf\s+\/$/i,
@@ -215,14 +142,23 @@ export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)dd\s+if=/i,
 ]
 
-export const NETWORK_COMMAND_PATTERNS = [/(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i]
+export const NETWORK_COMMAND_PATTERNS = [
+  /(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i,
+]
 
 export const PIPE_TO_SHELL_PATTERNS = [/(curl|wget)[^\n]{0,500}\|\s*(sh|bash|zsh|fish)\b/i]
 
 export const SUDO_COMMAND_PATTERN = /(^|\s)sudo(\s|$)/i
 export const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*;\s*\}\s*;\s*:/
 export const PATH_TRAVERSAL_PATTERN = /(^|\/)\.\.(\/|$)/
-export const DOCUMENTS_ALIAS_TOKENS = new Set(['doc', 'docs', 'document', 'documents', 'mydocument', 'mydocuments'])
+export const DOCUMENTS_ALIAS_TOKENS = new Set([
+  'doc',
+  'docs',
+  'document',
+  'documents',
+  'mydocument',
+  'mydocuments',
+])
 
 export const BLOCKED_READ_PATH_PATTERNS = [
   /^\/etc\/shadow(\/|$)/i,
@@ -290,7 +226,7 @@ export function resolveModelContextWindow(settings) {
 
 // Tool definitions and metadata are centralized in @/platform/agent/toolCatalog.
 
-// ── Terminal-first lean toolset (W2) ──────────────────────────────────────────
+// ── Terminal-first lean toolset (W2) ─────────────────────────────────────────
 // Tools advertised to capable models. Terminal.exec is primary; dedicated tools
 // remain only where shell is inefficient or unsafe: structured content I/O
 // (read/write/patch), web, app state (launch/clipboard/screen), notes/memory,
@@ -309,7 +245,8 @@ export function resolveAgentToolset(settings) {
   const mode = String(settings?.agent_toolset || 'auto').toLowerCase()
   if (mode === 'lean' || mode === 'structured') return mode
   const capable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
+    settings?.native_tools_enabled !== false
   return capable ? 'lean' : 'structured'
 }
 
@@ -327,7 +264,8 @@ export function useStatefulLoop(settings) {
   const mode = String(settings?.agent_stateful_loop || 'auto').toLowerCase()
   if (mode === 'off') return false
   const nativeCapable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
+    settings?.native_tools_enabled !== false
   return nativeCapable && (mode === 'on' || mode === 'auto')
 }
 
@@ -337,7 +275,10 @@ export function useStatefulLoop(settings) {
 // telling the model how much was cut and how to page the rest — so it can recover
 // from truncation instead of reasoning blind (the core "doesn't bounce back from
 // truncations" fix). Honors a tool result's own pagination hints when present.
-export function toToolResultContent(result, { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {}) {
+export function toToolResultContent(
+  result,
+  { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {},
+) {
   const rawText = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
   const text = markUntrustedExternalContent(toolName, rawText)
   if (!text) return '(no output)'
@@ -352,7 +293,8 @@ export function toToolResultContent(result, { cap = STATEFUL_TOOL_RESULT_CHAR_CA
     : Number.isFinite(Number(result?.offset))
       ? Number(result.offset) + 1
       : cap
-  const hasMoreHint = result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true
+  const hasMoreHint =
+    result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true
   const guidance = hasMoreHint
     ? `\n\n…[truncated ${remaining} more chars — there is more output. Continue from offset ${nextOffset} (re-read with a higher offset / next page) if you need the rest.]`
     : `\n\n…[truncated ${remaining} more chars.]`

@@ -6,178 +6,19 @@
  */
 
 // Behavior-preserving extraction from the legacy runtime; contracts will be tightened incrementally.
-import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
-import {
-  listDirectory,
-  findFiles,
-  readTextFile,
-  writeTextFile,
-  executeTerminalCommand,
-  launchLocalCommand,
-  getAutomationCapabilities,
-  searchWebResearch,
-  listSkillDefinitions,
-  powerRipgrep,
-  powerStat,
-  powerFind,
-  powerFd,
-  powerLocate,
-  powerDiff,
-  powerPatch,
-  powerWebFetch,
-  powerEnvInspect,
-  powerClipboardRead,
-  powerClipboardWrite,
-  powerScript,
-  chatsReadMemory,
-  chatsWriteMemory,
-  chatsRecall,
-  subagentReadOutput,
-} from '@/platform/desktopBridge'
-import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
-  recallRelevantNotes,
-  pruneNotesByCategory,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { createToolGuard } from '@/platform/agent/toolGuard'
-import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
-import {
-  normalizeDecision,
-  mapNativeMetaToDecision,
-  looksLikeControllerSchemaText,
-  recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
-import {
-  handleAgentDelegate,
-  handleAgentRecall,
-  handleAgentStatus,
-  handleAgentRoster,
-  handleAgentBroadcast,
-  handleAgentVerify,
-  evaluateDelegationResult,
-  ensureSubAgentLoop,
-  resolveAgentId,
-  detectOrchestrationMode,
-  resolveCurrentRole,
-  subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient'
-import {
-  extractJsonObject,
-  toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
-  TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog'
 
-import * as config from '@/platform/agent/runtime/config'
-import * as continuity from '@/platform/agent/runtime/continuity'
-const {
-  MAX_AGENT_STEPS,
-  AGENT_STEP_HARD_CAP,
-  MAX_PROMPT_MESSAGE_CHARS,
-  MAX_TOOL_RESULT_CHARS,
-  STATEFUL_TOOL_RESULT_CHAR_CAP,
-  DEFAULT_SKILLS_TOKEN_BUDGET,
-  DEFAULT_SKILLS_MAX_ACTIVE,
-  DEFAULT_SKILLS_MIN_RELEVANCE_SCORE,
-  MAX_TERMINAL_COMMAND_LENGTH,
-  MAX_FILE_WRITE_LENGTH,
-  MAX_NOTE_CONTENT_LENGTH,
-  MAX_SKILL_CARD_COUNT,
-  MAX_AGENT_READ_LINE_COUNT,
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
-  SEARCH_WEB_DEFAULT_RESULTS,
-  SEARCH_WEB_MAX_RESULTS,
-  SEARCH_WEB_DEFAULT_SOURCES,
-  SEARCH_WEB_MAX_SOURCES,
-  SEARCH_WEB_DEFAULT_CALL_BUDGET,
-  SEARCH_WEB_MAX_CALL_BUDGET,
-  SEARCH_WEB_UNLIMITED_CALL_BUDGET,
-  WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER,
-  WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
-  WEB_SEARCH_PAID_PROVIDER_IDS,
-  SESSION_STEP_BUDGET_HARD_CAP,
-  SESSION_STEP_BUDGET_CONTINUE_INCREMENT,
-  SESSION_STEP_BUDGET_EXTEND_INCREMENT,
-  SEARCH_BUDGET_CONTINUE_INCREMENT,
-  SEARCH_BUDGET_EXTEND_INCREMENT,
-  TOOL_TIMEOUT_CONTINUE_BOOST_MS,
-  TOOL_TIMEOUT_EXTEND_BOOST_MS,
-  TOOL_TIMEOUT_UNLIMITED_MS,
-  INSUFFICIENT_ACCESS_REPLY,
-  AGENT_STATES,
-  CONTEXT_BUDGET_WARN_RATIO,
-  WEB_SEARCH_BUDGET_BY_ROLE,
-  USER_CORRECTION_PATTERNS,
-  TIER_2_BLOCKED_PATTERNS,
-  TIER_3_APPROVAL_PATTERNS,
-  ALLOWED_MODULES,
-  DANGEROUS_COMMAND_PATTERNS,
-  NETWORK_COMMAND_PATTERNS,
-  PIPE_TO_SHELL_PATTERNS,
-  SUDO_COMMAND_PATTERN,
-  FORK_BOMB_PATTERN,
-  PATH_TRAVERSAL_PATTERN,
-  DOCUMENTS_ALIAS_TOKENS,
-  BLOCKED_READ_PATH_PATTERNS,
-  BLOCKED_WRITE_PATH_PATTERNS,
-  detectUserCorrection,
-  estimateContextTokensUsed,
-  resolveModelContextWindow,
-  resolveAgentToolset,
-  useStatefulLoop,
-  toToolResultContent,
-  formatDateKey,
-  formatTimeKey,
-  cleanSingleLine,
-  isResumeIntent,
-  getContinuityContext,
-  shouldPersistContinuityNote,
-  deriveContinuityTags,
-  buildStepHistoryLabel,
-  persistContinuityNote,
-} = Object.assign({}, config, continuity)
+import { toPreview } from '@/platform/agent/agentJsonUtils'
+
 
 // Converts todo status into the canonical representation expected by later code.
 export function normalizeTodoStatus(value) {
   const status = String(value || '').toLowerCase()
-  if (status === 'pending' || status === 'in_progress' || status === 'done' || status === 'blocked') {
+  if (
+    status === 'pending' ||
+    status === 'in_progress' ||
+    status === 'done' ||
+    status === 'blocked'
+  ) {
     return status
   }
 
@@ -285,7 +126,7 @@ export function createTodoTool(initialTodos = [], traceTool, onTodosChanged) {
     if (firstPending) {
       return setStatus(firstPending.id, 'in_progress', firstPending.text)
     }
-    return null // no real todo to advance — do not invent one
+    return null; // no real todo to advance — do not invent one
   }
 
   // Marks the model's in-progress (or next pending) todo complete; no-op if there is none.
@@ -445,13 +286,23 @@ export function createTraceTool(timeline, onEvent, getTodosSnapshot) {
               kind: String(meta.chart.kind || 'metric').slice(0, 60),
               label: String(meta.chart.label || '').slice(0, 180),
               value: Number.isFinite(Number(meta.chart.value)) ? Number(meta.chart.value) : 0,
-              max: Number.isFinite(Number(meta.chart.max)) ? Math.max(1, Number(meta.chart.max)) : 1,
-              linesRead: Number.isFinite(Number(meta.chart.linesRead)) ? Number(meta.chart.linesRead) : undefined,
-              charsRead: Number.isFinite(Number(meta.chart.charsRead)) ? Number(meta.chart.charsRead) : undefined,
+              max: Number.isFinite(Number(meta.chart.max))
+                ? Math.max(1, Number(meta.chart.max))
+                : 1,
+              linesRead: Number.isFinite(Number(meta.chart.linesRead))
+                ? Number(meta.chart.linesRead)
+                : undefined,
+              charsRead: Number.isFinite(Number(meta.chart.charsRead))
+                ? Number(meta.chart.charsRead)
+                : undefined,
               status: String(meta.chart.status || '').slice(0, 40),
               url: String(meta.chart.url || '').slice(0, 320),
-              index: Number.isFinite(Number(meta.chart.index)) ? Number(meta.chart.index) : undefined,
-              total: Number.isFinite(Number(meta.chart.total)) ? Number(meta.chart.total) : undefined,
+              index: Number.isFinite(Number(meta.chart.index))
+                ? Number(meta.chart.index)
+                : undefined,
+              total: Number.isFinite(Number(meta.chart.total))
+                ? Number(meta.chart.total)
+                : undefined,
             }
           : undefined
 
@@ -497,7 +348,10 @@ export function createTraceTool(timeline, onEvent, getTodosSnapshot) {
         tool,
         module: moduleName,
         status,
-        outputPreview: status === 'ok' ? toPreview(output, 900) : toPreview(errorMessage || 'Unknown tool error', 900),
+        outputPreview:
+          status === 'ok'
+            ? toPreview(output, 900)
+            : toPreview(errorMessage || 'Unknown tool error', 900),
         ...diffFields,
         step: Number.isFinite(Number(meta.step)) ? Number(meta.step) : undefined,
         durationMs: Number.isFinite(Number(meta.durationMs)) ? Number(meta.durationMs) : undefined,

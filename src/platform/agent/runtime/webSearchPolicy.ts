@@ -6,204 +6,17 @@
 
 // Behavior-preserving extraction from the legacy runtime; contracts will be tightened incrementally.
 import { getKey } from '@/platform/keyStore'
-import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
-import {
-  listDirectory,
-  findFiles,
-  readTextFile,
-  writeTextFile,
-  executeTerminalCommand,
-  launchLocalCommand,
-  getAutomationCapabilities,
-  searchWebResearch,
-  listSkillDefinitions,
-  powerRipgrep,
-  powerStat,
-  powerFind,
-  powerFd,
-  powerLocate,
-  powerDiff,
-  powerPatch,
-  powerWebFetch,
-  powerEnvInspect,
-  powerClipboardRead,
-  powerClipboardWrite,
-  powerScript,
-  chatsReadMemory,
-  chatsWriteMemory,
-  chatsRecall,
-  subagentReadOutput,
-} from '@/platform/desktopBridge'
-import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
-  recallRelevantNotes,
-  pruneNotesByCategory,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { createToolGuard } from '@/platform/agent/toolGuard'
-import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
-import {
-  normalizeDecision,
-  mapNativeMetaToDecision,
-  looksLikeControllerSchemaText,
-  recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
-import {
-  handleAgentDelegate,
-  handleAgentRecall,
-  handleAgentStatus,
-  handleAgentRoster,
-  handleAgentBroadcast,
-  handleAgentVerify,
-  evaluateDelegationResult,
-  ensureSubAgentLoop,
-  resolveAgentId,
-  detectOrchestrationMode,
-  resolveCurrentRole,
-  subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient'
-import {
-  extractJsonObject,
-  toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
-  TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog'
 
 import * as config from '@/platform/agent/runtime/config'
 import * as continuity from '@/platform/agent/runtime/continuity'
 import * as todoTrace from '@/platform/agent/runtime/todoTrace'
 import * as capabilityPolicy from '@/platform/agent/runtime/capabilityPolicy'
 const {
-  MAX_AGENT_STEPS,
-  AGENT_STEP_HARD_CAP,
-  MAX_PROMPT_MESSAGE_CHARS,
-  MAX_TOOL_RESULT_CHARS,
-  STATEFUL_TOOL_RESULT_CHAR_CAP,
-  DEFAULT_SKILLS_TOKEN_BUDGET,
-  DEFAULT_SKILLS_MAX_ACTIVE,
-  DEFAULT_SKILLS_MIN_RELEVANCE_SCORE,
-  MAX_TERMINAL_COMMAND_LENGTH,
-  MAX_FILE_WRITE_LENGTH,
-  MAX_NOTE_CONTENT_LENGTH,
-  MAX_SKILL_CARD_COUNT,
-  MAX_AGENT_READ_LINE_COUNT,
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
-  SEARCH_WEB_DEFAULT_RESULTS,
-  SEARCH_WEB_MAX_RESULTS,
-  SEARCH_WEB_DEFAULT_SOURCES,
-  SEARCH_WEB_MAX_SOURCES,
   SEARCH_WEB_DEFAULT_CALL_BUDGET,
   SEARCH_WEB_MAX_CALL_BUDGET,
-  SEARCH_WEB_UNLIMITED_CALL_BUDGET,
   WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER,
   WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
   WEB_SEARCH_PAID_PROVIDER_IDS,
-  SESSION_STEP_BUDGET_HARD_CAP,
-  SESSION_STEP_BUDGET_CONTINUE_INCREMENT,
-  SESSION_STEP_BUDGET_EXTEND_INCREMENT,
-  SEARCH_BUDGET_CONTINUE_INCREMENT,
-  SEARCH_BUDGET_EXTEND_INCREMENT,
-  TOOL_TIMEOUT_CONTINUE_BOOST_MS,
-  TOOL_TIMEOUT_EXTEND_BOOST_MS,
-  TOOL_TIMEOUT_UNLIMITED_MS,
-  INSUFFICIENT_ACCESS_REPLY,
-  AGENT_STATES,
-  CONTEXT_BUDGET_WARN_RATIO,
-  WEB_SEARCH_BUDGET_BY_ROLE,
-  USER_CORRECTION_PATTERNS,
-  TIER_2_BLOCKED_PATTERNS,
-  TIER_3_APPROVAL_PATTERNS,
-  ALLOWED_MODULES,
-  DANGEROUS_COMMAND_PATTERNS,
-  NETWORK_COMMAND_PATTERNS,
-  PIPE_TO_SHELL_PATTERNS,
-  SUDO_COMMAND_PATTERN,
-  FORK_BOMB_PATTERN,
-  PATH_TRAVERSAL_PATTERN,
-  DOCUMENTS_ALIAS_TOKENS,
-  BLOCKED_READ_PATH_PATTERNS,
-  BLOCKED_WRITE_PATH_PATTERNS,
-  detectUserCorrection,
-  estimateContextTokensUsed,
-  resolveModelContextWindow,
-  resolveAgentToolset,
-  useStatefulLoop,
-  toToolResultContent,
-  formatDateKey,
-  formatTimeKey,
-  cleanSingleLine,
-  isResumeIntent,
-  getContinuityContext,
-  shouldPersistContinuityNote,
-  deriveContinuityTags,
-  buildStepHistoryLabel,
-  persistContinuityNote,
-  normalizeTodoStatus,
-  normalizeTodo,
-  summarizeRequestForTodo,
-  buildSeedTodos,
-  createTodoTool,
-  createTraceTool,
-  summarizeTree,
-  clampNumber,
-  resolveSafetyConfig,
-  hasExplicitUserApproval,
-  inferToolNameFromAliasKey,
-  resolveToolRequest,
-  evaluateToolAccess,
-  buildCapabilitySnapshot,
-  isCapabilityOrPermissionError,
-  isMissingPathError,
-  buildInsufficientAccessReply,
-  looksLikeInsufficientAccessReply,
-  looksLikeToolAccessLimitationReply,
-  isImperativeActionRequest,
-  extractLaunchTargetFromRequest,
-  escapeSingleQuotedShellArg,
-  buildExecutableProbeCommand,
-  fallbackForcedToolAction,
-  inferForcedToolActionForRequest,
-  extractFindQueryFromText,
-  inferFindQuery,
-  shouldUseGlobalPathFallback,
-  extractFirstPathFromSummary,
-  buildBestEffortToolSummaryReply,
 } = Object.assign({}, config, continuity, todoTrace, capabilityPolicy)
 
 // Converts path for policy into the canonical representation expected by later code.
@@ -270,7 +83,15 @@ export function normalizeWebProviderId(value, fallback = WEB_SEARCH_DEFAULT_PRIM
   if (token === 'google') return 'google_cse'
   if (token === 'ddg') return 'duckduckgo'
 
-  const known = new Set(['duckduckgo', 'google_cse', 'tavily', 'exa', 'serper', 'brave', 'serpapi'])
+  const known = new Set([
+    'duckduckgo',
+    'google_cse',
+    'tavily',
+    'exa',
+    'serper',
+    'brave',
+    'serpapi',
+  ])
 
   return known.has(token) ? token : fallback
 }
@@ -281,7 +102,10 @@ export function normalizeWebProviderId(value, fallback = WEB_SEARCH_DEFAULT_PRIM
  * request is attempted.
  */
 
-export function normalizeWebProviderList(value, fallbackList = WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS) {
+export function normalizeWebProviderList(
+  value,
+  fallbackList = WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
+) {
   const input = Array.isArray(value) ? value : String(value || '').split(',')
 
   const seen = new Set()
@@ -311,7 +135,7 @@ export function normalizeWebProviderSettings(settings) {
   return {
     googleCseApiKey: getKey('search-google-cse'),
     googleCseCx: String(settings?.search_web_google_cse_cx || '').trim(),
-    tavilyApiKey: getKey('search-tavily'),
+    tavilyApiKey: getey('search-tavily'),
     exaApiKey: getKey('search-exa'),
     serperApiKey: getKey('search-serper'),
     serpApiApiKey: getKey('search-serpapi'),
@@ -368,8 +192,10 @@ export function buildWebSearchProviderPolicy(settings, approvalState) {
     WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
   ).filter((providerId) => providerId !== primaryProvider)
 
-  const requirePaidFallbackConfirmation = settings?.search_web_require_paid_fallback_confirmation !== false
-  const allowPaidFallback = !requirePaidFallbackConfirmation || Boolean(approvalState?.allowPaidSearchFallback)
+  const requirePaidFallbackConfirmation =
+    settings?.search_web_require_paid_fallback_confirmation !== false
+  const allowPaidFallback =
+    !requirePaidFallbackConfirmation || Boolean(approvalState?.allowPaidSearchFallback)
 
   const providerSettings = normalizeWebProviderSettings(settings)
 

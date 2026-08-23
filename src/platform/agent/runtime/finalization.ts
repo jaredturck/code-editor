@@ -7,230 +7,19 @@
 
 // Transitional extraction: behavior is preserved verbatim while runtime contracts are typed incrementally.
 import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
-import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
-import {
-  listDirectory,
-  findFiles,
-  readTextFile,
-  writeTextFile,
-  executeTerminalCommand,
-  launchLocalCommand,
-  getAutomationCapabilities,
-  searchWebResearch,
-  listSkillDefinitions,
-  powerRipgrep,
-  powerStat,
-  powerFind,
-  powerFd,
-  powerLocate,
-  powerDiff,
-  powerPatch,
-  powerWebFetch,
-  powerEnvInspect,
-  powerClipboardRead,
-  powerClipboardWrite,
-  powerScript,
-  chatsReadMemory,
-  chatsWriteMemory,
-  chatsRecall,
-  subagentReadOutput,
-} from '@/platform/desktopBridge'
-import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
-  recallRelevantNotes,
-  pruneNotesByCategory,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { createToolGuard } from '@/platform/agent/toolGuard'
-import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
-import {
-  normalizeDecision,
-  mapNativeMetaToDecision,
-  looksLikeControllerSchemaText,
-  recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
-import {
-  handleAgentDelegate,
-  handleAgentRecall,
-  handleAgentStatus,
-  handleAgentRoster,
-  handleAgentBroadcast,
-  handleAgentVerify,
-  evaluateDelegationResult,
-  ensureSubAgentLoop,
-  resolveAgentId,
-  detectOrchestrationMode,
-  resolveCurrentRole,
-  subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient'
-import {
-  extractJsonObject,
-  toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
-  TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog'
+
+import { buildUsageSummary } from '@/platform/agent/usageMetrics'
+
+import { trimMessageContent } from '@/platform/agent/agentJsonUtils'
+
+import { TOOL_DEFINITIONS, isLeanTool } from '@/platform/agent/toolCatalog'
 
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
 const {
   MAX_AGENT_STEPS,
-  AGENT_STEP_HARD_CAP,
-  MAX_PROMPT_MESSAGE_CHARS,
-  MAX_TOOL_RESULT_CHARS,
-  STATEFUL_TOOL_RESULT_CHAR_CAP,
-  DEFAULT_SKILLS_TOKEN_BUDGET,
-  DEFAULT_SKILLS_MAX_ACTIVE,
-  DEFAULT_SKILLS_MIN_RELEVANCE_SCORE,
-  MAX_TERMINAL_COMMAND_LENGTH,
-  MAX_FILE_WRITE_LENGTH,
-  MAX_NOTE_CONTENT_LENGTH,
-  MAX_SKILL_CARD_COUNT,
-  MAX_AGENT_READ_LINE_COUNT,
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
-  SEARCH_WEB_DEFAULT_RESULTS,
-  SEARCH_WEB_MAX_RESULTS,
-  SEARCH_WEB_DEFAULT_SOURCES,
-  SEARCH_WEB_MAX_SOURCES,
   SEARCH_WEB_DEFAULT_CALL_BUDGET,
-  SEARCH_WEB_MAX_CALL_BUDGET,
-  SEARCH_WEB_UNLIMITED_CALL_BUDGET,
-  WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER,
-  WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
-  WEB_SEARCH_PAID_PROVIDER_IDS,
-  SESSION_STEP_BUDGET_HARD_CAP,
-  SESSION_STEP_BUDGET_CONTINUE_INCREMENT,
-  SESSION_STEP_BUDGET_EXTEND_INCREMENT,
-  SEARCH_BUDGET_CONTINUE_INCREMENT,
-  SEARCH_BUDGET_EXTEND_INCREMENT,
-  TOOL_TIMEOUT_CONTINUE_BOOST_MS,
-  TOOL_TIMEOUT_EXTEND_BOOST_MS,
-  TOOL_TIMEOUT_UNLIMITED_MS,
   INSUFFICIENT_ACCESS_REPLY,
-  AGENT_STATES,
-  CONTEXT_BUDGET_WARN_RATIO,
-  WEB_SEARCH_BUDGET_BY_ROLE,
-  USER_CORRECTION_PATTERNS,
-  TIER_2_BLOCKED_PATTERNS,
-  TIER_3_APPROVAL_PATTERNS,
-  ALLOWED_MODULES,
-  DANGEROUS_COMMAND_PATTERNS,
-  NETWORK_COMMAND_PATTERNS,
-  PIPE_TO_SHELL_PATTERNS,
-  SUDO_COMMAND_PATTERN,
-  FORK_BOMB_PATTERN,
-  PATH_TRAVERSAL_PATTERN,
-  DOCUMENTS_ALIAS_TOKENS,
-  BLOCKED_READ_PATH_PATTERNS,
-  BLOCKED_WRITE_PATH_PATTERNS,
-  detectUserCorrection,
-  estimateContextTokensUsed,
-  resolveModelContextWindow,
-  resolveAgentToolset,
-  useStatefulLoop,
-  toToolResultContent,
-  normalizeTodoStatus,
-  normalizeTodo,
-  summarizeRequestForTodo,
-  buildSeedTodos,
-  formatDateKey,
-  formatTimeKey,
-  cleanSingleLine,
-  isResumeIntent,
-  getContinuityContext,
-  shouldPersistContinuityNote,
-  deriveContinuityTags,
-  buildStepHistoryLabel,
-  persistContinuityNote,
-  createTodoTool,
-  createTraceTool,
-  summarizeTree,
-  clampNumber,
-  resolveSafetyConfig,
-  hasExplicitUserApproval,
-  inferToolNameFromAliasKey,
-  resolveToolRequest,
-  evaluateToolAccess,
-  buildCapabilitySnapshot,
   isCapabilityOrPermissionError,
-  isMissingPathError,
-  buildInsufficientAccessReply,
-  looksLikeInsufficientAccessReply,
-  looksLikeToolAccessLimitationReply,
-  isImperativeActionRequest,
-  extractLaunchTargetFromRequest,
-  escapeSingleQuotedShellArg,
-  buildExecutableProbeCommand,
-  fallbackForcedToolAction,
-  inferForcedToolActionForRequest,
-  extractFindQueryFromText,
-  inferFindQuery,
-  shouldUseGlobalPathFallback,
-  extractFirstPathFromSummary,
-  buildBestEffortToolSummaryReply,
-  normalizePathForPolicy,
-  normalizePathToken,
-  isLikelyRelativePath,
-  dedupeStrings,
-  normalizeWebSearchQueryKey,
-  normalizeWebProviderId,
-  normalizeWebProviderList,
-  normalizeWebProviderSettings,
-  hasConfiguredProviderCredentials,
-  hasConfiguredPaidFallbackProviders,
-  buildWebSearchProviderPolicy,
-  resolveWebSearchCallBudget,
-  createWebSearchSessionState,
-  rememberWebSearchQuery,
-  getWebSearchCache,
-  setWebSearchCache,
-  normalizeApprovalDecisionToken,
-  normalizeApprovalResponse,
-  classifyLimitIssue,
-  buildLimitDecisionOptions,
-  resolveToolTimeoutMs,
-  runWithTimeout,
-  waitMs,
-  buildFindFallbackPaths,
-  resolveAgentRootBase,
-  applyAgentRoot,
-  assertSafePath,
-  assertSafeCommand,
-  assertAllowedTool,
 } = runtimeSupport
 
 // Determines whether the final reply incorrectly claims that no user request was provided.
@@ -339,7 +128,6 @@ export function buildControllerPayload({
   conversation,
   todos,
   stepHistory,
-  stepIndex,
   skillContext,
   continuityContext,
   relevantMemory = [],
@@ -353,24 +141,25 @@ export function buildControllerPayload({
 }) {
   const recentSteps = stepHistory.slice(-8)
   const latestStep = recentSteps[recentSteps.length - 1] || null
-  const recoveryContext =
-    latestStep?.ok === false
-      ? {
-          status: 'action_failed',
-          original_goal: userInput,
-          failed_action: {
-            tool: String(latestStep.tool || latestStep.requestedTool || ''),
-            error: String(latestStep.error || 'Tool execution failed.'),
-          },
-          recent_evidence: recentSteps.slice(-6).map((item) => ({
-            tool: String(item.tool || item.requestedTool || ''),
-            ok: item.ok !== false,
-            result: item.ok === false ? String(item.error || '') : String(item.summary || ''),
-          })),
-          instruction:
-            'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
-        }
-      : null
+  const recoveryContext = latestStep?.ok === false
+    ? {
+        status: 'action_failed',
+        original_goal: userInput,
+        failed_action: {
+          tool: String(latestStep.tool || latestStep.requestedTool || ''),
+          error: String(latestStep.error || 'Tool execution failed.'),
+        },
+        recent_evidence: recentSteps.slice(-6).map((item) => ({
+          tool: String(item.tool || item.requestedTool || ''),
+          ok: item.ok !== false,
+          result: item.ok === false
+            ? String(item.error || '')
+            : String(item.summary || ''),
+        })),
+        instruction:
+          'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
+      }
+    : null
 
   return {
     user_request: userInput,
@@ -392,7 +181,8 @@ export function buildControllerPayload({
       const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
         ? capabilitySnapshot.advertisedTools
         : capabilitySnapshot?.availableTools
-      const allowed = alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
+      const allowed =
+        alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
       if (!allowed) return false
       if (toolset === 'lean' && !alwaysOn) return isLeanTool(tool.name)
       return true
@@ -433,7 +223,9 @@ export function buildControllerPayload({
     // sight of the plan; maintained via chat.remember; earlier history via chat.recall.
     chat_memory: String(chatMemory || ''),
     memory_hygiene: {
-      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed)) ? Number(webSearchState.callsUsed) : 0,
+      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed))
+        ? Number(webSearchState.callsUsed)
+        : 0,
       web_search_call_budget: Number.isFinite(Number(webSearchState?.maxCalls))
         ? Number(webSearchState.maxCalls)
         : SEARCH_WEB_DEFAULT_CALL_BUDGET,
@@ -445,11 +237,11 @@ export function buildControllerPayload({
         : [],
     },
     // The full capability snapshot is no longer serialized into every per-step payload —
-    // it was the largest redundant chunk. `tools` above already lists what's available;
+    // it was the largest redundant chunk. `tools` above already lists what's available
     // a tool/permission limit is surfaced only when a call is actually blocked
     // (capabilityPolicy). This is the A5/A6 per-step token cut.
     // The controller output schema + json-only / one-tool-per-step rules now
-    // live in the system prompt (agent/controllerPrompt.js, 'structured' tier),
+    // live in the system prompt (agent/controllerPrompt.js, 'structured' viest),
     // so they are no longer re-narrated in every per-step payload.
     constraints: {
       guardrails: {
@@ -482,18 +274,24 @@ export function buildRunSummary({
   const toolResults = timeline.filter((event) => event.type === 'tool_result')
   const toolSuccesses = toolResults.filter((event) => event.status === 'ok').length
   const toolFailures = toolResults.filter((event) => event.status !== 'ok').length
-  const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
+  const capabilityBlocks = stepHistory.filter(
+    (step) => !step.ok && isCapabilityOrPermissionError(step.error),
+  ).length
   const toolRetries = stepHistory.filter((step) => step.retried).length
   // Invalid-argument failures → a signal that a tool's description/schema needs
   // sharpening (per Anthropic's "analyze tool-calling metrics" guidance).
   const invalidArgErrors = stepHistory.filter(
     (step) =>
-      !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
+      !step.ok &&
+      /invalid|argument|required|missing|schema|expected|must be|parse/i.test(
+        String(step.error || ''),
+      ),
   ).length
   // Consecutive same-tool calls — a proxy for redundant/thrashing tool use.
   let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {
-    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool) redundantToolCalls += 1
+    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool)
+      redundantToolCalls += 1
   }
 
   return {
@@ -515,7 +313,9 @@ export function buildRunSummary({
     sudoBlocked: safetyConfig?.blockSudo !== false,
     explicitApprovalRequired: Boolean(safetyConfig?.requireExplicitApproval),
     explicitApprovalGranted: Boolean(userApprovalGranted),
-    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps)) ? Number(safetyConfig.maxSteps) : MAX_AGENT_STEPS,
+    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps))
+      ? Number(safetyConfig.maxSteps)
+      : MAX_AGENT_STEPS,
     usage: usage || buildUsageSummary(null),
   }
 }
