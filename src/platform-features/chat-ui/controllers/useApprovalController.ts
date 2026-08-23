@@ -4,7 +4,7 @@
  * persistence logic.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   buildBridgePermissionState,
   buildPersistentPermissionPatch,
@@ -51,19 +51,19 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     }
     const result = await (
       updateBridgePermissions as unknown as (
-        permissions: typeof permissions,
+        next_permissions: typeof permissions,
       ) => Promise<{ ok: boolean; error?: string }>
     )(permissions)
     if (result?.ok === false) throw new Error(result.error || 'The trusted bridge rejected the permission change.')
   }
 
-  const restorePersistedBridgePermissions = (): void => {
+  const restorePersistedBridgePermissions = useCallback((): void => {
     if (!transientPermissionKeysRef.current.size) return
     transientPermissionKeysRef.current.clear()
     void syncBridgePermissions(readOrbSettings()).catch(() => {
       setStatus('Temporary permission cleanup failed; review permissions in Settings.')
     })
-  }
+  }, [setStatus])
 
   // Clears approval requests without disturbing unrelated application state.
   const clearApprovalRequests = (resolution: Partial<ApprovalResolution> = {}): void => {
@@ -85,7 +85,7 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     void syncBridgePermissions(readOrbSettings()).catch(() => {
       setStatus('Desktop permissions could not be synchronized.')
     })
-  }, [])
+  }, [setStatus])
 
   useEffect(
     () => () => {
@@ -101,7 +101,7 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
       approvalTimeoutsRef.current.clear()
       restorePersistedBridgePermissions()
     },
-    [],
+    [restorePersistedBridgePermissions],
   )
 
   // Resolves approval request from the available configuration and runtime context.
