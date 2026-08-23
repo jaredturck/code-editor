@@ -6,7 +6,8 @@ vi.mock('@/platform/keyStore', () => ({
   normalizeKeyId: (value: unknown) => String(value || '1'),
 }))
 
-vi.mock('@/platform/providers/providerRegistry', () => ({
+vi.mock('@/platform/providers/providerRegistry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/providers/providerRegistry')>()),
   findAIProvider: (provider: string) => ({
     id: provider,
     label: provider === 'local' ? 'Local' : 'Cloud',
@@ -14,7 +15,8 @@ vi.mock('@/platform/providers/providerRegistry', () => ({
   }),
 }))
 
-vi.mock('@/platform/agent/toolCatalog', () => ({
+vi.mock('@/platform/agent/toolCatalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/agent/toolCatalog')>()),
   getToolPresentation: (tool: string) => ({ actionVerb: tool || 'Tool' }),
   getToolDefinitions: () => [],
 }))
