@@ -67,6 +67,7 @@ declare global {
         terminal: boolean
         launcher: boolean
         automation: boolean
+        screenCapture: boolean
         microphone: boolean
       }) => Promise<{
         ok: boolean
