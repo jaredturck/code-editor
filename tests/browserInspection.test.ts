@@ -1,12 +1,25 @@
-import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 const runtime_error_state = vi.hoisted(() => ({ enabled: true }))
 
 vi.mock('electron', () => {
-  class FakeWebContents extends EventEmitter {
+  class FakeWebContents {
     id = 41
     private current_url = ''
+    private listeners = new Map<string, Array<(...args: unknown[]) => void>>()
+
+    on(event: string, listener: (...args: unknown[]) => void) {
+      const event_listeners = this.listeners.get(event) ?? []
+      event_listeners.push(listener)
+      this.listeners.set(event, event_listeners)
+      return this
+    }
+
+    emit(event: string, ...args: unknown[]) {
+      for (const listener of this.listeners.get(event) ?? []) {
+        listener(...args)
+      }
+    }
 
     setWindowOpenHandler() {}
 
@@ -16,12 +29,10 @@ vi.mock('electron', () => {
         this.emit(
           'console-message',
           {},
-          {
-            level: 'error',
-            message: 'Uncaught TypeError: ReactDOM.render is not a function',
-            lineNumber: 7,
-            sourceId: 'http://localhost:3000/static/js/main.js',
-          },
+          3,
+          'Uncaught TypeError: ReactDOM.render is not a function',
+          7,
+          'http://localhost:3000/static/js/main.js',
         )
       }
     }
