@@ -193,7 +193,7 @@ const {
   estimateContextTokensUsed,
   resolveModelContextWindow,
   resolveAgentToolset,
-  useStatefulLoop,
+  useStatefulLoop: shouldUseStatefulLoop,
   toToolResultContent,
   normalizeTodoStatus,
   normalizeTodo,
@@ -553,9 +553,7 @@ export async function runAgentSession({
           (recommendation.requiresDownload
             ? `No suitable installed replacement was found. Download ${recommendation.label} (${recommendation.downloadSize || 'size varies'}) and continue?`
             : `Load ${recommendation.label} and continue?`) +
-          `
-
-${recommendation.reason}`,
+          `\n\n${recommendation.reason}`,
         options: [
           {
             value: recommendation.requiresDownload
@@ -1728,7 +1726,7 @@ ${recommendation.reason}`,
   // the model drives. Early-returns, so the legacy loop below is skipped entirely.
   // Extracting this into agent/conversationLoop.js is a clean follow-up once proven
   // (kept inline now to share the session closures with guaranteed-correct binding).
-  if (useStatefulLoop(settings)) {
+  if (shouldUseStatefulLoop(settings)) {
     // Build the durable final-result envelope (same shape both loops return).
     const finishStateful = async (reply) => {
       const finalText = await finalizeHybridReply(reply)
