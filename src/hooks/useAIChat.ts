@@ -29,7 +29,6 @@ import {
   appendChatMessage,
   createChat,
   getActiveChatId,
-  getChatSessionState,
   loadChat,
   removeChat,
   saveChatSessionState,
@@ -76,6 +75,12 @@ function get_recorder_mime_type() {
 
 function stop_stream(stream: MediaStream | null) {
   for (const track of stream?.getTracks() ?? []) track.stop()
+}
+
+function normalize_agent_todos(todos: unknown[]): Array<Record<string, unknown>> {
+  return todos.filter(
+    (todo): todo is Record<string, unknown> => Boolean(todo) && typeof todo === 'object' && !Array.isArray(todo),
+  )
 }
 
 interface AgentEditorContext {
@@ -410,7 +415,7 @@ function useAIChat(
           attached_files: to_agent_attachments(turn_attachments),
           chat_session: { id: chat_id },
         },
-        todos,
+        todos: normalize_agent_todos(todos),
         abortSignal: signal,
         onCheckpoint: (checkpoint) => {
           if (checkpoint?.type === 'todos') {
