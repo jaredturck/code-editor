@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { useClipboardHistory, useOrbSettings, useOrbShell } from '@/platform-context/AgentSettingsContext'
+import { useOrbSettings, useOrbShell } from '@/platform-context/AgentSettingsContext'
+import { useClipboardHistory } from '@/platform-context/orb/ClipboardContext'
 import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask'
 import { normalizeNoteOrder, readNotes, reindexNoteOrder, writeNotes } from '@/platform/notesStorage'
 import type { StoredNote } from '@/platform/notesStorage'
