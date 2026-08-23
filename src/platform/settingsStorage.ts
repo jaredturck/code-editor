@@ -264,6 +264,7 @@ export interface BridgePermissionState {
   terminal: boolean
   launcher: boolean
   automation: boolean
+  screenCapture: boolean
   microphone: boolean
 }
 
@@ -320,6 +321,7 @@ export function buildBridgePermissionState(settings: Partial<OrbSettings> | OrbS
     terminal: settings.permissions_terminal === true,
     launcher: settings.permissions_terminal === true,
     automation: settings.permissions_mouse_control === true,
+    screenCapture: settings.permissions_screen_capture === true,
     microphone: settings.permissions_microphone === true,
   }
 }
