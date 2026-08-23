@@ -20,6 +20,7 @@ if (typeof window !== 'undefined') {
 
   Object.defineProperty(window, 'editor_api', {
     configurable: true,
+    writable: true,
     value: {
       platform: 'linux',
       file: {

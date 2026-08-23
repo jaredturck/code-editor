@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import hljs from 'highlight.js/lib/common'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { readArtifact, type BridgeArtifact } from '../platform/desktopBridge'
 
@@ -105,6 +105,11 @@ function artifact_id_from_href(href: string) {
   } catch {
     return match[1]
   }
+}
+
+function markdown_url_transform(url: string) {
+  if (url.startsWith('artifact:')) return url
+  return defaultUrlTransform(url)
 }
 
 function ArtifactPreview({ artifact, onClose }: { artifact: BridgeArtifact; onClose: () => void }) {
@@ -214,6 +219,7 @@ function MarkdownView({ content, baseFilePath = null, className = 'artifact-md',
             },
           }}
           remarkPlugins={[remarkGfm]}
+          urlTransform={markdown_url_transform}
         >
           {content}
         </ReactMarkdown>

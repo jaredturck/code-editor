@@ -74,6 +74,10 @@ describe('chat and autonomous-run encryption at rest', () => {
     await initializeEncryptedDatabase({ databasePath: database_path, masterKey: master_key })
     const restored_chat = await getEncryptedChat(chat_id)
     const restored_store = await readEncryptedStoreAll()
+    const restored_meta =
+      restored_chat?.meta && typeof restored_chat.meta === 'object'
+        ? (restored_chat.meta as Record<string, unknown>)
+        : {}
     const restored_messages = Array.isArray(restored_chat?.messages)
       ? (restored_chat.messages as Array<Record<string, unknown>>)
       : []
@@ -81,15 +85,15 @@ describe('chat and autonomous-run encryption at rest', () => {
     const restored_attachments = Array.isArray(first_message.attachments)
       ? (first_message.attachments as Array<Record<string, unknown>>)
       : []
-    const restored_meta =
+    const restored_message_meta =
       first_message.meta && typeof first_message.meta === 'object'
         ? (first_message.meta as Record<string, unknown>)
         : {}
 
-    expect(restored_chat?.title).toBe(`title ${sentinel}`)
+    expect(restored_meta.title).toBe(`title ${sentinel}`)
     expect(first_message.content).toBe(`message ${sentinel}`)
     expect(restored_attachments[0]?.content).toBe(`attachment ${sentinel}`)
-    expect(restored_meta.privateRunNote).toBe(`timeline ${sentinel}`)
+    expect(restored_message_meta.privateRunNote).toBe(`timeline ${sentinel}`)
     expect(restored_chat?.compacted).toBe(`compacted ${sentinel}`)
     expect(await readEncryptedChatMemory(chat_id)).toBe(`memory ${sentinel}`)
     expect(restored_store[session_key]).toContain(`todo ${sentinel}`)
