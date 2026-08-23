@@ -61,7 +61,12 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
   const working_dir = String(settings.agent_working_dir || '').trim()
   const launcher_enabled = settings.permissions_terminal === true
 
-  useEffect(() => projectRunController.subscribe(set_project_run), [])
+  useEffect(() => {
+    const unsubscribe = projectRunController.subscribe(set_project_run)
+    return () => {
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     const poll = () => {
