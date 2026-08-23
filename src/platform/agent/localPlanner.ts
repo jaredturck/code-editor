@@ -3,60 +3,57 @@
  * compact structured plan only; tool execution remains in the main controller.
  */
 
-import { callAIWithMeta } from '@/platform/aiService';
-import { readAgentModels } from '@/platform/agent/agentIdentity';
+import { callAIWithMeta } from '@/platform/aiService'
+import { readAgentModels } from '@/platform/agent/agentIdentity'
 
 export interface LocalPreflightPlan {
-  taskType: string;
-  developmentTask: boolean;
-  workspaceMutationExpected: boolean;
-  verificationRequired: boolean;
-  successCriteria: string[];
-  needsLocalFiles: boolean;
-  needsWebResearch: boolean;
-  localQueries: string[];
-  webQueries: string[];
-  preflightChecks: string[];
-  verificationChecks: string[];
-  steps: string[];
+  taskType: string
+  developmentTask: boolean
+  workspaceMutationExpected: boolean
+  verificationRequired: boolean
+  successCriteria: string[]
+  needsLocalFiles: boolean
+  needsWebResearch: boolean
+  localQueries: string[]
+  webQueries: string[]
+  preflightChecks: string[]
+  verificationChecks: string[]
+  steps: string[]
 }
 
 interface SettingsLike {
-  agent_models?: unknown;
-  ai_local_url?: string;
-  agent_local_planning?: boolean;
-  agent_preflight_plan?: unknown;
-  [key: string]: unknown;
+  agent_models?: unknown
+  ai_local_url?: string
+  agent_local_planning?: boolean
+  agent_preflight_plan?: unknown
+  [key: string]: unknown
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function parsePlannerJson(value: string): Record<string, unknown> | null {
-  const text = String(value || '').trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text;
-  const start = fenced.indexOf('{');
-  const end = fenced.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
+  const text = String(value || '').trim()
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || text
+  const start = fenced.indexOf('{')
+  const end = fenced.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
   try {
-    const parsed = JSON.parse(fenced.slice(start, end + 1));
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    const parsed = JSON.parse(fenced.slice(start, end + 1))
+    return parsed && typeof parsed === 'object' ? parsed : null
   } catch {
-    return null;
+    return null
   }
 }
 
 function normalizeStrings(value: unknown, limit: number): string[] {
-  if (!Array.isArray(value)) return [];
-  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean))).slice(
-    0,
-    limit,
-  );
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, limit)
 }
 
 function normalizePreflightPlan(value: unknown): LocalPreflightPlan | null {
-  if (!isRecord(value)) return null;
+  if (!isRecord(value)) return null
   return {
     taskType: String(value.taskType || 'other'),
     developmentTask: value.developmentTask === true,
@@ -70,11 +67,11 @@ function normalizePreflightPlan(value: unknown): LocalPreflightPlan | null {
     preflightChecks: normalizeStrings(value.preflightChecks, 8),
     verificationChecks: normalizeStrings(value.verificationChecks, 8),
     steps: normalizeStrings(value.steps, 12),
-  };
+  }
 }
 
 export function shouldRunLocalPlanning(userInput: string): boolean {
-  return Boolean(String(userInput || '').trim());
+  return Boolean(String(userInput || '').trim())
 }
 
 export async function buildLocalPreflightPlan(
@@ -83,24 +80,22 @@ export async function buildLocalPreflightPlan(
   settings: SettingsLike,
   signal?: AbortSignal | null,
 ): Promise<LocalPreflightPlan | null> {
-  const suppliedPlan = normalizePreflightPlan(settings?.agent_preflight_plan);
-  if (suppliedPlan) return suppliedPlan;
-  if (!shouldRunLocalPlanning(userInput) || settings?.agent_local_planning === false) return null;
+  const suppliedPlan = normalizePreflightPlan(settings?.agent_preflight_plan)
+  if (suppliedPlan) return suppliedPlan
+  if (!shouldRunLocalPlanning(userInput) || settings?.agent_local_planning === false) return null
 
-  const localModels = readAgentModels(settings).filter(
-    (entry) => entry.provider === 'local' && entry.model,
-  );
+  const localModels = readAgentModels(settings).filter((entry) => entry.provider === 'local' && entry.model)
   const planner =
     localModels.find((entry) => entry.role === 'scout' && entry.primary) ||
     localModels.find((entry) => entry.role === 'orchestrator' && entry.primary) ||
     localModels.find((entry) => entry.role === 'scout') ||
-    localModels[0];
-  if (!planner) return null;
+    localModels[0]
+  if (!planner) return null
 
   const recent = (Array.isArray(conversation) ? conversation : [])
     .slice(-6)
     .map((message) => `${message.role || 'user'}: ${String(message.content || '').slice(0, 1200)}`)
-    .join('\n');
+    .join('\n')
   const prompt = [
     'Create a compact execution preflight and task contract for an AI agent. Return JSON only.',
     'Interpret the complete request and recent context semantically. Do not classify intent from isolated keywords or phrases.',
@@ -119,13 +114,14 @@ export async function buildLocalPreflightPlan(
     recent ? `Recent context:\n${recent}` : '',
   ]
     .filter(Boolean)
-    .join('\n\n');
+    .join('\n\n')
 
   const meta = await callAIWithMeta(
     [
       {
         role: 'system',
-        content: 'You are IRIS local planner. Interpret user intent semantically and produce a concise structured task contract, not a final answer.',
+        content:
+          'You are IRIS local planner. Interpret user intent semantically and produce a concise structured task contract, not a final answer.',
       },
       { role: 'user', content: prompt },
     ],
@@ -137,13 +133,13 @@ export async function buildLocalPreflightPlan(
       agent_max_output_tokens: 1100,
     },
     { signal: signal || undefined },
-  );
-  const parsed = parsePlannerJson(String(meta?.text || ''));
-  return normalizePreflightPlan(parsed);
+  )
+  const parsed = parsePlannerJson(String(meta?.text || ''))
+  return normalizePreflightPlan(parsed)
 }
 
 export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): string {
-  if (!plan) return '';
+  if (!plan) return ''
   const parts = [
     `Local preflight: task=${plan.taskType}.`,
     plan.developmentTask
@@ -156,19 +152,15 @@ export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): strin
       ? 'Task contract: completion requires real verification. Continue the current agent loop until appropriate verification evidence exists; if verification fails, diagnose the observed failure, choose the next action, fix it, and verify again.'
       : '',
     plan.successCriteria.length ? `Success criteria: ${plan.successCriteria.join(' | ')}.` : '',
-    plan.preflightChecks.length
-      ? `Preflight checks: ${plan.preflightChecks.join(' | ')}.`
-      : '',
+    plan.preflightChecks.length ? `Preflight checks: ${plan.preflightChecks.join(' | ')}.` : '',
     plan.needsLocalFiles
       ? `Use filesystem RAG${plan.localQueries.length ? ` for: ${plan.localQueries.join(' | ')}` : ''}.`
       : 'Filesystem RAG is optional.',
     plan.needsWebResearch
       ? `Use web research${plan.webQueries.length ? ` for: ${plan.webQueries.join(' | ')}` : ''}.`
       : 'Web research is not initially required.',
-    plan.verificationChecks.length
-      ? `Verification goals: ${plan.verificationChecks.join(' | ')}.`
-      : '',
+    plan.verificationChecks.length ? `Verification goals: ${plan.verificationChecks.join(' | ')}.` : '',
     plan.steps.length ? `Plan: ${plan.steps.join(' → ')}.` : '',
-  ];
-  return parts.filter(Boolean).join(' ');
+  ]
+  return parts.filter(Boolean).join(' ')
 }

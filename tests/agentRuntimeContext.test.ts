@@ -116,9 +116,7 @@ describe('autonomous project working context', () => {
 
     const recovered = result_fixture()
     recovered.reply = 'Created website.py.'
-    recovered.stepHistory = [
-      { step: 1, tool: 'files.write', ok: true, summary: 'created /workspace/website.py' },
-    ]
+    recovered.stepHistory = [{ step: 1, tool: 'files.write', ok: true, summary: 'created /workspace/website.py' }]
     recovered.todos = [{ id: 1, text: 'Create website.py', status: 'done' }]
 
     runtime_state.run.mockResolvedValueOnce(failed).mockResolvedValueOnce(recovered)

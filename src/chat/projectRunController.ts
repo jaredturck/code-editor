@@ -150,11 +150,8 @@ export function normalize_project_run_todos(value: unknown): ProjectRunTodo[] {
 
   return value.slice(0, 100).map((todo, index) => {
     const source = todo && typeof todo === 'object' ? (todo as Record<string, unknown>) : {}
-    const dependsOn = (Array.isArray(source.dependsOn)
-      ? source.dependsOn
-      : Array.isArray(source.depends_on)
-        ? source.depends_on
-        : []
+    const dependsOn = (
+      Array.isArray(source.dependsOn) ? source.dependsOn : Array.isArray(source.depends_on) ? source.depends_on : []
     )
       .slice(0, MAX_TODO_DEPENDENCIES)
       .map((item) => String(item || '').slice(0, MAX_TODO_ID_LENGTH))
@@ -163,8 +160,9 @@ export function normalize_project_run_todos(value: unknown): ProjectRunTodo[] {
     return {
       id: String(source.id ?? index + 1).slice(0, MAX_TODO_ID_LENGTH),
       text:
-        String(source.text || 'Untitled task').trim().slice(0, MAX_TODO_TEXT_LENGTH) ||
-        'Untitled task',
+        String(source.text || 'Untitled task')
+          .trim()
+          .slice(0, MAX_TODO_TEXT_LENGTH) || 'Untitled task',
       status: normalize_todo_status(source.status),
       dependsOn,
     }
@@ -208,9 +206,7 @@ export function normalize_project_run_state(value: unknown): ProjectRunState | n
   if (
     !source.id ||
     !source.chat_id ||
-    (!active_statuses.has(status) &&
-      !resumable_statuses.has(status) &&
-      !terminal_statuses.has(status))
+    (!active_statuses.has(status) && !resumable_statuses.has(status) && !terminal_statuses.has(status))
   ) {
     return null
   }
@@ -259,9 +255,8 @@ function apply_patch(state: ProjectRunState, patch: ProjectRunPatch) {
     state.steps = Math.max(0, Number(patch.steps) || 0)
   }
   if (Object.hasOwn(patch, 'summary')) {
-    const summary = patch.summary && typeof patch.summary === 'object'
-      ? patch.summary as Record<string, unknown>
-      : null
+    const summary =
+      patch.summary && typeof patch.summary === 'object' ? (patch.summary as Record<string, unknown>) : null
     state.summary = typeof patch.summary === 'string' ? patch.summary.slice(0, 4000) : state.summary
     state.runtime_summary = normalize_project_run_runtime_summary(summary)
     state.usage = normalize_project_run_usage(summary?.usage)
@@ -381,17 +376,12 @@ function resume(provider = '', model = '') {
   if (!current_state || !is_resumable_project_run_status(current_state.status)) return null
   abort_controller = new AbortController()
   pause_requested = false
-  transition(
-    current_state.mode === 'plan_first' && current_state.todos.length === 0
-      ? 'planning'
-      : 'running',
-    {
-      error: '',
-      last_activity: 'Resuming project run',
-      provider: provider || current_state.provider,
-      model: model || current_state.model,
-    },
-  )
+  transition(current_state.mode === 'plan_first' && current_state.todos.length === 0 ? 'planning' : 'running', {
+    error: '',
+    last_activity: 'Resuming project run',
+    provider: provider || current_state.provider,
+    model: model || current_state.model,
+  })
   return { state: current_state, signal: abort_controller.signal }
 }
 

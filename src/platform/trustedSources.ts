@@ -18,54 +18,45 @@
  */
 
 export type SourceKind =
-  | 'encyclopedia'
-  | 'scholarly'
-  | 'code'
-  | 'docs'
-  | 'package'
-  | 'reference'
-  | 'gov'
-  | 'data'
-  | 'books'
-  | 'news';
+  'encyclopedia' | 'scholarly' | 'code' | 'docs' | 'package' | 'reference' | 'gov' | 'data' | 'books' | 'news'
 
 export interface TrustedSource {
-  id: string;
-  name: string;
-  kinds: SourceKind[];
-  domains: string[];
-  summary: string;
-  search?: string;
-  api?: string;
-  requiresKey?: boolean;
-  noJs: boolean;
+  id: string
+  name: string
+  kinds: SourceKind[]
+  domains: string[]
+  summary: string
+  search?: string
+  api?: string
+  requiresKey?: boolean
+  noJs: boolean
 }
 
 export interface TrustedSourceTarget {
-  id: string;
-  name: string;
-  kinds: SourceKind[];
-  domains: string[];
-  summary: string;
-  searchUrl?: string;
-  apiUrl?: string;
-  noJs: boolean;
-  requiresKey: boolean;
+  id: string
+  name: string
+  kinds: SourceKind[]
+  domains: string[]
+  summary: string
+  searchUrl?: string
+  apiUrl?: string
+  noJs: boolean
+  requiresKey: boolean
 }
 
 export interface TrustedSourceLookupOptions {
-  kind?: SourceKind | string;
-  limit?: number;
+  kind?: SourceKind | string
+  limit?: number
 }
 
 export interface TrustedSourceLookupResult {
-  topic: string;
-  kind: string | null;
-  availableKinds?: SourceKind[];
-  count?: number;
-  sources: TrustedSourceTarget[];
-  error?: string;
-  usage?: string;
+  topic: string
+  kind: string | null
+  availableKinds?: SourceKind[]
+  count?: number
+  sources: TrustedSourceTarget[]
+  error?: string
+  usage?: string
 }
 
 const TRUSTED_SOURCES: TrustedSource[] = [
@@ -75,8 +66,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'Wikipedia',
     kinds: ['encyclopedia', 'reference'],
     domains: ['en.wikipedia.org', 'wikipedia.org'],
-    summary:
-      'Free encyclopedia — the default for general background, definitions, people, places, events.',
+    summary: 'Free encyclopedia — the default for general background, definitions, people, places, events.',
     search: 'https://en.wikipedia.org/w/index.php?search={q}',
     // OpenSearch (keyless, curl-friendly) returns title/desc/url tuples; REST summary
     // gives a one-paragraph extract per title.
@@ -88,8 +78,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'Wikidata',
     kinds: ['data', 'reference', 'encyclopedia'],
     domains: ['wikidata.org', 'www.wikidata.org'],
-    summary:
-      'Structured facts (entities, identifiers, properties) — good for precise attributes and IDs.',
+    summary: 'Structured facts (entities, identifiers, properties) — good for precise attributes and IDs.',
     search: 'https://www.wikidata.org/w/index.php?search={q}',
     api: 'https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&language=en&limit=10&search={q}',
     noJs: true,
@@ -99,8 +88,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'Encyclopaedia Britannica',
     kinds: ['encyclopedia', 'reference'],
     domains: ['britannica.com', 'www.britannica.com'],
-    summary:
-      'Editorially reviewed encyclopedia — a second authoritative source to cross-check Wikipedia.',
+    summary: 'Editorially reviewed encyclopedia — a second authoritative source to cross-check Wikipedia.',
     search: 'https://www.britannica.com/search?query={q}',
     noJs: false,
   },
@@ -111,8 +99,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'arXiv',
     kinds: ['scholarly'],
     domains: ['arxiv.org', 'export.arxiv.org'],
-    summary:
-      'Open preprints (CS, physics, math, stats) — primary source for recent research papers.',
+    summary: 'Open preprints (CS, physics, math, stats) — primary source for recent research papers.',
     search: 'https://arxiv.org/abs/?searchtype=all&query={q}',
     api: 'http://export.arxiv.org/api/query?search_query=all:{q}&max_results=10',
     noJs: true,
@@ -132,8 +119,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'Crossref',
     kinds: ['scholarly'],
     domains: ['crossref.org', 'api.crossref.org'],
-    summary:
-      'DOI metadata for the scholarly record — resolve a paper/DOI to authoritative metadata.',
+    summary: 'DOI metadata for the scholarly record — resolve a paper/DOI to authoritative metadata.',
     search: 'https://search.crossref.org/?q={q}',
     api: 'https://api.crossref.org/works?rows=10&query={q}',
     noJs: true,
@@ -143,8 +129,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'OpenAlex',
     kinds: ['scholarly', 'data'],
     domains: ['openalex.org', 'api.openalex.org'],
-    summary:
-      'Open index of works, authors, venues — broad scholarly coverage (free key / mailto polite pool).',
+    summary: 'Open index of works, authors, venues — broad scholarly coverage (free key / mailto polite pool).',
     search: 'https://openalex.org/works?search={q}',
     api: 'https://api.openalex.org/works?search={q}',
     requiresKey: true,
@@ -195,8 +180,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     name: 'GitHub',
     kinds: ['code'],
     domains: ['github.com', 'api.github.com'],
-    summary:
-      'Source code and repositories — find implementations, examples, issues (REST search is rate-limited).',
+    summary: 'Source code and repositories — find implementations, examples, issues (REST search is rate-limited).',
     search: 'https://github.com/search?type=repositories&q={q}',
     api: 'https://api.github.com/search/repositories?per_page=10&q={q}',
     noJs: true,
@@ -315,7 +299,7 @@ const TRUSTED_SOURCES: TrustedSource[] = [
     search: 'https://www.reuters.com/site-search/?query={q}',
     noJs: false,
   },
-];
+]
 
 // When a caller asks for a kind, also offer these closely-related kinds.
 const KIND_SYNONYMS: Record<string, SourceKind[]> = {
@@ -329,22 +313,22 @@ const KIND_SYNONYMS: Record<string, SourceKind[]> = {
   gov: ['gov', 'data'],
   books: ['books', 'reference'],
   news: ['news'],
-};
+}
 
 // Default mix when no kind is given — a broad, high-signal set.
-const DEFAULT_KINDS: SourceKind[] = ['encyclopedia', 'scholarly', 'code', 'docs', 'reference'];
+const DEFAULT_KINDS: SourceKind[] = ['encyclopedia', 'scholarly', 'code', 'docs', 'reference']
 
 // Fills template from the supplied values without changing the source template.
 function fillTemplate(template: string | undefined, query: string): string | undefined {
-  if (!template) return undefined;
-  return template.replace(/\{q\}/g, encodeURIComponent(query));
+  if (!template) return undefined
+  return template.replace(/\{q\}/g, encodeURIComponent(query))
 }
 
 /** All distinct kinds the registry covers (for tool help / UI). */
 export function trustedSourceKinds(): SourceKind[] {
-  const set = new Set<SourceKind>();
-  for (const s of TRUSTED_SOURCES) for (const k of s.kinds) set.add(k);
-  return [...set].sort();
+  const set = new Set<SourceKind>()
+  for (const s of TRUSTED_SOURCES) for (const k of s.kinds) set.add(k)
+  return [...set].sort()
 }
 
 /**
@@ -359,34 +343,32 @@ export function lookupTrustedSources(
   topic: string,
   options: TrustedSourceLookupOptions = {},
 ): TrustedSourceLookupResult {
-  const query = String(topic || '').trim();
+  const query = String(topic || '').trim()
   if (!query) {
     return {
       topic: '',
       kind: null,
       sources: [],
       error: 'A non-empty topic is required.',
-    };
+    }
   }
 
   const requestedKind = String(options.kind || '')
     .trim()
-    .toLowerCase();
-  const limit = Math.max(1, Math.min(20, Number(options.limit) || 8));
+    .toLowerCase()
+  const limit = Math.max(1, Math.min(20, Number(options.limit) || 8))
 
-  const wantedKinds = requestedKind
-    ? KIND_SYNONYMS[requestedKind] || [requestedKind]
-    : DEFAULT_KINDS;
-  const wanted = new Set<string>(wantedKinds);
+  const wantedKinds = requestedKind ? KIND_SYNONYMS[requestedKind] || [requestedKind] : DEFAULT_KINDS
+  const wanted = new Set<string>(wantedKinds)
 
   // Primary kind first, then related, preserving registry order within each tier.
   const scored = TRUSTED_SOURCES.map((s) => {
-    const exact = requestedKind && s.kinds.some((kind) => kind === requestedKind);
-    const related = s.kinds.some((k) => wanted.has(k));
-    return { s, rank: exact ? 0 : related ? 1 : 2 };
+    const exact = requestedKind && s.kinds.some((kind) => kind === requestedKind)
+    const related = s.kinds.some((k) => wanted.has(k))
+    return { s, rank: exact ? 0 : related ? 1 : 2 }
   })
     .filter((e) => e.rank < 2)
-    .sort((a, b) => a.rank - b.rank);
+    .sort((a, b) => a.rank - b.rank)
 
   const sources = scored.slice(0, limit).map(({ s }) => ({
     id: s.id,
@@ -398,7 +380,7 @@ export function lookupTrustedSources(
     apiUrl: fillTemplate(s.api, query),
     noJs: Boolean(s.noJs),
     requiresKey: Boolean(s.requiresKey),
-  }));
+  }))
 
   return {
     topic: query,
@@ -408,7 +390,7 @@ export function lookupTrustedSources(
     sources,
     usage:
       'These are vetted source targets, not results. Fetch the apiUrl (keyless JSON, prefer for noJs sources) or searchUrl with web.fetch / search.web / curl — all still subject to the web access guard.',
-  };
+  }
 }
 
-export { TRUSTED_SOURCES };
+export { TRUSTED_SOURCES }

@@ -169,9 +169,7 @@ describe('AISettingsPanel', () => {
     render_panel('models', { on_editor_ai_change })
 
     fireEvent.change(screen.getByDisplayValue('speech'), { target: { value: 'new-speech-model' } })
-    expect(on_editor_ai_change).toHaveBeenCalledWith(
-      expect.objectContaining({ speech_model: 'new-speech-model' }),
-    )
+    expect(on_editor_ai_change).toHaveBeenCalledWith(expect.objectContaining({ speech_model: 'new-speech-model' }))
   })
 
   it('stores provider secrets only through the secure credential bridge', () => {
@@ -192,9 +190,7 @@ describe('AISettingsPanel', () => {
     fireEvent.click(file_read!.querySelector('[role="switch"]') as HTMLElement)
 
     await waitFor(() => expect(state.update_bridge_permissions).toHaveBeenCalledTimes(1))
-    expect(state.update_bridge_permissions).toHaveBeenCalledWith(
-      expect.objectContaining({ fileRead: true }),
-    )
+    expect(state.update_bridge_permissions).toHaveBeenCalledWith(expect.objectContaining({ fileRead: true }))
     expect(state.settings.permissions_file_read).toBe(true)
   })
 })

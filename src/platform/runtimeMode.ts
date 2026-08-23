@@ -3,52 +3,52 @@
  * the independent workspace, or the dedicated editor window.
  */
 
-import { canControlDesktopWindow } from '@/platform/desktopShellWindow';
+import { canControlDesktopWindow } from '@/platform/desktopShellWindow'
 
-export type RuntimeWindowRole = 'browser' | 'combined' | 'orb' | 'workspace' | 'editor';
+export type RuntimeWindowRole = 'browser' | 'combined' | 'orb' | 'workspace' | 'editor'
 
 export function isDesktopShellMode(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (canControlDesktopWindow()) return true;
+  if (typeof window === 'undefined') return false
+  if (canControlDesktopWindow()) return true
 
   try {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('desktopShell') === '1';
+    const params = new URLSearchParams(window.location.search)
+    return params.get('desktopShell') === '1'
   } catch {
-    return false;
+    return false
   }
 }
 
 export function getRuntimeWindowRole(): RuntimeWindowRole {
-  if (typeof window === 'undefined') return 'browser';
+  if (typeof window === 'undefined') return 'browser'
 
-  const preloadRole = window.orbitDesktop?.windowRole;
+  const preloadRole = window.orbitDesktop?.windowRole
   if (preloadRole === 'orb' || preloadRole === 'workspace' || preloadRole === 'editor') {
-    return preloadRole;
+    return preloadRole
   }
 
   try {
-    const params = new URLSearchParams(window.location.search);
-    const queryRole = params.get('windowRole');
+    const params = new URLSearchParams(window.location.search)
+    const queryRole = params.get('windowRole')
     if (queryRole === 'orb' || queryRole === 'workspace' || queryRole === 'editor') {
-      return queryRole;
+      return queryRole
     }
-    if (params.get('desktopShell') === '1') return 'combined';
+    if (params.get('desktopShell') === '1') return 'combined'
   } catch {
     /* browser fallback below */
   }
 
-  return 'browser';
+  return 'browser'
 }
 
 export function isDesktopOrbWindow(): boolean {
-  return isDesktopShellMode() && getRuntimeWindowRole() === 'orb';
+  return isDesktopShellMode() && getRuntimeWindowRole() === 'orb'
 }
 
 export function isDesktopWorkspaceWindow(): boolean {
-  return isDesktopShellMode() && getRuntimeWindowRole() === 'workspace';
+  return isDesktopShellMode() && getRuntimeWindowRole() === 'workspace'
 }
 
 export function isDesktopEditorWindow(): boolean {
-  return isDesktopShellMode() && getRuntimeWindowRole() === 'editor';
+  return isDesktopShellMode() && getRuntimeWindowRole() === 'editor'
 }

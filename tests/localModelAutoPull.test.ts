@@ -51,9 +51,7 @@ describe('configured local model auto-pull', () => {
   it('pulls the exact configured Ollama model and retries it before failover can occur', async () => {
     state.invoke
       .mockRejectedValueOnce(
-        new Error(
-          'Local model "qwen3.5:9b" isn\'t available on the Ollama server (model \'qwen3.5:9b\' not found).',
-        ),
+        new Error("Local model \"qwen3.5:9b\" isn't available on the Ollama server (model 'qwen3.5:9b' not found)."),
       )
       .mockResolvedValueOnce({ text: 'ready', usage: {} })
     state.pull.mockResolvedValue({ ok: true, model: 'qwen3.5:9b', status: 'success' })

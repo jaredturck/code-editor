@@ -1,6 +1,6 @@
 /** Verifies extracted provider helpers preserve request, streaming, and response normalization. */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyAnthropicStreamPayload,
   buildAnthropicHeaders,
@@ -8,19 +8,19 @@ import {
   normalizeAnthropicMessages,
   parseAnthropicResponse,
   type AnthropicStreamState,
-} from '../../src/lib/providers/anthropicProvider';
+} from '../../src/lib/providers/anthropicProvider'
 import {
   buildGeminiRequestBody,
   normalizeGeminiContents,
   parseGeminiResponse,
-} from '../../src/lib/providers/geminiProvider';
+} from '../../src/lib/providers/geminiProvider'
 import {
   applyOpenAIStreamPayload,
   buildOpenAIRequestBody,
   normalizeOpenAIMessages,
   parseOpenAIChatResponse,
   type OpenAIStreamState,
-} from '../../src/lib/providers/openaiProvider';
+} from '../../src/lib/providers/openaiProvider'
 
 const messages = [
   { role: 'system', content: 'system guidance' },
@@ -34,27 +34,25 @@ const messages = [
     role: 'tool',
     toolResults: [{ id: 'call-1', name: 'files.read', content: 'done' }],
   },
-] as any;
+] as any
 
 describe('OpenAI provider modular helpers', () => {
   it('normalizes persistent tool turns and builds the same request controls', () => {
-    const normalized = normalizeOpenAIMessages(messages);
+    const normalized = normalizeOpenAIMessages(messages)
     expect(normalized[2]).toMatchObject({
       role: 'assistant',
       tool_calls: [{ id: 'call-1', function: { arguments: '{"path":"/tmp/a"}' } }],
-    });
-    expect(normalized[3]).toEqual({ role: 'tool', tool_call_id: 'call-1', content: 'done' });
+    })
+    expect(normalized[3]).toEqual({ role: 'tool', tool_call_id: 'call-1', content: 'done' })
 
     expect(
       buildOpenAIRequestBody(normalized, {
         model: 'gpt-4o',
         providerId: 'openai',
-        tools: [
-          { name: 'files.read', description: 'Read', inputSchema: { type: 'object' } },
-        ] as any,
+        tools: [{ name: 'files.read', description: 'Read', inputSchema: { type: 'object' } }] as any,
       }),
-    ).toMatchObject({ model: 'gpt-4o', messages: normalized, tool_choice: 'auto' });
-  });
+    ).toMatchObject({ model: 'gpt-4o', messages: normalized, tool_choice: 'auto' })
+  })
 
   it('applies streamed deltas and parses non-streaming metadata', () => {
     const state: OpenAIStreamState = {
@@ -63,17 +61,17 @@ describe('OpenAI provider modular helpers', () => {
       finishReason: '',
       usage: null,
       toolAccumulators: new Map(),
-    };
-    const onToken = vi.fn();
+    }
+    const onToken = vi.fn()
     applyOpenAIStreamPayload(
       JSON.stringify({ choices: [{ delta: { content: 'hello' }, finish_reason: 'stop' }] }),
       state,
       onToken,
       vi.fn(),
       vi.fn(),
-    );
-    expect(state).toMatchObject({ text: 'hello', finishReason: 'stop' });
-    expect(onToken).toHaveBeenCalledWith('hello');
+    )
+    expect(state).toMatchObject({ text: 'hello', finishReason: 'stop' })
+    expect(onToken).toHaveBeenCalledWith('hello')
 
     expect(
       parseOpenAIChatResponse(
@@ -84,29 +82,29 @@ describe('OpenAI provider modular helpers', () => {
         'OpenAI',
         'gpt-4o',
       ),
-    ).toMatchObject({ provider: 'OpenAI', model: 'gpt-4o', text: 'answer', stopReason: 'stop' });
-  });
-});
+    ).toMatchObject({ provider: 'OpenAI', model: 'gpt-4o', text: 'answer', stopReason: 'stop' })
+  })
+})
 
 describe('Anthropic provider modular helpers', () => {
   it('normalizes tool turns and preserves legacy thinking request controls', () => {
-    const normalized = normalizeAnthropicMessages(messages);
-    expect(normalized[1]).toMatchObject({ role: 'assistant' });
+    const normalized = normalizeAnthropicMessages(messages)
+    expect(normalized[1]).toMatchObject({ role: 'assistant' })
     expect(normalized[2]).toMatchObject({
       role: 'user',
       content: [{ type: 'tool_result', tool_use_id: 'call-1', content: 'done' }],
-    });
+    })
 
-    const settings = { extended_thinking: true, thinking_budget_tokens: 2000 } as any;
+    const settings = { extended_thinking: true, thinking_budget_tokens: 2000 } as any
     expect(buildAnthropicRequestBody(messages, 'claude-sonnet-4-5', settings, {})).toMatchObject({
       model: 'claude-sonnet-4-5',
       thinking: { type: 'enabled', budget_tokens: 2000 },
-    });
+    })
     expect(buildAnthropicHeaders('key', 'claude-sonnet-4-5', settings)).toMatchObject({
       'x-api-key': 'key',
       'anthropic-beta': 'interleaved-thinking-2025-05-14',
-    });
-  });
+    })
+  })
 
   it('applies streamed text and parses content blocks', () => {
     const state: AnthropicStreamState = {
@@ -116,8 +114,8 @@ describe('Anthropic provider modular helpers', () => {
       inputTokens: 0,
       outputTokens: 0,
       blocks: new Map(),
-    };
-    const onToken = vi.fn();
+    }
+    const onToken = vi.fn()
     applyAnthropicStreamPayload(
       JSON.stringify({
         type: 'content_block_delta',
@@ -128,9 +126,9 @@ describe('Anthropic provider modular helpers', () => {
       onToken,
       vi.fn(),
       vi.fn(),
-    );
-    expect(state.text).toBe('hi');
-    expect(onToken).toHaveBeenCalledWith('hi');
+    )
+    expect(state.text).toBe('hi')
+    expect(onToken).toHaveBeenCalledWith('hi')
 
     expect(
       parseAnthropicResponse(
@@ -141,23 +139,23 @@ describe('Anthropic provider modular helpers', () => {
         } as any,
         'claude-sonnet-4-6',
       ),
-    ).toMatchObject({ text: 'answer', stopReason: 'end_turn' });
-  });
-});
+    ).toMatchObject({ text: 'answer', stopReason: 'end_turn' })
+  })
+})
 
 describe('Gemini provider modular helpers', () => {
   it('normalizes messages, builds system instructions, and parses candidates', () => {
-    const normalized = normalizeGeminiContents(messages);
-    expect(normalized[1]).toMatchObject({ role: 'model' });
+    const normalized = normalizeGeminiContents(messages)
+    expect(normalized[1]).toMatchObject({ role: 'model' })
     expect(normalized[2]).toMatchObject({
       role: 'user',
       parts: [{ functionResponse: { response: { result: 'done' } } }],
-    });
+    })
 
     expect(buildGeminiRequestBody(messages, 'gemini-2.0-flash', {})).toMatchObject({
       contents: normalized,
       system_instruction: { parts: [{ text: 'system guidance' }] },
-    });
+    })
 
     expect(
       parseGeminiResponse(
@@ -167,6 +165,6 @@ describe('Gemini provider modular helpers', () => {
         } as any,
         'gemini-2.0-flash',
       ),
-    ).toMatchObject({ provider: 'Gemini', text: 'answer', stopReason: 'STOP' });
-  });
-});
+    ).toMatchObject({ provider: 'Gemini', text: 'answer', stopReason: 'STOP' })
+  })
+})

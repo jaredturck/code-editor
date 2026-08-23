@@ -4,132 +4,130 @@
  */
 
 export interface DesktopWindowModeOptions {
-  anchorX?: number;
-  anchorY?: number;
-  extraWidth?: number;
+  anchorX?: number
+  anchorY?: number
+  extraWidth?: number
 }
 
 export interface DesktopAgentStatusSummary {
-  running: boolean;
-  thinking: string;
+  running: boolean
+  thinking: string
 }
 
 export interface DesktopWindowBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface DesktopLauncherModeResult {
-  mode: 'collapsed' | 'expanded';
-  position: { x: number; y: number };
-  bounds: DesktopWindowBounds;
+  mode: 'collapsed' | 'expanded'
+  position: { x: number; y: number }
+  bounds: DesktopWindowBounds
 }
 
 function getDesktopBridgeCandidate(): OrbitDesktopBridge | null {
-  if (typeof window === 'undefined') return null;
-  return window.orbitDesktop ?? null;
+  if (typeof window === 'undefined') return null
+  return window.orbitDesktop ?? null
 }
 
 function getDesktopBridge(): OrbitDesktopBridge | null {
-  const bridge = getDesktopBridgeCandidate();
-  if (!bridge || bridge.isDesktopShell !== true) return null;
-  return bridge;
+  const bridge = getDesktopBridgeCandidate()
+  if (!bridge || bridge.isDesktopShell !== true) return null
+  return bridge
 }
 
 export function hasDesktopBridge(): boolean {
-  return Boolean(getDesktopBridgeCandidate());
+  return Boolean(getDesktopBridgeCandidate())
 }
 
 export function canControlDesktopWindow(): boolean {
-  return Boolean(getDesktopBridge());
+  return Boolean(getDesktopBridge())
 }
 
 export function moveDesktopWindowBy(dx: number, dy: number): void {
-  getDesktopBridge()?.moveWindowBy?.(dx, dy);
+  getDesktopBridge()?.moveWindowBy?.(dx, dy)
 }
 
 export async function finishDesktopLauncherDrag(
   screenX: number,
   screenY: number,
 ): Promise<DesktopLauncherModeResult | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge?.finishLauncherDrag) return null;
+  const bridge = getDesktopBridge()
+  if (!bridge?.finishLauncherDrag) return null
 
   try {
-    return (await bridge.finishLauncherDrag(screenX, screenY)) as DesktopLauncherModeResult | null;
+    return (await bridge.finishLauncherDrag(screenX, screenY)) as DesktopLauncherModeResult | null
   } catch {
-    return null;
+    return null
   }
 }
 
 export function minimizeDesktopWindow(): void {
-  getDesktopBridge()?.minimizeWindow?.();
+  getDesktopBridge()?.minimizeWindow?.()
 }
 
 export function hideDesktopWindow(): void {
-  getDesktopBridge()?.hideWindow?.();
+  getDesktopBridge()?.hideWindow?.()
 }
 
 export function resizeDesktopWindow(bounds: DesktopWindowBounds): void {
-  getDesktopBridge()?.resizeWindow?.(bounds);
+  getDesktopBridge()?.resizeWindow?.(bounds)
 }
 
 export async function setDesktopLauncherExpanded(
   expanded: boolean,
   orbBounds: DesktopWindowBounds,
 ): Promise<DesktopLauncherModeResult | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge?.setLauncherExpanded) return null;
+  const bridge = getDesktopBridge()
+  if (!bridge?.setLauncherExpanded) return null
 
   try {
-    return await bridge.setLauncherExpanded(expanded, orbBounds);
+    return await bridge.setLauncherExpanded(expanded, orbBounds)
   } catch {
-    return null;
+    return null
   }
 }
 
 export function openDesktopWorkspacePanel(panel: string): void {
-  getDesktopBridge()?.openWorkspacePanel?.(panel);
+  getDesktopBridge()?.openWorkspacePanel?.(panel)
 }
 
 export function openDesktopEditorWindow(): void {
-  getDesktopBridge()?.openEditorWindow?.();
+  getDesktopBridge()?.openEditorWindow?.()
 }
 
 export function notifyDesktopWorkspaceReady(): void {
-  getDesktopBridge()?.notifyWorkspaceReady?.();
+  getDesktopBridge()?.notifyWorkspaceReady?.()
 }
 
 export function onDesktopWorkspacePanel(listener: (panel: string) => void): () => void {
-  return getDesktopBridge()?.onWorkspacePanel?.(listener) || (() => {});
+  return getDesktopBridge()?.onWorkspacePanel?.(listener) || (() => {})
 }
 
 export function publishDesktopAgentStatus(status: DesktopAgentStatusSummary): void {
-  getDesktopBridge()?.publishAgentStatus?.(status);
+  getDesktopBridge()?.publishAgentStatus?.(status)
 }
 
-export function onDesktopAgentStatus(
-  listener: (status: DesktopAgentStatusSummary) => void,
-): () => void {
-  return getDesktopBridge()?.onAgentStatus?.(listener) || (() => {});
+export function onDesktopAgentStatus(listener: (status: DesktopAgentStatusSummary) => void): () => void {
+  return getDesktopBridge()?.onAgentStatus?.(listener) || (() => {})
 }
 
 export function requestDesktopAgentStop(): void {
-  getDesktopBridge()?.requestAgentStop?.();
+  getDesktopBridge()?.requestAgentStop?.()
 }
 
 export function onDesktopAgentStopRequest(listener: () => void): () => void {
-  return getDesktopBridge()?.onAgentStopRequest?.(listener) || (() => {});
+  return getDesktopBridge()?.onAgentStopRequest?.(listener) || (() => {})
 }
 
 export async function setDesktopWindowMode(
   mode: string,
   options: DesktopWindowModeOptions = {},
 ): Promise<unknown | null> {
-  const bridge = getDesktopBridge();
-  if (!bridge?.setWindowMode) return undefined;
+  const bridge = getDesktopBridge()
+  if (!bridge?.setWindowMode) return undefined
 
   try {
     return await bridge.setWindowMode({
@@ -137,23 +135,23 @@ export async function setDesktopWindowMode(
       anchorX: options.anchorX,
       anchorY: options.anchorY,
       extraWidth: options.extraWidth,
-    });
+    })
   } catch {
-    return null;
+    return null
   }
 }
 
 export async function getDesktopScreenSources(): Promise<Array<{
-  id: string;
-  name: string;
-  thumbnail?: string;
+  id: string
+  name: string
+  thumbnail?: string
 }> | null> {
-  const bridge = getDesktopBridgeCandidate();
-  if (typeof bridge?.getScreenSources !== 'function') return null;
+  const bridge = getDesktopBridgeCandidate()
+  if (typeof bridge?.getScreenSources !== 'function') return null
 
   try {
-    return await bridge.getScreenSources();
+    return await bridge.getScreenSources()
   } catch {
-    return null;
+    return null
   }
 }

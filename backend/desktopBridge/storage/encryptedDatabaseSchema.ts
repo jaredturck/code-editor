@@ -294,7 +294,7 @@ export const ENCRYPTED_DATABASE_SCHEMA_SQL = `
         ON file_concept_memberships(concept_id, similarity DESC, file_id);
       CREATE INDEX IF NOT EXISTS file_concept_memberships_file_index
         ON file_concept_memberships(file_id, concept_id);
-`;
+`
 
 export const ENCRYPTED_DATABASE_COMPATIBILITY_INDEX_SQL = `
       CREATE INDEX IF NOT EXISTS filesystem_nodes_kind_size_index
@@ -303,7 +303,7 @@ export const ENCRYPTED_DATABASE_COMPATIBILITY_INDEX_SQL = `
         ON filesystem_nodes(content_kind, indexed_at, id);
       CREATE INDEX IF NOT EXISTS filesystem_nodes_kind_scan_order_index
         ON filesystem_nodes(content_kind, indexed_at, scan_order, id);
-`;
+`
 
 export const ENCRYPTED_DATABASE_SCHEMA_VERSION_SQL = `INSERT INTO schema_meta(key, value) VALUES('schema_version', '7')
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`

@@ -13,11 +13,11 @@
  */
 
 export function stripYamlScalar(value) {
-  let v = String(value || '').trim();
+  let v = String(value || '').trim()
   if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-    v = v.slice(1, -1);
+    v = v.slice(1, -1)
   }
-  return v;
+  return v
 }
 
 const COMPLEX_KEYS = new Set([
@@ -29,69 +29,68 @@ const COMPLEX_KEYS = new Set([
   'modelvariants',
   'reflextrigger',
   'provenance',
-]);
+])
 
 // Parses a SKILL.md string into the structured skill shape the upsert route accepts.
 export function parseSkillMarkdown(content, fallbackId = 'skill') {
-  const text = String(content || '').replace(/^﻿/, '');
-  const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/);
+  const text = String(content || '').replace(/^﻿/, '')
+  const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
 
   if (!match) {
-    return { id: fallbackId, title: fallbackId, instructions: text.trim() };
+    return { id: fallbackId, title: fallbackId, instructions: text.trim() }
   }
 
-  const [, fmBlock, body] = match;
-  const meta = {};
-  let currentListKey = null;
+  const [, fmBlock, body] = match
+  const meta = {}
+  let currentListKey = null
 
   for (const line of fmBlock.split('\n')) {
-    if (!line.trim() || /^\s*#/.test(line)) continue;
+    if (!line.trim() || /^\s*#/.test(line)) continue
 
-    const listItem = line.match(/^\s*-\s+(.*)$/);
+    const listItem = line.match(/^\s*-\s+(.*)$/)
     if (listItem && currentListKey) {
-      if (!Array.isArray(meta[currentListKey])) meta[currentListKey] = [];
-      meta[currentListKey].push(stripYamlScalar(listItem[1]));
-      continue;
+      if (!Array.isArray(meta[currentListKey])) meta[currentListKey] = []
+      meta[currentListKey].push(stripYamlScalar(listItem[1]))
+      continue
     }
 
-    const kv = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
-    if (!kv) continue;
+    const kv = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/)
+    if (!kv) continue
 
-    const key = kv[1].trim();
-    const rawValue = kv[2].trim();
+    const key = kv[1].trim()
+    const rawValue = kv[2].trim()
 
     if (rawValue === '') {
-      meta[key] = [];
-      currentListKey = key;
-      continue;
+      meta[key] = []
+      currentListKey = key
+      continue
     }
 
     const looksJson =
-      (rawValue.startsWith('[') && rawValue.endsWith(']')) ||
-      (rawValue.startsWith('{') && rawValue.endsWith('}'));
+      (rawValue.startsWith('[') && rawValue.endsWith(']')) || (rawValue.startsWith('{') && rawValue.endsWith('}'))
     if (COMPLEX_KEYS.has(key.toLowerCase()) && looksJson) {
       try {
-        meta[key] = JSON.parse(rawValue);
-        currentListKey = null;
-        continue;
+        meta[key] = JSON.parse(rawValue)
+        currentListKey = null
+        continue
       } catch {
         /* fall through to list/scalar */
       }
     }
 
-    const inlineList = rawValue.match(/^\[(.*)\]$/);
+    const inlineList = rawValue.match(/^\[(.*)\]$/)
     if (inlineList) {
       meta[key] = inlineList[1]
         .split(',')
         .map((s) => stripYamlScalar(s))
-        .filter(Boolean);
+        .filter(Boolean)
     } else {
-      meta[key] = stripYamlScalar(rawValue);
+      meta[key] = stripYamlScalar(rawValue)
     }
-    currentListKey = null;
+    currentListKey = null
   }
 
-  const name = String(meta.name || fallbackId).trim() || fallbackId;
+  const name = String(meta.name || fallbackId).trim() || fallbackId
   return {
     id: meta.id || name,
     title: meta.title || name,
@@ -110,44 +109,43 @@ export function parseSkillMarkdown(content, fallbackId = 'skill') {
     provenance: meta.provenance,
     createdAt: meta.createdAt,
     updatedAt: meta.updatedAt,
-  };
+  }
 }
 
 // Serializes a structured skill into the canonical SKILL.md string for editing.
 export function serializeSkillToMarkdown(skill) {
-  const s = skill && typeof skill === 'object' ? skill : {};
-  const fm = [];
+  const s = skill && typeof skill === 'object' ? skill : {}
+  const fm = []
   const scalar = (k, v) => {
-    if (v !== undefined && v !== null && v !== '') fm.push(`${k}: ${String(v)}`);
-  };
+    if (v !== undefined && v !== null && v !== '') fm.push(`${k}: ${String(v)}`)
+  }
   const jsonArr = (k, v) => {
-    if (Array.isArray(v) && v.length) fm.push(`${k}: ${JSON.stringify(v)}`);
-  };
+    if (Array.isArray(v) && v.length) fm.push(`${k}: ${JSON.stringify(v)}`)
+  }
   const jsonObj = (k, v) => {
-    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length)
-      fm.push(`${k}: ${JSON.stringify(v)}`);
-  };
+    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length) fm.push(`${k}: ${JSON.stringify(v)}`)
+  }
 
-  scalar('name', s.id);
-  scalar('id', s.id);
-  scalar('title', s.title);
-  scalar('description', s.summary);
-  scalar('type', s.type || 'standard');
-  scalar('priority', Number.isFinite(Number(s.priority)) ? Number(s.priority) : 0);
-  fm.push(`enabled: ${s.enabled !== false}`);
-  if (s.guard === true) fm.push('guard: true');
-  jsonArr('triggers', s.triggers);
-  jsonArr('agentTarget', s.agentTarget);
-  jsonArr('dependencies', s.dependencies);
-  jsonArr('examples', s.examples);
-  jsonObj('modelVariants', s.modelVariants);
-  jsonObj('reflexTrigger', s.reflexTrigger);
-  jsonObj('provenance', s.provenance);
-  scalar('createdAt', s.createdAt);
-  scalar('updatedAt', s.updatedAt);
+  scalar('name', s.id)
+  scalar('id', s.id)
+  scalar('title', s.title)
+  scalar('description', s.summary)
+  scalar('type', s.type || 'standard')
+  scalar('priority', Number.isFinite(Number(s.priority)) ? Number(s.priority) : 0)
+  fm.push(`enabled: ${s.enabled !== false}`)
+  if (s.guard === true) fm.push('guard: true')
+  jsonArr('triggers', s.triggers)
+  jsonArr('agentTarget', s.agentTarget)
+  jsonArr('dependencies', s.dependencies)
+  jsonArr('examples', s.examples)
+  jsonObj('modelVariants', s.modelVariants)
+  jsonObj('reflexTrigger', s.reflexTrigger)
+  jsonObj('provenance', s.provenance)
+  scalar('createdAt', s.createdAt)
+  scalar('updatedAt', s.updatedAt)
 
-  const body = String(s.instructions || '').trim();
-  return `---\n${fm.join('\n')}\n---\n\n${body}\n`;
+  const body = String(s.instructions || '').trim()
+  return `---\n${fm.join('\n')}\n---\n\n${body}\n`
 }
 
 // A blank SKILL.md template for the "New skill" action.
@@ -190,5 +188,5 @@ A short, concrete walkthrough: the situation, the tool calls, and the outcome. O
 
 ## Pitfalls
 - The mistake people (and models) make here, and the nuance that avoids it.`,
-  });
+  })
 }

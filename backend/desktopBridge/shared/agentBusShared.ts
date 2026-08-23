@@ -5,16 +5,16 @@
  */
 
 interface AgentTaskBase {
-  taskId: string;
-  priority?: string;
-  context?: Record<string, unknown>;
+  taskId: string
+  priority?: string
+  context?: Record<string, unknown>
 }
 
 interface AgentRosterEntryBase {
-  currentTaskId?: string | null;
+  currentTaskId?: string | null
 }
 
-export const AGENT_TASK_RESULT_TTL_MS = 5 * 60 * 1000;
+export const AGENT_TASK_RESULT_TTL_MS = 5 * 60 * 1000
 
 export const TASK_STATUS = {
   PENDING: 'pending',
@@ -23,17 +23,17 @@ export const TASK_STATUS = {
   FAILED: 'failed',
   TIMEOUT: 'timeout',
   PARTIAL: 'partial',
-} as const;
+} as const
 
-export type AgentTaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+export type AgentTaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS]
 
 export const AGENT_STATUS = {
   IDLE: 'idle',
   WORKING: 'working',
   SUSPENDED: 'suspended',
-} as const;
+} as const
 
-export type AgentWorkerStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS];
+export type AgentWorkerStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS]
 
 /**
  * Add a task using the existing queue ordering rule: high-priority tasks are
@@ -41,11 +41,11 @@ export type AgentWorkerStatus = (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS]
  */
 export function enqueueAgentTask<T extends AgentTaskBase>(queue: T[], task: T) {
   if (task.priority === 'high') {
-    queue.unshift(task);
+    queue.unshift(task)
   } else {
-    queue.push(task);
+    queue.push(task)
   }
-  return queue.length;
+  return queue.length
 }
 
 /**
@@ -58,15 +58,15 @@ export function pruneExpiredTaskResults<T>(
   now = Date.now(),
   ttlMs = AGENT_TASK_RESULT_TTL_MS,
 ) {
-  let removed = 0;
+  let removed = 0
   for (const [taskId, timestamp] of timestamps) {
     if (now - timestamp > ttlMs) {
-      results.delete(taskId);
-      timestamps.delete(taskId);
-      removed += 1;
+      results.delete(taskId)
+      timestamps.delete(taskId)
+      removed += 1
     }
   }
-  return removed;
+  return removed
 }
 
 /**
@@ -80,27 +80,27 @@ export function findActiveTaskStatus<T extends AgentTaskBase, R extends AgentRos
   roster: Map<unknown, R>,
   { preferRunning = false }: { preferRunning?: boolean } = {},
 ) {
-  let queued = false;
+  let queued = false
   for (const queue of queues.values()) {
     if (queue.some((task) => task.taskId === taskId)) {
-      queued = true;
-      break;
+      queued = true
+      break
     }
   }
 
-  let running = false;
+  let running = false
   for (const entry of roster.values()) {
     if (entry.currentTaskId === taskId) {
-      running = true;
-      break;
+      running = true
+      break
     }
   }
 
   if (preferRunning) {
-    return running ? TASK_STATUS.RUNNING : queued ? TASK_STATUS.PENDING : 'unknown';
+    return running ? TASK_STATUS.RUNNING : queued ? TASK_STATUS.PENDING : 'unknown'
   }
 
-  return queued ? TASK_STATUS.PENDING : running ? TASK_STATUS.RUNNING : 'unknown';
+  return queued ? TASK_STATUS.PENDING : running ? TASK_STATUS.RUNNING : 'unknown'
 }
 
 /**
@@ -118,7 +118,7 @@ export function applyBroadcastToQueuedTasks<T extends AgentTaskBase>(
         ...(task.context || {}),
         ...contextUpdate,
         broadcast: message,
-      };
+      }
     }
   }
 }

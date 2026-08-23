@@ -15,8 +15,5 @@ const developmentGuidance = `DEVELOPMENT JUDGMENT: Use the progressive skills sy
 
 /** Builds project-run guidance while leaving semantic development decisions to the model. */
 export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
-  return buildLegacyProjectRunInput(goal, run_mode, resume).replace(
-    legacyBrowserGuidance,
-    developmentGuidance,
-  )
+  return buildLegacyProjectRunInput(goal, run_mode, resume).replace(legacyBrowserGuidance, developmentGuidance)
 }

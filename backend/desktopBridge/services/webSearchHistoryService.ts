@@ -12,41 +12,32 @@ import {
   getEncryptedWebSearchSession,
   listEncryptedWebSearchSessions,
   upsertEncryptedWebSearchSession,
-} from '../storage/encryptedDatabase.js';
+} from '../storage/encryptedDatabase.js'
 
 export async function listWebSearchHistory(limit: unknown): Promise<Record<string, unknown>[]> {
-  return listEncryptedWebSearchSessions(Number(limit) || 100);
+  return listEncryptedWebSearchSessions(Number(limit) || 100)
 }
 
-export async function createWebSearchHistorySession(
-  session: unknown,
-): Promise<Record<string, unknown>> {
-  return createEncryptedWebSearchSession(session);
+export async function createWebSearchHistorySession(session: unknown): Promise<Record<string, unknown>> {
+  return createEncryptedWebSearchSession(session)
 }
 
-export async function getWebSearchHistorySession(
-  id: unknown,
-): Promise<Record<string, unknown> | null> {
-  return getEncryptedWebSearchSession(id);
+export async function getWebSearchHistorySession(id: unknown): Promise<Record<string, unknown> | null> {
+  return getEncryptedWebSearchSession(id)
 }
 
-export async function saveWebSearchHistorySession(
-  id: unknown,
-  session: unknown,
-): Promise<Record<string, unknown>> {
-  return upsertEncryptedWebSearchSession(id, session);
+export async function saveWebSearchHistorySession(id: unknown, session: unknown): Promise<Record<string, unknown>> {
+  return upsertEncryptedWebSearchSession(id, session)
 }
 
-export async function duplicateWebSearchHistorySession(
-  id: unknown,
-): Promise<Record<string, unknown>> {
-  return duplicateEncryptedWebSearchSession(id);
+export async function duplicateWebSearchHistorySession(id: unknown): Promise<Record<string, unknown>> {
+  return duplicateEncryptedWebSearchSession(id)
 }
 
 export async function deleteWebSearchHistorySession(id: unknown): Promise<number> {
-  return deleteEncryptedWebSearchSession(id);
+  return deleteEncryptedWebSearchSession(id)
 }
 
 export async function clearWebSearchHistory(): Promise<number> {
-  return clearEncryptedWebSearchSessions();
+  return clearEncryptedWebSearchSessions()
 }

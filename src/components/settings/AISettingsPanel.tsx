@@ -14,12 +14,7 @@ import {
   type BridgeFileSemanticStatus,
 } from '@/platform/desktopBridge'
 import type { AgentRoleId } from '@/platform/agent/agentIdentity'
-import {
-  getCredentialStorageStatus,
-  hasKeyFor,
-  listProviderKeys,
-  setKey,
-} from '@/platform/keyStore'
+import { getCredentialStorageStatus, hasKeyFor, listProviderKeys, setKey } from '@/platform/keyStore'
 import {
   buildDiscoveredModelsPatch,
   buildProviderValidationPatch,
@@ -79,7 +74,15 @@ const permission_keys = [
   ['permissions_microphone', 'Use microphone', 'Allow the migrated transcription service to access microphone input.'],
 ] as const
 
-function SettingsToggle({ checked, disabled = false, onChange }: { checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+function SettingsToggle({
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (value: boolean) => void
+}) {
   return (
     <button
       aria-checked={checked}
@@ -143,9 +146,7 @@ function credential_slot_id(provider_id: string, key_id: string) {
 }
 
 function next_key_id(provider_id: string, pending_ids: string[] = []) {
-  const ids = [...listProviderKeys(provider_id), ...pending_ids]
-    .map((value) => Number(value))
-    .filter(Number.isFinite)
+  const ids = [...listProviderKeys(provider_id), ...pending_ids].map((value) => Number(value)).filter(Number.isFinite)
   return String((ids.length ? Math.max(...ids) : 1) + 1)
 }
 
@@ -227,12 +228,7 @@ function AISettingsPanel({
   }
 
   const row = (id: string, label: string, description: string, control: React.ReactNode) => (
-    <SettingsRow
-      description={description}
-      highlighted={highlighted_setting === id}
-      id={id}
-      label={label}
-    >
+    <SettingsRow description={description} highlighted={highlighted_setting === id} id={id} label={label}>
       {control}
     </SettingsRow>
   )
@@ -262,7 +258,10 @@ function AISettingsPanel({
   const delete_key = (provider_id: string, key_id: string) => {
     const slot = credential_slot_id(provider_id, key_id)
     if (!setKey(provider_id, '', key_id)) {
-      set_provider_messages((current) => ({ ...current, [slot]: 'Secure credential storage could not remove the key.' }))
+      set_provider_messages((current) => ({
+        ...current,
+        [slot]: 'Secure credential storage could not remove the key.',
+      }))
       return
     }
 
@@ -441,12 +440,15 @@ function AISettingsPanel({
           }`}
         >
           <div className="font-medium">
-            {storage.available && storage.persistent ? 'Secure credential storage is active' : 'Secure credential storage unavailable'}
+            {storage.available && storage.persistent
+              ? 'Secure credential storage is active'
+              : 'Secure credential storage unavailable'}
           </div>
           <div className="mt-1 opacity-80">
             {storage.available && storage.persistent
               ? `API keys are stored with Electron safeStorage (${storage.backend || 'OS credential store'}) and are never written to editor settings.`
-              : storage.reason || 'Cloud provider credentials cannot be saved until the secure desktop bridge is available.'}
+              : storage.reason ||
+                'Cloud provider credentials cannot be saved until the secure desktop bridge is available.'}
           </div>
         </div>
 
@@ -469,7 +471,12 @@ function AISettingsPanel({
                           const value = event.target.value
                           update_platform_settings({
                             ai_local_url: value,
-                            provider_key_validation: buildProviderValidationPatch(readOrbSettings(), 'local', '1', null),
+                            provider_key_validation: buildProviderValidationPatch(
+                              readOrbSettings(),
+                              'local',
+                              '1',
+                              null,
+                            ),
                           })
                           on_editor_ai_change({ ...editor_ai, ollama_url: value })
                         }}
@@ -493,21 +500,31 @@ function AISettingsPanel({
                     const stored = hasKeyFor(provider.id, key_id)
                     const key_validation = getProviderValidation(platform_settings, provider.id, key_id)
                     return (
-                      <div className="rounded-xl border border-transparent px-4 py-3 hover:border-[var(--border)]" data-setting-id={key_id === '1' ? `provider-${provider.id}-status` : undefined} key={slot}>
+                      <div
+                        className="rounded-xl border border-transparent px-4 py-3 hover:border-[var(--border)]"
+                        data-setting-id={key_id === '1' ? `provider-${provider.id}-status` : undefined}
+                        key={slot}
+                      >
                         <div className="flex items-center gap-3">
                           <div className="w-16 text-xs font-medium text-[var(--text)]">Key {key_id}</div>
                           <input
                             aria-label={`${provider.label} Key ${key_id}`}
                             autoComplete="off"
                             className={`${input_class} min-w-0 flex-1 font-mono`}
-                            onChange={(event) => set_key_inputs((current) => ({ ...current, [slot]: event.target.value }))}
-                            placeholder={stored ? 'Stored securely — enter a replacement' : provider.keyPlaceholder || 'API key'}
+                            onChange={(event) =>
+                              set_key_inputs((current) => ({ ...current, [slot]: event.target.value }))
+                            }
+                            placeholder={
+                              stored ? 'Stored securely — enter a replacement' : provider.keyPlaceholder || 'API key'
+                            }
                             type="password"
                             value={key_inputs[slot] || ''}
                           />
                           <button
                             className="h-9 rounded-md border border-[var(--border)] px-3 text-xs text-[var(--muted)] hover:bg-[var(--hover)] disabled:opacity-40"
-                            disabled={!storage.available || !storage.persistent || !String(key_inputs[slot] || '').trim()}
+                            disabled={
+                              !storage.available || !storage.persistent || !String(key_inputs[slot] || '').trim()
+                            }
                             onClick={() => save_key(provider.id, key_id)}
                             type="button"
                           >
@@ -537,7 +554,9 @@ function AISettingsPanel({
                           ) : null}
                         </div>
                         <div className="ml-[76px] mt-2 flex items-center justify-between gap-3 text-[10px]">
-                          <span className={provider_status_color[key_validation.status] || provider_status_color.untested}>
+                          <span
+                            className={provider_status_color[key_validation.status] || provider_status_color.untested}
+                          >
                             {stored ? validation_label(key_validation.status) : 'No key stored'}
                             {key_validation.models.length ? ` · ${key_validation.models.length} models` : ''}
                           </span>
@@ -559,7 +578,9 @@ function AISettingsPanel({
                     provider_messages['local:1'] ||
                       validation.message ||
                       'Test the local endpoint explicitly; Settings never creates background model traffic.',
-                    <span className={`text-xs ${provider_status_color[validation.status] || provider_status_color.untested}`}>
+                    <span
+                      className={`text-xs ${provider_status_color[validation.status] || provider_status_color.untested}`}
+                    >
                       {validation_label(validation.status)}
                     </span>,
                   )}
@@ -649,7 +670,12 @@ function AISettingsPanel({
                   <button
                     className="rounded-md border border-sky-500/25 bg-sky-500/8 px-2 py-1 text-[10px] text-sky-300 hover:bg-red-500/10 hover:text-red-300"
                     key={model}
-                    onClick={() => update_selected_models(models_provider, selected.filter((item) => item !== model))}
+                    onClick={() =>
+                      update_selected_models(
+                        models_provider,
+                        selected.filter((item) => item !== model),
+                      )
+                    }
                     title="Remove from the agent model shortlist"
                     type="button"
                   >
@@ -759,7 +785,11 @@ function AISettingsPanel({
             if (provider.id === current?.provider) return true
             const models = getSelectedProviderModels(platform_settings, provider.id)
             const keys = provider.id === 'local' ? ['1'] : getValidProviderKeyIds(platform_settings, provider.id)
-            return models.length > 0 && keys.length > 0 && getProviderValidation(platform_settings, provider.id, keys[0]).status === 'valid'
+            return (
+              models.length > 0 &&
+              keys.length > 0 &&
+              getProviderValidation(platform_settings, provider.id, keys[0]).status === 'valid'
+            )
           })
           const provider_id = current?.provider || ''
           const key_ids = provider_id === 'local' ? ['1'] : getValidProviderKeyIds(platform_settings, provider_id)
@@ -769,7 +799,11 @@ function AISettingsPanel({
           const tier = Number(platform_settings[tier_key] ?? detail.default_tier)
 
           return (
-            <div className="rounded-xl border border-transparent px-4 py-4 hover:border-[var(--border)]" data-setting-id={`agent-role-${role}`} key={role}>
+            <div
+              className="rounded-xl border border-transparent px-4 py-4 hover:border-[var(--border)]"
+              data-setting-id={`agent-role-${role}`}
+              key={role}
+            >
               <div className="mb-3 flex items-start justify-between gap-4">
                 <div>
                   <div className="text-xs font-medium text-[var(--text)]">{detail.label}</div>
@@ -816,7 +850,9 @@ function AISettingsPanel({
                   onChange={(event) => {
                     const next_key = event.target.value
                     const next_models = getCuratedModelsForKey(platform_settings, provider_id, next_key)
-                    const next_model = next_models.includes(current?.model || '') ? current?.model || '' : next_models[0] || ''
+                    const next_model = next_models.includes(current?.model || '')
+                      ? current?.model || ''
+                      : next_models[0] || ''
                     update_role(role, provider_id, next_model, next_key)
                   }}
                   value={key_id}
@@ -847,7 +883,9 @@ function AISettingsPanel({
                 <select
                   aria-label={`${detail.label} permission tier`}
                   className={input_class}
-                  onChange={(event) => update_platform_settings({ [tier_key]: Number(event.target.value) } as Partial<OrbSettings>)}
+                  onChange={(event) =>
+                    update_platform_settings({ [tier_key]: Number(event.target.value) } as Partial<OrbSettings>)
+                  }
                   value={tier}
                 >
                   {permission_tier_options.map((option) => (
@@ -1265,12 +1303,7 @@ function AISettingsPanel({
             onChange={(event) =>
               update_platform_settings({
                 skills_min_relevance_score: Math.round(
-                  clamp_number(
-                    event.target.value,
-                    0,
-                    20,
-                    Number(platform_settings.skills_min_relevance_score || 3),
-                  ),
+                  clamp_number(event.target.value, 0, 20, Number(platform_settings.skills_min_relevance_score || 3)),
                 ),
               })
             }
@@ -1325,13 +1358,16 @@ function AISettingsPanel({
 
         <SettingsSection title="Indexed locations">
           <div className="px-4 py-3 text-[10px] text-[var(--muted)]">
-            Indexing a location allows semantic discovery only; it does not grant the agent permission to modify that location.
+            Indexing a location allows semantic discovery only; it does not grant the agent permission to modify that
+            location.
           </div>
           {semantic_sources.length ? (
             semantic_sources.map((source) => (
               <label
                 className={`flex min-h-11 items-center gap-3 rounded-lg px-4 py-2 ${
-                  sources_locked || !source.available ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-[var(--hover)]'
+                  sources_locked || !source.available
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer hover:bg-[var(--hover)]'
                 }`}
                 key={source.id}
               >
@@ -1369,7 +1405,8 @@ function AISettingsPanel({
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-[11px] text-amber-200">
             <div className="font-medium">Large semantic index confirmation required</div>
             <div className="mt-1 opacity-80">
-              Preflight found {semantic_preflight.fileCount.toLocaleString()} eligible files. Building this index can take significant time and local compute.
+              Preflight found {semantic_preflight.fileCount.toLocaleString()} eligible files. Building this index can
+              take significant time and local compute.
             </div>
             <button
               className="mt-3 h-9 rounded-md border border-amber-400/40 px-3 text-xs hover:bg-amber-500/10 disabled:opacity-40"
@@ -1392,7 +1429,11 @@ function AISettingsPanel({
               onClick={() => void preflight_semantic_index()}
               type="button"
             >
-              {semantic_busy === 'preflight' ? 'Checking…' : semantic_status?.indexStatus === 'ready' ? 'Rebuild index' : 'Build index'}
+              {semantic_busy === 'preflight'
+                ? 'Checking…'
+                : semantic_status?.indexStatus === 'ready'
+                  ? 'Rebuild index'
+                  : 'Build index'}
             </button>
             <button
               className="h-9 rounded-md border border-[var(--border)] px-3 text-xs text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-40"
@@ -1413,7 +1454,11 @@ function AISettingsPanel({
             ) : null}
             <button
               className="h-9 rounded-md border border-red-500/25 px-3 text-xs text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-              disabled={Boolean(semantic_busy) || semantic_status?.indexStatus === 'building' || semantic_status?.indexStatus === 'missing'}
+              disabled={
+                Boolean(semantic_busy) ||
+                semantic_status?.indexStatus === 'building' ||
+                semantic_status?.indexStatus === 'missing'
+              }
               onClick={() => {
                 if (window.confirm('Delete the encrypted semantic file index? Source files will not be changed.')) {
                   void run_semantic_action('clear', clearFileSemanticIndex)

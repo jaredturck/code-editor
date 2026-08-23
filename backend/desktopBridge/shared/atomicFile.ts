@@ -4,22 +4,19 @@
  * being left partially written if the process stops during serialization or disk I/O.
  */
 
-import { randomBytes } from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { randomBytes } from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 export interface AtomicWriteOptions {
-  encoding?: BufferEncoding;
-  mode?: number;
+  encoding?: BufferEncoding
+  mode?: number
 }
 
 // Builds a collision-resistant temporary path beside the destination file for atomic replacement.
 function temporarySibling(targetPath: string): string {
-  const suffix = randomBytes(8).toString('hex');
-  return path.join(
-    path.dirname(targetPath),
-    `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.${suffix}.tmp`,
-  );
+  const suffix = randomBytes(8).toString('hex')
+  return path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.${suffix}.tmp`)
 }
 
 /**
@@ -31,25 +28,25 @@ export async function atomicWriteFile(
   data: string | Uint8Array,
   options: AtomicWriteOptions = {},
 ): Promise<void> {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  const temporaryPath = temporarySibling(targetPath);
-  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  await fs.mkdir(path.dirname(targetPath), { recursive: true })
+  const temporaryPath = temporarySibling(targetPath)
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null
 
   try {
-    handle = await fs.open(temporaryPath, 'wx', options.mode ?? 0o600);
+    handle = await fs.open(temporaryPath, 'wx', options.mode ?? 0o600)
     if (typeof data === 'string') {
-      await handle.writeFile(data, options.encoding ?? 'utf8');
+      await handle.writeFile(data, options.encoding ?? 'utf8')
     } else {
-      await handle.writeFile(data);
+      await handle.writeFile(data)
     }
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await fs.rename(temporaryPath, targetPath);
+    await handle.sync()
+    await handle.close()
+    handle = null
+    await fs.rename(temporaryPath, targetPath)
   } catch (error) {
-    if (handle) await handle.close().catch(() => undefined);
-    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
-    throw error;
+    if (handle) await handle.close().catch(() => undefined)
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined)
+    throw error
   }
 }
 
@@ -59,5 +56,5 @@ export async function atomicWriteJson(
   value: unknown,
   options: AtomicWriteOptions & { spaces?: number } = {},
 ): Promise<void> {
-  await atomicWriteFile(targetPath, JSON.stringify(value, null, options.spaces ?? 0), options);
+  await atomicWriteFile(targetPath, JSON.stringify(value, null, options.spaces ?? 0), options)
 }

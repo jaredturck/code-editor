@@ -28,7 +28,9 @@ const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const MAX_VERIFICATION_REMEDIATION_PASSES = 2
 
 function cleanLine(value: unknown, maxChars = 500) {
-  const clean = String(value || '').replace(/\s+/g, ' ').trim()
+  const clean = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return clean.length <= maxChars ? clean : `${clean.slice(0, maxChars)}…`
 }
 
@@ -87,12 +89,7 @@ async function withModelTaskContract(input: AgentSessionInput): Promise<AgentSes
       role: typeof message.role === 'string' ? message.role : undefined,
       content: message.content,
     }))
-    const plan = await buildLocalPreflightPlan(
-      input.userInput,
-      conversation,
-      input.settings,
-      input.abortSignal,
-    )
+    const plan = await buildLocalPreflightPlan(input.userInput, conversation, input.settings, input.abortSignal)
     if (!plan) return input
 
     input.onEvent?.({
@@ -124,13 +121,8 @@ function withVerificationState(input: AgentSessionInput): AgentSessionInput {
   const required = plan.developmentTask === true && plan.verificationRequired === true
   const contractKey = buildVerificationContractKey(plan as unknown as Record<string, unknown>)
   const projectSummary = persistedProjectSummary(input)
-  const persistedState = input.settings?.agent_verification_state
-    || projectSummary?.verificationState
-  const state = ensureVerificationState(
-    persistedState,
-    contractKey,
-    required,
-  )
+  const persistedState = input.settings?.agent_verification_state || projectSummary?.verificationState
+  const state = ensureVerificationState(persistedState, contractKey, required)
   return {
     ...input,
     settings: {
@@ -147,9 +139,7 @@ function activeVerificationState(input: AgentSessionInput): VerificationState | 
 }
 
 function withoutVerificationTodo(todos: Array<Record<string, unknown>> | undefined) {
-  return (Array.isArray(todos) ? todos : []).filter(
-    (todo) => String(todo.id || '') !== VERIFICATION_GATE_TODO_ID,
-  )
+  return (Array.isArray(todos) ? todos : []).filter((todo) => String(todo.id || '') !== VERIFICATION_GATE_TODO_ID)
 }
 
 function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResult): AgentSessionResult {
@@ -203,11 +193,11 @@ function buildVerificationRemediationPrompt(
     'Use verification.require to declare or revise the checks you consider necessary. Real terminal.exec, launch.run, browser.inspect, diagnostics.check, and agent.review results return verificationCandidateId values. Use verification.record to bind the appropriate candidate to one declared requirement. The runtime derives pass/fail from the real result; do not claim or encode a passed boolean yourself.',
     'If you change source files after a check passes, that evidence becomes stale. Re-run whichever checks you still consider necessary after the change.',
     `Current verification state:\n${formatVerificationGate(gate)}`,
-    gate.blockers.length
-      ? `Blocking conditions:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}`
-      : '',
+    gate.blockers.length ? `Blocking conditions:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}` : '',
     recentEvidence ? `Recent execution evidence:\n${recentEvidence}` : '',
-  ].filter(Boolean).join('\n\n')
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 function annotateVerification(
@@ -240,7 +230,8 @@ function annotateVerification(
         status: 'in_progress',
       },
     ],
-    reply: `${String(result.reply || '').trim()}\n\nThe verification gate remains open, so this run is paused rather than marked complete. ${gate.blockers.join(' ')}`.trim(),
+    reply:
+      `${String(result.reply || '').trim()}\n\nThe verification gate remains open, so this run is paused rather than marked complete. ${gate.blockers.join(' ')}`.trim(),
   }
 }
 
@@ -284,16 +275,17 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     executionInput.onEvent?.({
       type: 'notice',
       level: 'warning',
-      summary: `Verification gate requested remediation pass ${remediationPasses}/${MAX_VERIFICATION_REMEDIATION_PASSES}: ${gate.blockers.join(' ')}`.slice(0, 1000),
+      summary:
+        `Verification gate requested remediation pass ${remediationPasses}/${MAX_VERIFICATION_REMEDIATION_PASSES}: ${gate.blockers.join(' ')}`.slice(
+          0,
+          1000,
+        ),
       at: Date.now(),
     })
     const remediationInput: AgentSessionInput = {
       ...executionInput,
       userInput: buildVerificationRemediationPrompt(input.userInput, gate, combined),
-      conversation: [
-        ...(executionInput.conversation || []),
-        { role: 'assistant', content: combined.reply },
-      ].slice(-80),
+      conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-80),
       todos: withoutVerificationTodo(combined.todos),
     }
     const next = await runLegacyAgentSession(remediationInput)
@@ -301,13 +293,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     gate = state ? evaluateVerificationGate(state) : null
   }
 
-  const finalResult = annotateVerification(
-    combined,
-    gate,
-    remediationPasses,
-    state,
-    taskPreflightPlan(executionInput),
-  )
+  const finalResult = annotateVerification(combined, gate, remediationPasses, state, taskPreflightPlan(executionInput))
   try {
     await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
   } catch (error) {

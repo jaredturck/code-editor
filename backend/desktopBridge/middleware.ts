@@ -4,38 +4,38 @@
  * router used by the packaged server.
  */
 
-import type { Connect } from 'vite';
-import { normalizeBridgeError } from './errors.js';
-import { handleBridgeRequest } from './routes/router.js';
-import { isLocalBridgeRequest } from './services/bridgeServiceRuntime.js';
-import { sendJson } from './response.js';
-import type { BridgeRequest, BridgeResponse } from './types.js';
-import { DEVELOPMENT_BRIDGE_PERMISSIONS } from './shared/bridgeAuthorization.js';
+import type { Connect } from 'vite'
+import { normalizeBridgeError } from './errors.js'
+import { handleBridgeRequest } from './routes/router.js'
+import { isLocalBridgeRequest } from './services/bridgeServiceRuntime.js'
+import { sendJson } from './response.js'
+import type { BridgeRequest, BridgeResponse } from './types.js'
+import { DEVELOPMENT_BRIDGE_PERMISSIONS } from './shared/bridgeAuthorization.js'
 
 // Creates desktop bridge middleware with the state and dependencies needed by its consumers.
 export function createDesktopBridgeMiddleware(baseDir: string): Connect.NextHandleFunction {
   return async (request, response, next) => {
-    const req = request as BridgeRequest;
-    const res = response as BridgeResponse;
+    const req = request as BridgeRequest
+    const res = response as BridgeResponse
 
     if (!req.url || !req.url.startsWith('/api/local/')) {
-      next();
-      return;
+      next()
+      return
     }
 
     if (!isLocalBridgeRequest(req)) {
-      sendJson(res, 403, { error: 'Forbidden: local bridge only accepts loopback requests.' });
-      return;
+      sendJson(res, 403, { error: 'Forbidden: local bridge only accepts loopback requests.' })
+      return
     }
 
     try {
       const handled = await handleBridgeRequest(req, res, baseDir, {
         permissions: { ...DEVELOPMENT_BRIDGE_PERMISSIONS },
-      });
-      if (!handled) next();
+      })
+      if (!handled) next()
     } catch (error: unknown) {
-      const normalized = normalizeBridgeError(error);
-      sendJson(res, normalized.statusCode, { error: normalized.message });
+      const normalized = normalizeBridgeError(error)
+      sendJson(res, normalized.statusCode, { error: normalized.message })
     }
-  };
+  }
 }

@@ -11,55 +11,52 @@ import {
   type BridgeLauncherCapability,
   type BridgeLauncherDiscovery,
   type BridgeLauncherSemanticApplication,
-} from '@/platform/desktopBridge';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
+} from '@/platform/desktopBridge'
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
 
-export type LauncherCategory = 'app' | 'script' | 'command' | 'url';
-export type LauncherAction = 'launch' | 'dev_start' | 'dev_stop' | 'clear_data';
+export type LauncherCategory = 'app' | 'script' | 'command' | 'url'
+export type LauncherAction = 'launch' | 'dev_start' | 'dev_stop' | 'clear_data'
 
 export interface LauncherEntry {
-  id: number | string;
-  name: string;
-  command: string;
-  icon: string;
-  category: LauncherCategory;
-  pinned?: boolean;
-  executable?: string;
-  args?: string[];
-  cwd?: string;
-  subtitle?: string;
-  action?: LauncherAction;
-  disabled?: boolean;
-  disabledReason?: string;
-  capability?: string;
-  agentVisible?: boolean;
+  id: number | string
+  name: string
+  command: string
+  icon: string
+  category: LauncherCategory
+  pinned?: boolean
+  executable?: string
+  args?: string[]
+  cwd?: string
+  subtitle?: string
+  action?: LauncherAction
+  disabled?: boolean
+  disabledReason?: string
+  capability?: string
+  agentVisible?: boolean
 }
 
 export interface LauncherCatalogState {
-  discovery: BridgeLauncherDiscovery;
-  devStatus: BridgeDevEnvironmentStatus;
+  discovery: BridgeLauncherDiscovery
+  devStatus: BridgeDevEnvironmentStatus
 }
 
-export const LAUNCHER_SHORTCUTS_STORAGE_KEY = 'iris_launcher_shortcuts';
-export const LAUNCHER_DISCOVERY_STORAGE_KEY = 'iris_launcher_discovery';
+export const LAUNCHER_SHORTCUTS_STORAGE_KEY = 'iris_launcher_shortcuts'
+export const LAUNCHER_DISCOVERY_STORAGE_KEY = 'iris_launcher_discovery'
 
 const EMPTY_DISCOVERY: BridgeLauncherDiscovery = {
   desktop: '',
   applications: [],
   tools: [],
-};
+}
 
 const EMPTY_DEV_STATUS: BridgeDevEnvironmentStatus = {
   configured: false,
   available: false,
   running: false,
   reason: 'No working directory configured.',
-};
+}
 
-const APPLICATION_PRESENTATION: Record<
-  string,
-  { name: string; icon: string; dynamicName?: boolean }
-> = {
+const APPLICATION_PRESENTATION: Record<string, { name: string; icon: string; dynamicName?: boolean }> = {
   file_manager: { name: 'Files', icon: 'files' },
   terminal: { name: 'Terminal', icon: 'terminal' },
   web_browser: { name: 'Web Browser', icon: 'web_network' },
@@ -71,40 +68,35 @@ const APPLICATION_PRESENTATION: Record<
   email_client: { name: 'Email Client', icon: 'email' },
   software_center: { name: 'Software Center', icon: 'software_center' },
   password_manager: { name: 'Password Manager', icon: 'password' },
-};
+}
 
-let latestDevStatus: BridgeDevEnvironmentStatus = EMPTY_DEV_STATUS;
+let latestDevStatus: BridgeDevEnvironmentStatus = EMPTY_DEV_STATUS
 
 function normalizeDiscovery(value: unknown): BridgeLauncherDiscovery {
-  if (!value || typeof value !== 'object') return EMPTY_DISCOVERY;
-  const record = value as Partial<BridgeLauncherDiscovery>;
+  if (!value || typeof value !== 'object') return EMPTY_DISCOVERY
+  const record = value as Partial<BridgeLauncherDiscovery>
   return {
     desktop: String(record.desktop || ''),
     applications: Array.isArray(record.applications) ? record.applications.slice(0, 50) : [],
     tools: Array.isArray(record.tools) ? record.tools.slice(0, 30) : [],
-  };
+  }
 }
 
 export function getLauncherDiscovery(): BridgeLauncherDiscovery {
-  return normalizeDiscovery(
-    readStorageJson<unknown>(LAUNCHER_DISCOVERY_STORAGE_KEY, EMPTY_DISCOVERY),
-  );
+  return normalizeDiscovery(readStorageJson<unknown>(LAUNCHER_DISCOVERY_STORAGE_KEY, EMPTY_DISCOVERY))
 }
 
 export function getLauncherShortcuts(): LauncherEntry[] {
-  const parsed = readStorageJson<unknown>(LAUNCHER_SHORTCUTS_STORAGE_KEY, []);
-  return Array.isArray(parsed) ? (parsed.slice(0, 100) as LauncherEntry[]) : [];
+  const parsed = readStorageJson<unknown>(LAUNCHER_SHORTCUTS_STORAGE_KEY, [])
+  return Array.isArray(parsed) ? (parsed.slice(0, 100) as LauncherEntry[]) : []
 }
 
-function capabilityByName(
-  values: BridgeLauncherCapability[],
-  capability: string,
-): BridgeLauncherCapability | null {
-  return values.find((value) => value.capability === capability) || null;
+function capabilityByName(values: BridgeLauncherCapability[], capability: string): BridgeLauncherCapability | null {
+  return values.find((value) => value.capability === capability) || null
 }
 
 function quoteShellValue(value: string): string {
-  return `'${String(value).replace(/'/g, `'"'"'`)}'`;
+  return `'${String(value).replace(/'/g, `'"'"'`)}'`
 }
 
 function terminalArguments(
@@ -112,19 +104,19 @@ function terminalArguments(
   shell: BridgeLauncherCapability,
   command: string,
 ): string[] {
-  const executable = terminal.executable.split('/').pop()?.toLowerCase() || '';
-  const wrapped = `${command}; status=$?; printf '\nCommand exited with status %s. Press Enter to close...' "$status"; read -r _; exit "$status"`;
+  const executable = terminal.executable.split('/').pop()?.toLowerCase() || ''
+  const wrapped = `${command}; status=$?; printf '\nCommand exited with status %s. Press Enter to close...' "$status"; read -r _; exit "$status"`
 
   if (executable === 'gnome-terminal' || executable === 'kgx' || executable === 'mate-terminal') {
-    return ['--', shell.executable, '-lc', wrapped];
+    return ['--', shell.executable, '-lc', wrapped]
   }
   if (executable === 'xfce4-terminal') {
-    return ['--execute', shell.executable, '-lc', wrapped];
+    return ['--execute', shell.executable, '-lc', wrapped]
   }
   if (executable === 'wezterm') {
-    return ['start', '--', shell.executable, '-lc', wrapped];
+    return ['start', '--', shell.executable, '-lc', wrapped]
   }
-  return ['-e', shell.executable, '-lc', wrapped];
+  return ['-e', shell.executable, '-lc', wrapped]
 }
 
 function terminalWorkflowEntry({
@@ -139,16 +131,16 @@ function terminalWorkflowEntry({
   subtitle,
   agentVisible = false,
 }: {
-  id: string;
-  name: string;
-  icon: string;
-  command: string;
-  category: LauncherCategory;
-  terminal: BridgeLauncherCapability;
-  shell: BridgeLauncherCapability;
-  cwd?: string;
-  subtitle: string;
-  agentVisible?: boolean;
+  id: string
+  name: string
+  icon: string
+  command: string
+  category: LauncherCategory
+  terminal: BridgeLauncherCapability
+  shell: BridgeLauncherCapability
+  cwd?: string
+  subtitle: string
+  agentVisible?: boolean
 }): LauncherEntry {
   return {
     id,
@@ -161,36 +153,31 @@ function terminalWorkflowEntry({
     cwd,
     subtitle,
     agentVisible,
-  };
+  }
 }
 
-function updateCommand(
-  packageManager: BridgeLauncherCapability,
-  privilegeHelper: BridgeLauncherCapability,
-): string {
-  const manager = packageManager.executable.split('/').pop() || '';
-  const prefix = `${quoteShellValue(privilegeHelper.executable)} ${quoteShellValue(packageManager.executable)}`;
+function updateCommand(packageManager: BridgeLauncherCapability, privilegeHelper: BridgeLauncherCapability): string {
+  const manager = packageManager.executable.split('/').pop() || ''
+  const prefix = `${quoteShellValue(privilegeHelper.executable)} ${quoteShellValue(packageManager.executable)}`
 
-  if (manager === 'pacman') return `${prefix} -Syu`;
-  if (manager === 'apt') return `${prefix} update && ${prefix} full-upgrade`;
-  if (manager === 'dnf') return `${prefix} upgrade --refresh`;
-  if (manager === 'zypper') return `${prefix} update`;
-  if (manager === 'apk') return `${prefix} update && ${prefix} upgrade`;
-  if (manager === 'xbps-install') return `${prefix} -Su`;
-  return '';
+  if (manager === 'pacman') return `${prefix} -Syu`
+  if (manager === 'apt') return `${prefix} update && ${prefix} full-upgrade`
+  if (manager === 'dnf') return `${prefix} upgrade --refresh`
+  if (manager === 'zypper') return `${prefix} update`
+  if (manager === 'apk') return `${prefix} update && ${prefix} upgrade`
+  if (manager === 'xbps-install') return `${prefix} -Su`
+  return ''
 }
 
 function semanticApplicationIcon(application: BridgeLauncherSemanticApplication): string {
-  const categories = application.categories.map((value) => value.toLowerCase());
-  if (application.source === 'steam' || categories.some((value) => value.includes('game')))
-    return 'controller';
-  if (categories.some((value) => value.includes('graphics'))) return 'graphics';
-  if (categories.some((value) => value.includes('audio') || value.includes('video')))
-    return 'clapperboard';
-  if (categories.some((value) => value.includes('development'))) return 'code_editor';
-  if (categories.some((value) => value.includes('office'))) return 'paper';
-  if (categories.some((value) => value.includes('network'))) return 'web_network';
-  return 'rocket';
+  const categories = application.categories.map((value) => value.toLowerCase())
+  if (application.source === 'steam' || categories.some((value) => value.includes('game'))) return 'controller'
+  if (categories.some((value) => value.includes('graphics'))) return 'graphics'
+  if (categories.some((value) => value.includes('audio') || value.includes('video'))) return 'clapperboard'
+  if (categories.some((value) => value.includes('development'))) return 'code_editor'
+  if (categories.some((value) => value.includes('office'))) return 'paper'
+  if (categories.some((value) => value.includes('network'))) return 'web_network'
+  return 'rocket'
 }
 
 /** Converts one semantic search result into the same structured launcher contract as curated cards. */
@@ -198,9 +185,7 @@ export function semanticApplicationLauncherEntry(
   application: BridgeLauncherSemanticApplication,
   discovery: BridgeLauncherDiscovery,
 ): LauncherEntry {
-  const command = [application.executable, ...(application.args || [])]
-    .map(quoteShellValue)
-    .join(' ');
+  const command = [application.executable, ...(application.args || [])].map(quoteShellValue).join(' ')
   const base = {
     id: `indexed-${application.id}`,
     name: application.name,
@@ -214,36 +199,36 @@ export function semanticApplicationLauncherEntry(
       'Installed application',
     capability: 'semantic_application',
     agentVisible: false,
-  };
+  }
 
   if (!application.terminal) {
     return {
       ...base,
       executable: application.executable,
       args: application.args || [],
-    };
+    }
   }
 
-  const terminal = capabilityByName(discovery.applications, 'terminal');
-  const shell = capabilityByName(discovery.tools, 'shell');
+  const terminal = capabilityByName(discovery.applications, 'terminal')
+  const shell = capabilityByName(discovery.tools, 'shell')
   if (!terminal || !shell) {
     return {
       ...base,
       disabled: true,
       disabledReason: 'A terminal application is required to run this program.',
-    };
+    }
   }
   return {
     ...base,
     executable: terminal.executable,
     args: terminalArguments(terminal, shell, command),
-  };
+  }
 }
 
 function buildApplicationEntries(discovery: BridgeLauncherDiscovery): LauncherEntry[] {
   return discovery.applications.flatMap((application) => {
-    const presentation = APPLICATION_PRESENTATION[application.capability];
-    if (!presentation) return [];
+    const presentation = APPLICATION_PRESENTATION[application.capability]
+    if (!presentation) return []
     return [
       {
         id: `detected-${application.capability}`,
@@ -256,18 +241,18 @@ function buildApplicationEntries(discovery: BridgeLauncherDiscovery): LauncherEn
         subtitle: presentation.dynamicName ? 'Code editor' : application.displayName,
         capability: application.capability,
       },
-    ];
-  });
+    ]
+  })
 }
 
 function buildDevEntries(devStatus: BridgeDevEnvironmentStatus): LauncherEntry[] {
-  const project = String(devStatus.projectName || '').trim();
-  const command = String(devStatus.command || '').trim();
+  const project = String(devStatus.projectName || '').trim()
+  const command = String(devStatus.command || '').trim()
   const startSubtitle = devStatus.running
     ? `Running${project ? ` · ${project}` : ''}`
     : devStatus.available
       ? `${command}${project ? ` · ${project}` : ''}`
-      : String(devStatus.reason || 'No supported development command found.');
+      : String(devStatus.reason || 'No supported development command found.')
 
   return [
     {
@@ -298,7 +283,7 @@ function buildDevEntries(devStatus: BridgeDevEnvironmentStatus): LauncherEntry[]
       disabledReason: 'No managed development process is running.',
       agentVisible: false,
     },
-  ];
+  ]
 }
 
 function buildWorkflowEntries(
@@ -306,19 +291,19 @@ function buildWorkflowEntries(
   devStatus: BridgeDevEnvironmentStatus,
   workingDirectory: string,
 ): LauncherEntry[] {
-  const entries = buildDevEntries(devStatus);
-  const terminal = capabilityByName(discovery.applications, 'terminal');
-  const shell = capabilityByName(discovery.tools, 'shell');
-  const packageManager = capabilityByName(discovery.tools, 'package_manager');
-  const privilegeHelper = capabilityByName(discovery.tools, 'privilege_helper');
-  const dockerDesktop = capabilityByName(discovery.tools, 'docker_desktop');
-  const docker = capabilityByName(discovery.tools, 'docker');
-  const podmanDesktop = capabilityByName(discovery.tools, 'podman_desktop');
-  const podman = capabilityByName(discovery.tools, 'podman');
-  const git = capabilityByName(discovery.tools, 'git');
+  const entries = buildDevEntries(devStatus)
+  const terminal = capabilityByName(discovery.applications, 'terminal')
+  const shell = capabilityByName(discovery.tools, 'shell')
+  const packageManager = capabilityByName(discovery.tools, 'package_manager')
+  const privilegeHelper = capabilityByName(discovery.tools, 'privilege_helper')
+  const dockerDesktop = capabilityByName(discovery.tools, 'docker_desktop')
+  const docker = capabilityByName(discovery.tools, 'docker')
+  const podmanDesktop = capabilityByName(discovery.tools, 'podman_desktop')
+  const podman = capabilityByName(discovery.tools, 'podman')
+  const git = capabilityByName(discovery.tools, 'git')
 
   if (terminal && shell && packageManager && privilegeHelper) {
-    const command = updateCommand(packageManager, privilegeHelper);
+    const command = updateCommand(packageManager, privilegeHelper)
     if (command) {
       entries.push(
         terminalWorkflowEntry({
@@ -331,7 +316,7 @@ function buildWorkflowEntries(
           shell,
           subtitle: `${packageManager.displayName} system update`,
         }),
-      );
+      )
     }
   }
 
@@ -344,7 +329,7 @@ function buildWorkflowEntries(
     action: 'clear_data',
     subtitle: 'Delete encrypted chats, settings, notes, skills, and artifacts',
     agentVisible: false,
-  });
+  })
 
   if (dockerDesktop) {
     entries.push({
@@ -356,7 +341,7 @@ function buildWorkflowEntries(
       icon: 'docker',
       category: 'app',
       subtitle: dockerDesktop.displayName,
-    });
+    })
   } else if (docker && terminal && shell) {
     entries.push(
       terminalWorkflowEntry({
@@ -370,7 +355,7 @@ function buildWorkflowEntries(
         cwd: workingDirectory || undefined,
         subtitle: 'Show running Docker containers',
       }),
-    );
+    )
   }
 
   if (podmanDesktop) {
@@ -383,7 +368,7 @@ function buildWorkflowEntries(
       icon: 'podman',
       category: 'app',
       subtitle: podmanDesktop.displayName,
-    });
+    })
   } else if (podman && terminal && shell) {
     entries.push(
       terminalWorkflowEntry({
@@ -397,7 +382,7 @@ function buildWorkflowEntries(
         cwd: workingDirectory || undefined,
         subtitle: 'Show running Podman containers',
       }),
-    );
+    )
   }
 
   if (git && terminal && shell) {
@@ -415,15 +400,15 @@ function buildWorkflowEntries(
           ? `Repository status · ${workingDirectory.split('/').pop() || workingDirectory}`
           : 'Configure a working directory in Settings',
       }),
-    );
+    )
     if (!workingDirectory) {
-      const gitEntry = entries[entries.length - 1];
-      gitEntry.disabled = true;
-      gitEntry.disabledReason = 'Configure an agent working directory before running Git Status.';
+      const gitEntry = entries[entries.length - 1]
+      gitEntry.disabled = true
+      gitEntry.disabledReason = 'Configure an agent working directory before running Git Status.'
     }
   }
 
-  return entries;
+  return entries
 }
 
 export function buildLauncherCatalog({
@@ -433,40 +418,35 @@ export function buildLauncherCatalog({
   workingDirectory = '',
   agentOnly = false,
 }: {
-  shortcuts?: LauncherEntry[];
-  discovery?: BridgeLauncherDiscovery;
-  devStatus?: BridgeDevEnvironmentStatus;
-  workingDirectory?: string;
-  agentOnly?: boolean;
+  shortcuts?: LauncherEntry[]
+  discovery?: BridgeLauncherDiscovery
+  devStatus?: BridgeDevEnvironmentStatus
+  workingDirectory?: string
+  agentOnly?: boolean
 } = {}): LauncherEntry[] {
   const catalog = [
     ...shortcuts,
     ...buildApplicationEntries(discovery),
     ...buildWorkflowEntries(discovery, devStatus, workingDirectory),
-  ];
-  return agentOnly
-    ? catalog.filter((entry) => entry.agentVisible !== false && !entry.disabled)
-    : catalog;
+  ]
+  return agentOnly ? catalog.filter((entry) => entry.agentVisible !== false && !entry.disabled) : catalog
 }
 
 export function getLauncherCatalog(
   options: {
-    workingDirectory?: string;
-    agentOnly?: boolean;
+    workingDirectory?: string
+    agentOnly?: boolean
   } = {},
 ): LauncherEntry[] {
-  return buildLauncherCatalog(options);
+  return buildLauncherCatalog(options)
 }
 
-export async function refreshLauncherCatalog(
-  workingDirectory = '',
-  force = false,
-): Promise<LauncherCatalogState> {
-  const cached = getLauncherDiscovery();
-  const discovery = normalizeDiscovery(await discoverLauncherCapabilities(cached, force));
-  writeStorageJson(LAUNCHER_DISCOVERY_STORAGE_KEY, discovery);
-  latestDevStatus = await getDevEnvironmentStatus(workingDirectory);
-  return { discovery, devStatus: latestDevStatus };
+export async function refreshLauncherCatalog(workingDirectory = '', force = false): Promise<LauncherCatalogState> {
+  const cached = getLauncherDiscovery()
+  const discovery = normalizeDiscovery(await discoverLauncherCapabilities(cached, force))
+  writeStorageJson(LAUNCHER_DISCOVERY_STORAGE_KEY, discovery)
+  latestDevStatus = await getDevEnvironmentStatus(workingDirectory)
+  return { discovery, devStatus: latestDevStatus }
 }
 
 export function resolveLauncherEntry(
@@ -475,14 +455,14 @@ export function resolveLauncherEntry(
 ): LauncherEntry | null {
   const normalizedQuery = String(query || '')
     .trim()
-    .toLowerCase();
-  if (!normalizedQuery) return null;
-  const catalog = getLauncherCatalog(options);
+    .toLowerCase()
+  if (!normalizedQuery) return null
+  const catalog = getLauncherCatalog(options)
   return (
     catalog.find((entry) => String(entry.name).toLowerCase() === normalizedQuery) ||
     catalog.find((entry) => String(entry.id).toLowerCase() === normalizedQuery) ||
     catalog.find((entry) => String(entry.command).toLowerCase() === normalizedQuery) ||
     catalog.find((entry) => String(entry.name).toLowerCase().includes(normalizedQuery)) ||
     null
-  );
+  )
 }

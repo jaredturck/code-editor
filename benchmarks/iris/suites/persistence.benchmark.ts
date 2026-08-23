@@ -14,8 +14,8 @@ import {
   upsertEncryptedUserSkill,
   writeEncryptedStoreKey,
   writeEncryptedSubagentOutput,
-} from '../../../backend/desktopBridge/storage/encryptedDatabase.js';
-import type { BenchmarkDefinition } from '../core/types.js';
+} from '../../../backend/desktopBridge/storage/encryptedDatabase.js'
+import type { BenchmarkDefinition } from '../core/types.js'
 
 /** Creates deterministic normalized vectors for launcher persistence measurements. */
 function launcherApplications(count: number) {
@@ -27,11 +27,8 @@ function launcherApplications(count: number) {
       executable: `/usr/bin/benchmark-${index}`,
       keywords: ['benchmark', 'application', `group-${index % 8}`],
     },
-    embedding: Array.from(
-      { length: 1024 },
-      (_, dimension) => Math.sin((index + 1) * (dimension + 1) * 0.001) / 32,
-    ),
-  }));
+    embedding: Array.from({ length: 1024 }, (_, dimension) => Math.sin((index + 1) * (dimension + 1) * 0.001) / 32),
+  }))
 }
 
 /** Exercises application persistence domains that are independent from filesystem indexing. */
@@ -53,7 +50,7 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
           provider: 'local',
           model: 'benchmark-local',
           values: Array.from({ length: 16 }, (_, valueIndex) => valueIndex + iteration),
-        });
+        })
       }
     },
   },
@@ -71,9 +68,9 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
         await writeEncryptedStoreKey(`benchmark-read-setting-${index}`, {
           key: index,
           content: 'Persistent benchmark setting content. '.repeat(8),
-        });
+        })
       }
-      return undefined;
+      return undefined
     },
     run: () => readEncryptedStoreAll(),
   },
@@ -98,7 +95,7 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
         await appendEncryptedChatMessage(chat.id, {
           role: index % 2 === 0 ? 'user' : 'assistant',
           content: `Benchmark chat message ${index}. ${'context '.repeat(40)}`,
-        });
+        })
       }
     },
   },
@@ -116,14 +113,14 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
       const chat = await createEncryptedChat({
         title: 'Benchmark read chat',
         provider: 'local',
-      });
+      })
       for (let index = 0; index < 200; index += 1) {
         await appendEncryptedChatMessage(chat.id, {
           role: index % 2 === 0 ? 'user' : 'assistant',
           content: `Stored benchmark message ${index}. ${'semantic context '.repeat(20)}`,
-        });
+        })
       }
-      return chat;
+      return chat
     },
     run: (chat) => getEncryptedChat(chat.id),
   },
@@ -131,8 +128,7 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'persistence.artifact.roundtrip.1mib',
     suite: 'Application persistence',
     name: 'Encrypted artifact round trip · 1 MiB',
-    description:
-      'Chunks, encrypts, stores, reloads, decrypts, and reassembles a representative agent deliverable.',
+    description: 'Chunks, encrypts, stores, reloads, decrypts, and reassembles a representative agent deliverable.',
     iterations: 5,
     warmupIterations: 1,
     bytesPerOperation: 1024 * 1024,
@@ -144,8 +140,8 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
         content: context.content,
         summary: 'Benchmark artifact',
         type: 'text/markdown',
-      });
-      return readEncryptedArtifact(saved.id);
+      })
+      return readEncryptedArtifact(saved.id)
     },
   },
   {
@@ -159,9 +155,9 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
     tags: ['database'],
     setup: () => ({ content: 'Delegated benchmark output. '.repeat(40_000) }),
     run: async (context, iteration) => {
-      const id = `benchmark-subagent-${iteration}`;
-      await writeEncryptedSubagentOutput(id, context.content);
-      return readEncryptedSubagentOutput(id);
+      const id = `benchmark-subagent-${iteration}`
+      await writeEncryptedSubagentOutput(id, context.content)
+      return readEncryptedSubagentOutput(id)
     },
   },
   {
@@ -175,15 +171,15 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
     operationsPerIteration: 100,
     tags: ['database'],
     run: async (_context, iteration) => {
-      const profile = `benchmark-profile-${iteration}`;
+      const profile = `benchmark-profile-${iteration}`
       for (let index = 0; index < 100; index += 1) {
         await upsertEncryptedUserSkill(profile, `skill-${index}`, {
           name: `Benchmark skill ${index}`,
           description: 'Representative local skill instructions',
           instructions: 'Inspect the requested subsystem and return a concise result. '.repeat(10),
-        });
+        })
       }
-      return listEncryptedUserSkills(profile);
+      return listEncryptedUserSkills(profile)
     },
   },
   {
@@ -205,8 +201,8 @@ export const persistenceBenchmarks: BenchmarkDefinition<any>[] = [
           generatedAt: iteration,
         },
         context.applications,
-      );
-      return readEncryptedLauncherApplications();
+      )
+      return readEncryptedLauncherApplications()
     },
   },
-];
+]

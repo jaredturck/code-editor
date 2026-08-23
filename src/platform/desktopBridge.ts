@@ -33,7 +33,9 @@ interface AgentFileOperationOptions {
 }
 
 function normalize_workspace_path(file_path: string) {
-  const normalized = String(file_path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  const normalized = String(file_path || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
   const windows = typeof window !== 'undefined' && window.editor_api?.platform === 'win32'
   return windows ? normalized.toLowerCase() : normalized
 }
@@ -55,7 +57,7 @@ function agent_revision_key(actor_id: string, file_path: string) {
 }
 
 function remember_agent_revision(actor_id: string, result: unknown) {
-  const record = result && typeof result === 'object' ? result as BridgeRecord : {}
+  const record = result && typeof result === 'object' ? (result as BridgeRecord) : {}
   const path = String(record.path || '')
   const revision = String(record.revision || '')
   if (path && revision) observed_agent_revisions.set(agent_revision_key(actor_id, path), revision)
@@ -72,15 +74,19 @@ async function prepare_editor_agent_write(path: string, options: AgentFileOperat
       startLine: 1,
       lineCount: 1,
     })
-    const record = current && typeof current === 'object' ? current as BridgeRecord : {}
+    const record = current && typeof current === 'object' ? (current as BridgeRecord) : {}
     resolved_path = String(record.path || path)
     const revision = String(record.revision || '')
     const expected = observed_agent_revisions.get(agent_revision_key(actor_id, resolved_path))
     if (!expected) {
-      throw new Error(`Read ${resolved_path} as ${actor_id} before editing it so human or agent changes cannot be overwritten.`)
+      throw new Error(
+        `Read ${resolved_path} as ${actor_id} before editing it so human or agent changes cannot be overwritten.`,
+      )
     }
     if (revision && revision !== expected) {
-      throw new Error(`Refusing to edit ${resolved_path}: it changed after ${actor_id} last read it. Re-read the live file before retrying.`)
+      throw new Error(
+        `Refusing to edit ${resolved_path}: it changed after ${actor_id} last read it. Re-read the live file before retrying.`,
+      )
     }
   } catch (error) {
     if (!(error instanceof Error) || !/does not exist|not found|enoent/i.test(error.message)) throw error
@@ -98,11 +104,7 @@ function finish_editor_agent_write(
   if (!prepared) return
   remember_agent_revision(prepared.actor_id, result)
   if (options.holdLease !== true) {
-    releaseAgentWriteLease(
-      normalize_workspace_path(prepared.resolved_path),
-      prepared.actor_id,
-      prepared.task_id,
-    )
+    releaseAgentWriteLease(normalize_workspace_path(prepared.resolved_path), prepared.actor_id, prepared.task_id)
   }
 }
 
@@ -111,9 +113,10 @@ export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
   observed_agent_revisions.clear()
   if (!authority) clearAgentWriteLeases()
   editor_workspace_root = authority
-    ? authority.execute('files.list', { path: '', depth: 1 })
+    ? authority
+        .execute('files.list', { path: '', depth: 1 })
         .then((result) => {
-          const record = result && typeof result === 'object' ? result as BridgeRecord : {}
+          const record = result && typeof result === 'object' ? (result as BridgeRecord) : {}
           return String(record.rootPath || '')
         })
         .catch(() => '')
@@ -121,7 +124,9 @@ export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
 }
 
 export function setAgentVisionObjective(objective: string | null) {
-  agent_vision_objective = String(objective || '').trim().slice(0, 2400)
+  agent_vision_objective = String(objective || '')
+    .trim()
+    .slice(0, 2400)
 }
 
 export async function getAutomationCapabilities(): Promise<BridgeAutomationCapabilities & BridgeRecord> {
@@ -133,7 +138,8 @@ export async function getAutomationCapabilities(): Promise<BridgeAutomationCapab
 
   try {
     const frame = await captureAgentScreen({ maxWidth: 1600, maxHeight: 1000 })
-    const objective = agent_vision_objective ||
+    const objective =
+      agent_vision_objective ||
       'Inspect the current desktop for visible evidence relevant to the active coding task. Identify errors, dialogs, browser or application state, build/test output, or other UI evidence that should influence the next safe action.'
     const vision = await runVisionTask(objective, frame.dataUrl, settings as unknown as Record<string, unknown>)
 
@@ -141,9 +147,9 @@ export async function getAutomationCapabilities(): Promise<BridgeAutomationCapab
 
     if (settings.permissions_mouse_control === true && vision.actions.length > 0) {
       try {
-        execution = await base.executeAutomationActions(vision.actions as unknown as BridgeRecord[], {
+        execution = (await base.executeAutomationActions(vision.actions as unknown as BridgeRecord[], {
           cwd: String(settings.agent_working_dir || '').trim() || undefined,
-        }) as BridgeRecord
+        })) as BridgeRecord
       } catch (error) {
         execution = {
           error: error instanceof Error ? error.message : 'The approved visual action plan failed.',
@@ -201,15 +207,10 @@ export async function searchFileSemanticIndex(
   const results = await base.searchFileSemanticIndex(query, search_limit, kind)
 
   if (!workspace_root) return results.slice(0, requested_limit)
-  return results
-    .filter((result) => path_is_in_workspace(workspace_root, result.path))
-    .slice(0, requested_limit)
+  return results.filter((result) => path_is_in_workspace(workspace_root, result.path)).slice(0, requested_limit)
 }
 
-export async function listDirectory(
-  path: string,
-  depth = 3,
-): Promise<{ rootPath: string; tree: BridgeFileNode }> {
+export async function listDirectory(path: string, depth = 3): Promise<{ rootPath: string; tree: BridgeFileNode }> {
   if (editor_file_authority) {
     return (await editor_file_authority.execute('files.list', { path, depth })) as {
       rootPath: string
@@ -284,11 +285,7 @@ export async function powerStat(path_or_paths: string | string[]): Promise<Bridg
   return base.powerStat(path_or_paths)
 }
 
-export async function powerDiff(
-  path: string,
-  new_content: string,
-  context_lines = 3,
-): Promise<BridgeRecord> {
+export async function powerDiff(path: string, new_content: string, context_lines = 3): Promise<BridgeRecord> {
   if (editor_file_authority) {
     return (await editor_file_authority.execute('files.diff', {
       path,

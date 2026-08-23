@@ -46,9 +46,10 @@ function normalize_project_skill_settings(value: unknown): ProjectSkillSettings 
   }
 
   const source = value as Record<string, unknown>
-  const raw_skills = source.skills && typeof source.skills === 'object' && !Array.isArray(source.skills)
-    ? source.skills as Record<string, unknown>
-    : {}
+  const raw_skills =
+    source.skills && typeof source.skills === 'object' && !Array.isArray(source.skills)
+      ? (source.skills as Record<string, unknown>)
+      : {}
   const skills: Record<string, ProjectSkillOverride> = {}
 
   for (const [id, raw_override] of Object.entries(raw_skills).slice(0, MAX_PROJECT_SKILLS)) {
@@ -130,14 +131,13 @@ export async function loadProjectSkillDefinitions(workspace_root: string, io: Pr
       ) as BridgeSkillDefinition
       const id = String(parsed.id || fallback_id).trim() || fallback_id
       const override = settings.skills[id] || {}
-      const provenance = parsed.provenance && typeof parsed.provenance === 'object'
-        ? parsed.provenance as Record<string, unknown>
-        : {}
+      const provenance =
+        parsed.provenance && typeof parsed.provenance === 'object' ? (parsed.provenance as Record<string, unknown>) : {}
 
       definitions.push({
         ...parsed,
         id,
-        enabled: override.enabled ?? (parsed.enabled !== false),
+        enabled: override.enabled ?? parsed.enabled !== false,
         priority: override.priority ?? parsed.priority,
         provenance: {
           ...provenance,

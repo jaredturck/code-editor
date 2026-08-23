@@ -7,29 +7,29 @@ import {
   normalizeAnthropicMessages,
   parseAnthropicResponse,
   type AnthropicStreamState,
-} from '../../../src/platform/providers/anthropicProvider.js';
+} from '../../../src/platform/providers/anthropicProvider.js'
 import {
   buildGeminiRequestBody,
   normalizeGeminiContents,
   parseGeminiResponse,
-} from '../../../src/platform/providers/geminiProvider.js';
+} from '../../../src/platform/providers/geminiProvider.js'
 import {
   applyOpenAIStreamPayload,
   buildOpenAIRequestBody,
   normalizeOpenAIMessages,
   parseOpenAIChatResponse,
   type OpenAIStreamState,
-} from '../../../src/platform/providers/openaiProvider.js';
-import type { BenchmarkDefinition } from '../core/types.js';
+} from '../../../src/platform/providers/openaiProvider.js'
+import type { BenchmarkDefinition } from '../core/types.js'
 
 /** Creates a long provider-neutral conversation containing text, tool calls, and tool results. */
 function providerMessages(turns = 100): any[] {
-  const messages: any[] = [{ role: 'system', content: 'You are the IRIS benchmark agent.' }];
+  const messages: any[] = [{ role: 'system', content: 'You are the IRIS benchmark agent.' }]
   for (let index = 0; index < turns; index += 1) {
     messages.push({
       role: 'user',
       content: `Inspect benchmark file ${index} and summarize the relevant state. ${'context '.repeat(20)}`,
-    });
+    })
     messages.push({
       role: 'assistant',
       content: 'I will inspect the file.',
@@ -40,7 +40,7 @@ function providerMessages(turns = 100): any[] {
           args: { path: `/tmp/benchmark/file-${index}.txt`, maxChars: 16000 },
         },
       ],
-    });
+    })
     messages.push({
       role: 'tool',
       toolResults: [
@@ -50,9 +50,9 @@ function providerMessages(turns = 100): any[] {
           content: `Benchmark result ${index}: ${'data '.repeat(50)}`,
         },
       ],
-    });
+    })
   }
-  return messages;
+  return messages
 }
 
 /** Creates a representative canonical tool schema used by all provider adapters. */
@@ -70,7 +70,7 @@ function tools(): any[] {
         required: ['path'],
       },
     },
-  ];
+  ]
 }
 
 /** Creates fresh stream state so each measured parse starts from the same conditions. */
@@ -81,7 +81,7 @@ function openAIStreamState(): OpenAIStreamState {
     finishReason: '',
     usage: null,
     toolAccumulators: new Map(),
-  };
+  }
 }
 
 /** Creates fresh Anthropic stream state so accumulator mutation remains representative. */
@@ -93,7 +93,7 @@ function anthropicStreamState(): AnthropicStreamState {
     inputTokens: 0,
     outputTokens: 0,
     blocks: new Map(),
-  };
+  }
 }
 
 /** Measures provider-specific conversion costs independently from network latency. */
@@ -102,8 +102,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'providers.openai.normalize.300-messages',
     suite: 'AI providers',
     name: 'OpenAI message normalization · 300 turns',
-    description:
-      'Converts persistent IRIS messages, tool calls, and tool results into OpenAI chat format.',
+    description: 'Converts persistent IRIS messages, tool calls, and tool results into OpenAI chat format.',
     iterations: 12,
     warmupIterations: 3,
     operationsPerIteration: 301,
@@ -114,8 +113,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'providers.openai.request-build',
     suite: 'AI providers',
     name: 'OpenAI request construction',
-    description:
-      'Builds a native-tool request after provider message normalization and output-limit resolution.',
+    description: 'Builds a native-tool request after provider message normalization and output-limit resolution.',
     iterations: 12,
     warmupIterations: 3,
     setup: () => ({ messages: providerMessages(100), tools: tools() }),
@@ -140,7 +138,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
       }),
     }),
     run: (context) => {
-      const state = openAIStreamState();
+      const state = openAIStreamState()
       for (let index = 0; index < 1000; index += 1) {
         applyOpenAIStreamPayload(
           context.payload,
@@ -148,22 +146,21 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
           () => {},
           () => {},
           () => {},
-        );
+        )
       }
-      return state;
+      return state
     },
   },
   {
     id: 'providers.openai.response-parse',
     suite: 'AI providers',
     name: 'OpenAI response normalization',
-    description:
-      'Normalizes text, tool calls, usage, and stop reasons into IRIS provider metadata.',
+    description: 'Normalizes text, tool calls, usage, and stop reasons into IRIS provider metadata.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 500,
     run: () => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 500; index += 1) {
         result = parseOpenAIChatResponse(
           {
@@ -192,17 +189,16 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
           } as any,
           'OpenAI',
           'gpt-4o',
-        );
+        )
       }
-      return result;
+      return result
     },
   },
   {
     id: 'providers.anthropic.normalize.300-messages',
     suite: 'AI providers',
     name: 'Anthropic message normalization · 300 turns',
-    description:
-      'Converts the same persistent conversation into alternating Messages API content blocks.',
+    description: 'Converts the same persistent conversation into alternating Messages API content blocks.',
     iterations: 12,
     warmupIterations: 3,
     operationsPerIteration: 301,
@@ -213,8 +209,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'providers.anthropic.request-build',
     suite: 'AI providers',
     name: 'Anthropic request construction',
-    description:
-      'Builds thinking, caching, tools, and token controls for a Claude native-tool request.',
+    description: 'Builds thinking, caching, tools, and token controls for a Claude native-tool request.',
     iterations: 12,
     warmupIterations: 3,
     setup: () => ({ messages: providerMessages(100), tools: tools() }),
@@ -247,7 +242,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
       }),
     }),
     run: (context) => {
-      const state = anthropicStreamState();
+      const state = anthropicStreamState()
       for (let index = 0; index < 1000; index += 1) {
         applyAnthropicStreamPayload(
           context.payload,
@@ -255,22 +250,21 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
           () => {},
           () => {},
           () => {},
-        );
+        )
       }
-      return state;
+      return state
     },
   },
   {
     id: 'providers.anthropic.response-parse',
     suite: 'AI providers',
     name: 'Anthropic response normalization',
-    description:
-      'Normalizes text, tool-use blocks, usage, and stop reason into the shared provider result.',
+    description: 'Normalizes text, tool-use blocks, usage, and stop reason into the shared provider result.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 500,
     run: () => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 500; index += 1) {
         result = parseAnthropicResponse(
           {
@@ -287,9 +281,9 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
             usage: { input_tokens: 2000, output_tokens: 100 },
           } as any,
           'claude-sonnet-4-6',
-        );
+        )
       }
-      return result;
+      return result
     },
   },
   {
@@ -307,8 +301,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'providers.gemini.request-build',
     suite: 'AI providers',
     name: 'Gemini request construction',
-    description:
-      'Builds contents, system instructions, tools, and generation configuration for Gemini.',
+    description: 'Builds contents, system instructions, tools, and generation configuration for Gemini.',
     iterations: 12,
     warmupIterations: 3,
     setup: () => ({ messages: providerMessages(100), tools: tools() }),
@@ -326,7 +319,7 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
     warmupIterations: 4,
     operationsPerIteration: 500,
     run: () => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 500; index += 1) {
         result = parseGeminiResponse(
           {
@@ -353,9 +346,9 @@ export const providerBenchmarks: BenchmarkDefinition<any>[] = [
             },
           } as any,
           'gemini-2.0-flash',
-        );
+        )
       }
-      return result;
+      return result
     },
   },
-];
+]

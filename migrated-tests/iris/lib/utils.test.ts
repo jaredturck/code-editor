@@ -5,19 +5,19 @@
  * guarantees.
  */
 
-import { describe, expect, it } from 'vitest';
-import { cn, isIframe } from '@/platform/utils';
+import { describe, expect, it } from 'vitest'
+import { cn, isIframe } from '@/platform/utils'
 
 describe('utils', () => {
   it('joins conditional class names', () => {
-    expect(cn('base', false && 'hidden', { active: true })).toBe('base active');
-  });
+    expect(cn('base', false && 'hidden', { active: true })).toBe('base active')
+  })
 
   it('merges conflicting Tailwind utility classes', () => {
-    expect(cn('px-2 py-1', 'px-4')).toBe('py-1 px-4');
-  });
+    expect(cn('px-2 py-1', 'px-4')).toBe('py-1 px-4')
+  })
 
   it('detects the default test window as not framed', () => {
-    expect(isIframe).toBe(false);
-  });
-});
+    expect(isIframe).toBe(false)
+  })
+})

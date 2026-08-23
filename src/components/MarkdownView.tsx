@@ -223,9 +223,7 @@ function MarkdownView({ content, baseFilePath = null, className = 'artifact-md',
           {artifact_error}
         </div>
       )}
-      {artifact_preview && (
-        <ArtifactPreview artifact={artifact_preview} onClose={() => set_artifact_preview(null)} />
-      )}
+      {artifact_preview && <ArtifactPreview artifact={artifact_preview} onClose={() => set_artifact_preview(null)} />}
     </>
   )
 }

@@ -3,14 +3,7 @@ import { normalizeModelList } from '@/platform/providers/providerConfiguration'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
 export type AISettingsSection =
-  | 'providers'
-  | 'models'
-  | 'agents'
-  | 'routing'
-  | 'autonomy'
-  | 'limits'
-  | 'skills'
-  | 'semantic'
+  'providers' | 'models' | 'agents' | 'routing' | 'autonomy' | 'limits' | 'skills' | 'semantic'
 
 export const ai_settings_sections: Array<{ id: AISettingsSection; label: string }> = [
   { id: 'providers', label: 'Providers' },
@@ -23,10 +16,7 @@ export const ai_settings_sections: Array<{ id: AISettingsSection; label: string 
   { id: 'semantic', label: 'Semantic Index' },
 ]
 
-export const agent_role_details: Record<
-  AgentRoleId,
-  { label: string; description: string; default_tier: number }
-> = {
+export const agent_role_details: Record<AgentRoleId, { label: string; description: string; default_tier: number }> = {
   orchestrator: {
     label: 'Orchestrator',
     description: 'Primary planner and coordinator for project-level work.',

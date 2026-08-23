@@ -13,10 +13,10 @@ import {
   contentToText,
   createSSELineReader,
   parseToolArguments,
-} from '@/platform/providers/providerUtils';
-import { resolveMaxOutputTokens, isReasoningModel } from '@/platform/modelProfiles';
-import { toOpenAITools, encodeToolName, decodeToolName } from '@/platform/agent/toolSchema';
-import type { ProviderMeta, ToolCall } from '@/platform/agent/types';
+} from '@/platform/providers/providerUtils'
+import { resolveMaxOutputTokens, isReasoningModel } from '@/platform/modelProfiles'
+import { toOpenAITools, encodeToolName, decodeToolName } from '@/platform/agent/toolSchema'
+import type { ProviderMeta, ToolCall } from '@/platform/agent/types'
 import type {
   AIMessage,
   AISettings,
@@ -26,100 +26,98 @@ import type {
   ProviderFetch,
   ProviderStreamFn,
   ToolCallStreamEvent,
-} from '@/platform/providers/types';
+} from '@/platform/providers/types'
 
 interface OpenAIStreamToolDelta {
-  index?: number;
-  id?: string;
+  index?: number
+  id?: string
   function?: {
-    name?: string;
-    arguments?: string;
-  };
+    name?: string
+    arguments?: string
+  }
 }
 
 interface OpenAIStreamEvent {
-  usage?: Parameters<typeof normalizeUsage>[0];
+  usage?: Parameters<typeof normalizeUsage>[0]
   choices?: Array<{
     delta?: {
-      content?: string;
-      reasoning_content?: string;
-      reasoning?: string;
-      tool_calls?: OpenAIStreamToolDelta[];
-    };
-    finish_reason?: string;
-  }>;
+      content?: string
+      reasoning_content?: string
+      reasoning?: string
+      tool_calls?: OpenAIStreamToolDelta[]
+    }
+    finish_reason?: string
+  }>
 }
 
 interface OpenAIToolCallResponse {
-  id?: string;
+  id?: string
   function?: {
-    name?: string;
-    arguments?: string;
-  };
+    name?: string
+    arguments?: string
+  }
 }
 
 interface OpenAIChatResponse {
   choices?: Array<{
     message?: {
-      content?: string;
-      reasoning_content?: string;
-      reasoning?: string;
-      tool_calls?: OpenAIToolCallResponse[];
-    };
-    finish_reason?: string;
-  }>;
-  usage?: Parameters<typeof normalizeUsage>[0];
+      content?: string
+      reasoning_content?: string
+      reasoning?: string
+      tool_calls?: OpenAIToolCallResponse[]
+    }
+    finish_reason?: string
+  }>
+  usage?: Parameters<typeof normalizeUsage>[0]
 }
 
 interface OpenAIErrorResponse {
-  error?: { message?: string };
+  error?: { message?: string }
 }
 
 interface OpenAIModelListResponse {
-  data?: Array<{ id?: string; name?: string }>;
+  data?: Array<{ id?: string; name?: string }>
 }
 
 export interface OpenAIToolAccumulator {
-  id: string;
-  name: string;
-  args: string;
+  id: string
+  name: string
+  args: string
 }
 
 export interface OpenAIStreamState {
-  text: string;
-  thinking: string;
-  finishReason: string;
-  usage: Parameters<typeof normalizeUsage>[0];
-  toolAccumulators: Map<number, OpenAIToolAccumulator>;
+  text: string
+  thinking: string
+  finishReason: string
+  usage: Parameters<typeof normalizeUsage>[0]
+  toolAccumulators: Map<number, OpenAIToolAccumulator>
 }
 
 interface OpenAIRequestBodyOptions {
-  model: string;
-  providerId: string;
-  settings?: AISettings;
-  tools?: OpenAICompatibleOptions['tools'];
-  toolChoice?: OpenAICompatibleOptions['toolChoice'];
+  model: string
+  providerId: string
+  settings?: AISettings
+  tools?: OpenAICompatibleOptions['tools']
+  toolChoice?: OpenAICompatibleOptions['toolChoice']
 }
 
 interface StreamOpenAICompatibleOptions {
-  baseUrl: string;
-  apiKey: string;
-  extraHeaders: Record<string, string>;
-  body: Record<string, unknown>;
-  model: string;
-  providerId: string;
-  providerLabel: string;
-  onToken?: (token: string) => void;
-  onThinkingToken?: (token: string) => void;
-  onToolCall?: (event: ToolCallStreamEvent) => void;
-  streamFn: ProviderStreamFn;
+  baseUrl: string
+  apiKey: string
+  extraHeaders: Record<string, string>
+  body: Record<string, unknown>
+  model: string
+  providerId: string
+  providerLabel: string
+  onToken?: (token: string) => void
+  onThinkingToken?: (token: string) => void
+  onToolCall?: (event: ToolCallStreamEvent) => void
+  streamFn: ProviderStreamFn
 }
 
 /** Converts canonical assistant and tool turns into the OpenAI-compatible message shape. */
-export function normalizeOpenAIMessages(
-  messages: readonly AIMessage[],
-): Array<Record<string, unknown>> {
-  const normalizedMessages: Array<Record<string, unknown>> = [];
+export function normalizeOpenAIMessages(messages: readonly AIMessage[]): Array<Record<string, unknown>> {
+  const normalizedMessages: Array<Record<string, unknown>> = []
   for (const message of messages) {
     if (message.role === 'tool' && Array.isArray(message.toolResults)) {
       for (const result of message.toolResults) {
@@ -127,21 +125,14 @@ export function normalizeOpenAIMessages(
           role: 'tool',
           tool_call_id: result.id,
           content: String(result.content ?? ''),
-        });
+        })
       }
-      continue;
+      continue
     }
-    if (
-      message.role === 'assistant' &&
-      Array.isArray(message.toolCalls) &&
-      message.toolCalls.length
-    ) {
+    if (message.role === 'assistant' && Array.isArray(message.toolCalls) && message.toolCalls.length) {
       const assistantMessage: Record<string, unknown> = {
         role: 'assistant',
-        content:
-          (typeof message.content === 'string'
-            ? message.content
-            : contentToText(message.content)) || null,
+        content: (typeof message.content === 'string' ? message.content : contentToText(message.content)) || null,
         tool_calls: message.toolCalls.map((toolCall) => ({
           id: toolCall.id,
           type: 'function',
@@ -150,20 +141,18 @@ export function normalizeOpenAIMessages(
             arguments: JSON.stringify(toolCall.args || {}),
           },
         })),
-      };
-      const reasoningContent = String(
-        message.reasoning_content || message.reasoningContent || '',
-      ).trim();
-      if (reasoningContent) assistantMessage.reasoning_content = reasoningContent;
-      normalizedMessages.push(assistantMessage);
-      continue;
+      }
+      const reasoningContent = String(message.reasoning_content || message.reasoningContent || '').trim()
+      if (reasoningContent) assistantMessage.reasoning_content = reasoningContent
+      normalizedMessages.push(assistantMessage)
+      continue
     }
     normalizedMessages.push({
       role: message.role,
       content: normalizeContentToArray(message.content),
-    });
+    })
   }
-  return normalizedMessages;
+  return normalizedMessages
 }
 
 /** Builds the stable OpenAI-compatible request body from normalized conversation turns. */
@@ -175,18 +164,15 @@ export function buildOpenAIRequestBody(
     model: options.model,
     messages,
     max_tokens: resolveMaxOutputTokens(options.model, options.providerId, options.settings),
-  };
+  }
   if (Array.isArray(options.tools) && options.tools.length) {
-    body.tools = toOpenAITools(options.tools);
-    body.tool_choice = options.toolChoice || 'auto';
+    body.tools = toOpenAITools(options.tools)
+    body.tool_choice = options.toolChoice || 'auto'
   }
-  if (
-    isReasoningModel(options.providerId, options.model) &&
-    /openrouter/i.test(String(options.providerId))
-  ) {
-    body.reasoning = { enabled: true };
+  if (isReasoningModel(options.providerId, options.model) && /openrouter/i.test(String(options.providerId))) {
+    body.reasoning = { enabled: true }
   }
-  return body;
+  return body
 }
 
 /** Applies one decoded SSE payload to the retained OpenAI streaming state. */
@@ -197,110 +183,104 @@ export function applyOpenAIStreamPayload(
   emitThinking: (token: string) => void,
   emitToolCall: (event: ToolCallStreamEvent) => void,
 ): void {
-  if (payload === '[DONE]') return;
-  let event: OpenAIStreamEvent;
+  if (payload === '[DONE]') return
+  let event: OpenAIStreamEvent
   try {
-    event = JSON.parse(payload) as OpenAIStreamEvent;
+    event = JSON.parse(payload) as OpenAIStreamEvent
   } catch {
-    return;
+    return
   }
-  if (event.usage) state.usage = event.usage;
-  const choice = event.choices?.[0];
-  if (!choice) return;
-  const delta = choice.delta || {};
+  if (event.usage) state.usage = event.usage
+  const choice = event.choices?.[0]
+  if (!choice) return
+  const delta = choice.delta || {}
   const reasoning =
     typeof delta.reasoning_content === 'string' && delta.reasoning_content
       ? delta.reasoning_content
       : typeof delta.reasoning === 'string' && delta.reasoning
         ? delta.reasoning
-        : '';
+        : ''
   if (reasoning) {
-    state.thinking += reasoning;
-    emitThinking(reasoning);
+    state.thinking += reasoning
+    emitThinking(reasoning)
   }
   if (typeof delta.content === 'string' && delta.content) {
-    state.text += delta.content;
-    emitToken(delta.content);
+    state.text += delta.content
+    emitToken(delta.content)
   }
   if (Array.isArray(delta.tool_calls)) {
     for (const toolCall of delta.tool_calls) {
-      const index = Number.isInteger(toolCall.index) ? Number(toolCall.index) : 0;
+      const index = Number.isInteger(toolCall.index) ? Number(toolCall.index) : 0
       const current = state.toolAccumulators.get(index) || {
         id: '',
         name: '',
         args: '',
-      };
-      if (toolCall.id) current.id = toolCall.id;
+      }
+      if (toolCall.id) current.id = toolCall.id
       if (toolCall.function?.name && !current.name) {
-        current.name = toolCall.function.name;
+        current.name = toolCall.function.name
         emitToolCall({
           phase: 'start',
           index,
           id: current.id,
           name: decodeToolName(current.name),
-        });
+        })
       } else if (toolCall.function?.name) {
-        current.name = toolCall.function.name;
+        current.name = toolCall.function.name
       }
       if (toolCall.function?.arguments) {
-        current.args += toolCall.function.arguments;
+        current.args += toolCall.function.arguments
         emitToolCall({
           phase: 'args',
           index,
           partial: toolCall.function.arguments,
           json: current.args,
-        });
+        })
       }
-      state.toolAccumulators.set(index, current);
+      state.toolAccumulators.set(index, current)
     }
   }
-  if (choice.finish_reason) state.finishReason = choice.finish_reason;
+  if (choice.finish_reason) state.finishReason = choice.finish_reason
 }
 
 /** Converts accumulated streaming tool fragments into executable canonical tool calls. */
-export function finalizeOpenAIStreamToolCalls(
-  toolAccumulators: Map<number, OpenAIToolAccumulator>,
-): ToolCall[] {
+export function finalizeOpenAIStreamToolCalls(toolAccumulators: Map<number, OpenAIToolAccumulator>): ToolCall[] {
   return [...toolAccumulators.values()]
     .filter((tool) => tool.name)
     .map((tool) => {
-      const parsed = parseToolArguments(tool.args);
+      const parsed = parseToolArguments(tool.args)
       return {
         id: tool.id,
         name: decodeToolName(tool.name),
         args: parsed.args,
         argsError: parsed.argsError,
         rawArgs: parsed.rawArgs,
-      };
-    });
+      }
+    })
 }
 
 /** Converts a non-streaming OpenAI response into IRIS's shared provider metadata. */
-export function parseOpenAIChatResponse(
-  data: OpenAIChatResponse,
-  providerLabel: string,
-  model: string,
-): ProviderMeta {
-  const message = data?.choices?.[0]?.message || {};
-  const text = message.content || '';
+export function parseOpenAIChatResponse(data: OpenAIChatResponse, providerLabel: string, model: string): ProviderMeta {
+  const message = data?.choices?.[0]?.message || {}
+  const text = message.content || ''
   const thinking =
     (typeof message.reasoning_content === 'string' && message.reasoning_content) ||
     (typeof message.reasoning === 'string' && message.reasoning) ||
-    '';
+    ''
   const toolCalls = Array.isArray(message.tool_calls)
     ? message.tool_calls
         .filter((toolCall) => Boolean(toolCall?.function?.name))
         .map((toolCall) => {
-          const parsed = parseToolArguments(toolCall.function?.arguments);
+          const parsed = parseToolArguments(toolCall.function?.arguments)
           return {
             id: String(toolCall.id || ''),
             name: decodeToolName(toolCall.function?.name),
             args: parsed.args,
             argsError: parsed.argsError,
             rawArgs: parsed.rawArgs,
-          };
+          }
         })
-    : [];
+    : []
 
   return toMetaResponse({
     provider: providerLabel,
@@ -310,7 +290,7 @@ export function parseOpenAIChatResponse(
     toolCalls,
     stopReason: data?.choices?.[0]?.finish_reason || '',
     thinkingText: thinking,
-  });
+  })
 }
 
 // ── Streaming (SSE) ───────────────────────────────────────────────────────────
@@ -337,18 +317,18 @@ async function streamOpenAICompatible({
     ...body,
     stream: true,
     stream_options: { include_usage: true },
-  };
-  const _emitToken = typeof onToken === 'function' ? onToken : () => {};
-  const _emitThinking = typeof onThinkingToken === 'function' ? onThinkingToken : () => {};
-  const _emitToolCall = typeof onToolCall === 'function' ? onToolCall : () => {};
+  }
+  const _emitToken = typeof onToken === 'function' ? onToken : () => {}
+  const _emitThinking = typeof onThinkingToken === 'function' ? onThinkingToken : () => {}
+  const _emitToolCall = typeof onToolCall === 'function' ? onToolCall : () => {}
   const _state: OpenAIStreamState = {
     text: '',
     thinking: '',
     finishReason: '',
     usage: null,
     toolAccumulators: new Map<number, OpenAIToolAccumulator>(),
-  };
-  const _sse = createSSELineReader();
+  }
+  const _sse = createSSELineReader()
 
   await streamFn(
     `${baseUrl}/chat/completions`,
@@ -363,13 +343,13 @@ async function streamOpenAICompatible({
     },
     (chunk) => {
       for (const payload of _sse.push(chunk)) {
-        applyOpenAIStreamPayload(payload, _state, _emitToken, _emitThinking, _emitToolCall);
+        applyOpenAIStreamPayload(payload, _state, _emitToken, _emitThinking, _emitToolCall)
       }
     },
     { provider: providerId },
-  );
+  )
 
-  const _toolCalls = finalizeOpenAIStreamToolCalls(_state.toolAccumulators);
+  const _toolCalls = finalizeOpenAIStreamToolCalls(_state.toolAccumulators)
 
   return toMetaResponse({
     provider: providerLabel,
@@ -379,37 +359,37 @@ async function streamOpenAICompatible({
     toolCalls: _toolCalls,
     stopReason: _state.finishReason,
     thinkingText: _state.thinking,
-  });
+  })
 }
 
-export const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
-export const OPENCODE_DEFAULT_BASE_URL = 'https://opencode.ai/zen/v1';
-const OPENCODE_LEGACY_BASE_URL = 'https://api.opencode.ai/v1';
+export const OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
+export const OPENCODE_DEFAULT_BASE_URL = 'https://opencode.ai/zen/v1'
+const OPENCODE_LEGACY_BASE_URL = 'https://api.opencode.ai/v1'
 
 // ── Base URL helpers ──────────────────────────────────────────────────────────
 
 export function getOpenCodeBaseUrl(settings?: AISettings): string {
-  const _configured = settings?.ai_opencode_url || OPENCODE_DEFAULT_BASE_URL;
-  const _normalized = normalizeOpenAICompatibleBaseUrl(_configured);
-  if (!_normalized) return OPENCODE_DEFAULT_BASE_URL;
+  const _configured = settings?.ai_opencode_url || OPENCODE_DEFAULT_BASE_URL
+  const _normalized = normalizeOpenAICompatibleBaseUrl(_configured)
+  if (!_normalized) return OPENCODE_DEFAULT_BASE_URL
 
   try {
-    const _parsed = new URL(_normalized);
-    const _host = String(_parsed.hostname || '').toLowerCase();
+    const _parsed = new URL(_normalized)
+    const _host = String(_parsed.hostname || '').toLowerCase()
     const _path = String(_parsed.pathname || '')
       .replace(/\/+$/, '')
-      .toLowerCase();
+      .toLowerCase()
 
-    if (_host === 'api.opencode.ai') return OPENCODE_DEFAULT_BASE_URL;
+    if (_host === 'api.opencode.ai') return OPENCODE_DEFAULT_BASE_URL
 
     if (_host === 'opencode.ai' && /^\/v\d+$/.test(_path)) {
-      return `${_parsed.protocol}//${_parsed.host}/zen${_path}`;
+      return `${_parsed.protocol}//${_parsed.host}/zen${_path}`
     }
   } catch {
-    if (_normalized === OPENCODE_LEGACY_BASE_URL) return OPENCODE_DEFAULT_BASE_URL;
+    if (_normalized === OPENCODE_LEGACY_BASE_URL) return OPENCODE_DEFAULT_BASE_URL
   }
 
-  return _normalized;
+  return _normalized
 }
 
 // ── Shared OpenAI-compatible call ─────────────────────────────────────────────
@@ -433,33 +413,31 @@ export async function callOpenAICompatible(
     onToolCall,
     streamFn,
     settings,
-  } = options;
-  const _apiKey = normalizeApiKey(apiKey);
-  const _baseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl);
+  } = options
+  const _apiKey = normalizeApiKey(apiKey)
+  const _baseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl)
 
   if (!_apiKey) {
-    throw new Error(`${providerLabel} API key not configured. Please add it in Settings.`);
+    throw new Error(`${providerLabel} API key not configured. Please add it in Settings.`)
   }
   if (!model) {
-    throw new Error(`${providerLabel} model is not configured. Please set a model in Settings.`);
+    throw new Error(`${providerLabel} model is not configured. Please set a model in Settings.`)
   }
-  if (!_baseUrl) throw new Error(`${providerLabel} base URL is not configured.`);
+  if (!_baseUrl) throw new Error(`${providerLabel} base URL is not configured.`)
 
-  const _normalizedMessages = normalizeOpenAIMessages(messages);
+  const _normalizedMessages = normalizeOpenAIMessages(messages)
   const _body = buildOpenAIRequestBody(_normalizedMessages, {
     model,
     providerId,
     settings,
     tools,
     toolChoice,
-  });
+  })
 
   // Token-streaming path (when the runtime requests it for answer, reasoning, or
   // live tool-call args).
   if (
-    (typeof onToken === 'function' ||
-      typeof onThinkingToken === 'function' ||
-      typeof onToolCall === 'function') &&
+    (typeof onToken === 'function' || typeof onThinkingToken === 'function' || typeof onToolCall === 'function') &&
     typeof streamFn === 'function'
   ) {
     return streamOpenAICompatible({
@@ -474,7 +452,7 @@ export async function callOpenAICompatible(
       onThinkingToken,
       onToolCall,
       streamFn,
-    });
+    })
   }
 
   const _res = await fetchFn(`${_baseUrl}/chat/completions`, {
@@ -485,15 +463,15 @@ export async function callOpenAICompatible(
       ...extraHeaders,
     },
     body: JSON.stringify(_body),
-  });
+  })
 
   if (!_res.ok) {
-    const _err = (await _res.json().catch(() => ({}))) as OpenAIErrorResponse;
-    throw new Error(_err?.error?.message || `${providerLabel} error: ${_res.status}`);
+    const _err = (await _res.json().catch(() => ({}))) as OpenAIErrorResponse
+    throw new Error(_err?.error?.message || `${providerLabel} error: ${_res.status}`)
   }
 
-  const _data = (await _res.json()) as OpenAIChatResponse;
-  return parseOpenAIChatResponse(_data, providerLabel, model);
+  const _data = (await _res.json()) as OpenAIChatResponse
+  return parseOpenAIChatResponse(_data, providerLabel, model)
 }
 
 // ── Named provider wrappers ───────────────────────────────────────────────────
@@ -516,7 +494,7 @@ export async function callOpenAI(
       ...options,
     },
     fetchFn,
-  );
+  )
 }
 
 // Invokes the configured OpenCode-compatible endpoint and returns the shared provider response
@@ -540,7 +518,7 @@ export async function callOpenCode(
       ...options,
     },
     fetchFn,
-  );
+  )
 }
 
 // ── Model discovery ───────────────────────────────────────────────────────────
@@ -553,10 +531,10 @@ export async function listOpenAICompatibleModels(
   options: OpenAIModelDiscoveryOptions,
   fetchFn: ProviderFetch,
 ): Promise<string[]> {
-  const { apiKey, baseUrl, extraHeaders = {} } = options;
-  const _apiKey = normalizeApiKey(apiKey);
-  const _baseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl);
-  if (!_apiKey || !_baseUrl) return [];
+  const { apiKey, baseUrl, extraHeaders = {} } = options
+  const _apiKey = normalizeApiKey(apiKey)
+  const _baseUrl = normalizeOpenAICompatibleBaseUrl(baseUrl)
+  if (!_apiKey || !_baseUrl) return []
 
   const _res = await fetchFn(`${_baseUrl}/models`, {
     method: 'GET',
@@ -565,17 +543,15 @@ export async function listOpenAICompatibleModels(
       Authorization: `Bearer ${_apiKey}`,
       ...extraHeaders,
     },
-  });
+  })
 
-  if (!_res.ok) return [];
+  if (!_res.ok) return []
 
-  const _data = (await _res.json().catch(() => ({}))) as
-    | OpenAIModelListResponse
-    | Array<{ id?: string; name?: string }>;
-  const _raw = Array.isArray(_data) ? _data : (_data?.data ?? []);
+  const _data = (await _res.json().catch(() => ({}))) as OpenAIModelListResponse | Array<{ id?: string; name?: string }>
+  const _raw = Array.isArray(_data) ? _data : (_data?.data ?? [])
 
   return _raw
     .map((entry) => String(entry?.id || entry?.name || ''))
     .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
 }

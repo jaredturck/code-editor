@@ -1,11 +1,11 @@
 /** Curated Ollama recommendations shown separately from installed local models. */
 
 export interface RecommendedLocalModel {
-  id: string;
-  label: string;
-  description: string;
-  size: string;
-  capabilities: string[];
+  id: string
+  label: string
+  description: string
+  size: string
+  capabilities: string[]
 }
 
 export const RECOMMENDED_LOCAL_MODELS: RecommendedLocalModel[] = [
@@ -37,19 +37,17 @@ export const RECOMMENDED_LOCAL_MODELS: RecommendedLocalModel[] = [
     size: 'varies',
     capabilities: ['coding', 'tools'],
   },
-];
+]
 
 export interface LocalHardwareProfile {
-  memTotal?: number;
-  gpuMemoryTotalMb?: number;
+  memTotal?: number
+  gpuMemoryTotalMb?: number
 }
 
 /** Chooses IRIS's required local worker model from coarse hardware capacity. */
-export function chooseAutomaticLocalModel(
-  hardware: LocalHardwareProfile | null | undefined,
-): string {
-  const gpuMemoryGb = Number(hardware?.gpuMemoryTotalMb || 0) / 1024;
+export function chooseAutomaticLocalModel(hardware: LocalHardwareProfile | null | undefined): string {
+  const gpuMemoryGb = Number(hardware?.gpuMemoryTotalMb || 0) / 1024
 
-  if (gpuMemoryGb >= 28) return 'qwen3.6:27b';
-  return 'qwen3.5:9b';
+  if (gpuMemoryGb >= 28) return 'qwen3.6:27b'
+  return 'qwen3.5:9b'
 }

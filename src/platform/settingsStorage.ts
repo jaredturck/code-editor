@@ -4,17 +4,12 @@
  * defaults rather than creating feature-specific fallback values.
  */
 
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
-import { DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER_ID } from '@/platform/providers/providerRegistry';
-import {
-  AGENT_ROLE_IDS,
-  readAgentModels,
-  type AgentModelEntry,
-  type AgentRoleId,
-} from '@/platform/agent/agentIdentity';
-import { normalizeKeyId } from '@/platform/keyStore';
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
+import { DEFAULT_AI_MODEL, DEFAULT_AI_PROVIDER_ID } from '@/platform/providers/providerRegistry'
+import { AGENT_ROLE_IDS, readAgentModels, type AgentModelEntry, type AgentRoleId } from '@/platform/agent/agentIdentity'
+import { normalizeKeyId } from '@/platform/keyStore'
 
-const SETTINGS_STORAGE_KEY = 'iris_settings';
+const SETTINGS_STORAGE_KEY = 'iris_settings'
 
 export const DEFAULT_IRIS_SETTINGS = {
   ai_provider: DEFAULT_AI_PROVIDER_ID,
@@ -229,33 +224,29 @@ export const DEFAULT_IRIS_SETTINGS = {
   // Agent filesystem root. Empty = the user's home (~). Set via the /dir chat
   // command to scope agent file/terminal operations to a working directory.
   agent_working_dir: '',
-};
+}
 
 /** @deprecated Internal compatibility alias; new code should use DEFAULT_IRIS_SETTINGS. */
-export const DEFAULT_ORB_SETTINGS = DEFAULT_IRIS_SETTINGS;
+export const DEFAULT_ORB_SETTINGS = DEFAULT_IRIS_SETTINGS
 
 export type OrbSettings = Omit<
   typeof DEFAULT_IRIS_SETTINGS,
-  | 'discovered_models'
-  | 'agent_models'
-  | 'agent_team_roles'
-  | 'provider_key_validation'
-  | 'provider_selected_models'
+  'discovered_models' | 'agent_models' | 'agent_team_roles' | 'provider_key_validation' | 'provider_selected_models'
 > & {
-  agent_team_roles: AgentRoleId[] | null;
-  discovered_models: Record<string, string[]>;
-  agent_models: AgentModelEntry[] | null;
+  agent_team_roles: AgentRoleId[] | null
+  discovered_models: Record<string, string[]>
+  agent_models: AgentModelEntry[] | null
   provider_key_validation: Record<
     string,
     import('@/platform/providers/providerConfiguration').ProviderKeyValidationRecord
-  >;
-  provider_selected_models: Record<string, string[]>;
-  _stateful_cutover_v1?: boolean;
-  _permission_consent_v1?: boolean;
-  [key: string]: unknown;
-};
+  >
+  provider_selected_models: Record<string, string[]>
+  _stateful_cutover_v1?: boolean
+  _permission_consent_v1?: boolean
+  [key: string]: unknown
+}
 
-type PartialOrbSettings = Record<string, unknown> | null | undefined;
+type PartialOrbSettings = Record<string, unknown> | null | undefined
 
 export type PersistentPermissionKey =
   | 'file_read'
@@ -265,15 +256,15 @@ export type PersistentPermissionKey =
   | 'mouse_control'
   | 'microphone'
   | 'sudo'
-  | 'network_commands';
+  | 'network_commands'
 
 export interface BridgePermissionState {
-  fileRead: boolean;
-  fileWrite: boolean;
-  terminal: boolean;
-  launcher: boolean;
-  automation: boolean;
-  microphone: boolean;
+  fileRead: boolean
+  fileWrite: boolean
+  terminal: boolean
+  launcher: boolean
+  automation: boolean
+  microphone: boolean
 }
 
 const PERSISTENT_PERMISSION_KEYS = new Set<PersistentPermissionKey>([
@@ -285,11 +276,11 @@ const PERSISTENT_PERMISSION_KEYS = new Set<PersistentPermissionKey>([
   'microphone',
   'sudo',
   'network_commands',
-]);
+])
 
 // Normalizes permission identifiers carried by approval requests before they update settings.
 export function normalizePersistentPermissionKeys(value: unknown): PersistentPermissionKey[] {
-  const input = Array.isArray(value) ? value : value ? [value] : [];
+  const input = Array.isArray(value) ? value : value ? [value] : []
   return Array.from(
     new Set(
       input
@@ -302,29 +293,27 @@ export function normalizePersistentPermissionKeys(value: unknown): PersistentPer
           PERSISTENT_PERMISSION_KEYS.has(key as PersistentPermissionKey),
         ),
     ),
-  );
+  )
 }
 
 // Converts approved capability identifiers into the persistent settings they own.
 export function buildPersistentPermissionPatch(permissionKeys: unknown): Partial<OrbSettings> {
-  const patch: Partial<OrbSettings> = {};
+  const patch: Partial<OrbSettings> = {}
   for (const key of normalizePersistentPermissionKeys(permissionKeys)) {
-    if (key === 'file_read') patch.permissions_file_read = true;
-    if (key === 'file_write') patch.permissions_file_write = true;
-    if (key === 'terminal_exec') patch.permissions_terminal = true;
-    if (key === 'screen_capture') patch.permissions_screen_capture = true;
-    if (key === 'mouse_control') patch.permissions_mouse_control = true;
-    if (key === 'microphone') patch.permissions_microphone = true;
-    if (key === 'sudo') patch.agent_block_sudo = false;
-    if (key === 'network_commands') patch.agent_allow_network_commands = true;
+    if (key === 'file_read') patch.permissions_file_read = true
+    if (key === 'file_write') patch.permissions_file_write = true
+    if (key === 'terminal_exec') patch.permissions_terminal = true
+    if (key === 'screen_capture') patch.permissions_screen_capture = true
+    if (key === 'mouse_control') patch.permissions_mouse_control = true
+    if (key === 'microphone') patch.permissions_microphone = true
+    if (key === 'sudo') patch.agent_block_sudo = false
+    if (key === 'network_commands') patch.agent_allow_network_commands = true
   }
-  return patch;
+  return patch
 }
 
 // Builds the exact Electron-owned bridge capability state represented by renderer settings.
-export function buildBridgePermissionState(
-  settings: Partial<OrbSettings> | OrbSettings,
-): BridgePermissionState {
+export function buildBridgePermissionState(settings: Partial<OrbSettings> | OrbSettings): BridgePermissionState {
   return {
     fileRead: settings.permissions_file_read === true,
     fileWrite: settings.permissions_file_write === true,
@@ -332,7 +321,7 @@ export function buildBridgePermissionState(
     launcher: settings.permissions_terminal === true,
     automation: settings.permissions_mouse_control === true,
     microphone: settings.permissions_microphone === true,
-  };
+  }
 }
 
 const LEGACY_AGENT_SETTING_KEYS = new Set([
@@ -340,16 +329,14 @@ const LEGACY_AGENT_SETTING_KEYS = new Set([
   'agent_role_models',
   'agent_role_tags',
   'agent_role_tags_disabled',
-]);
+])
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
 function normalizedTags(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) return []
   return Array.from(
     new Set(
       value
@@ -360,24 +347,24 @@ function normalizedTags(value: unknown): string[] {
         )
         .filter(Boolean),
     ),
-  );
+  )
 }
 
 function legacyAgentModels(settings: Record<string, unknown>): AgentModelEntry[] {
-  const assignment = asRecord(settings.agent_role_assignment);
-  const extras = asRecord(settings.agent_role_models);
-  const tags = asRecord(settings.agent_role_tags);
-  const disabled = asRecord(settings.agent_role_tags_disabled);
-  const output: AgentModelEntry[] = [];
+  const assignment = asRecord(settings.agent_role_assignment)
+  const extras = asRecord(settings.agent_role_models)
+  const tags = asRecord(settings.agent_role_tags)
+  const disabled = asRecord(settings.agent_role_tags_disabled)
+  const output: AgentModelEntry[] = []
 
   const append = (role: AgentRoleId, raw: unknown, primary: boolean): void => {
-    const value = asRecord(raw);
-    const provider = String(value.provider || '').trim();
-    const model = String(value.model || '').trim();
-    if (!provider && !model) return;
-    const keyId = normalizeKeyId(value.keyId);
-    const entryTags = normalizedTags(value.tags);
-    const entryDisabledTags = normalizedTags(value.disabledTags);
+    const value = asRecord(raw)
+    const provider = String(value.provider || '').trim()
+    const model = String(value.model || '').trim()
+    if (!provider && !model) return
+    const keyId = normalizeKeyId(value.keyId)
+    const entryTags = normalizedTags(value.tags)
+    const entryDisabledTags = normalizedTags(value.disabledTags)
     output.push({
       id: `${role}:${provider}:${model}:${keyId}`.toLowerCase(),
       role,
@@ -387,19 +374,19 @@ function legacyAgentModels(settings: Record<string, unknown>): AgentModelEntry[]
       primary,
       tags: entryTags.length ? entryTags : normalizedTags(tags[role]),
       disabledTags: entryDisabledTags.length ? entryDisabledTags : normalizedTags(disabled[role]),
-    });
-  };
+    })
+  }
 
   for (const role of AGENT_ROLE_IDS) {
-    append(role, assignment[role], true);
-    const roleExtras = extras[role];
-    if (Array.isArray(roleExtras)) roleExtras.forEach((entry) => append(role, entry, false));
+    append(role, assignment[role], true)
+    const roleExtras = extras[role]
+    if (Array.isArray(roleExtras)) roleExtras.forEach((entry) => append(role, entry, false))
   }
-  return output;
+  return output
 }
 
 function hasLegacyAgentSettings(settings: Record<string, unknown>): boolean {
-  return Array.from(LEGACY_AGENT_SETTING_KEYS).some((key) => settings[key] != null);
+  return Array.from(LEGACY_AGENT_SETTING_KEYS).some((key) => settings[key] != null)
 }
 
 /**
@@ -409,38 +396,30 @@ function hasLegacyAgentSettings(settings: Record<string, unknown>): boolean {
  */
 
 function normalizeSettings(settings: PartialOrbSettings): OrbSettings {
-  const normalized = { ...DEFAULT_IRIS_SETTINGS } as OrbSettings;
+  const normalized = { ...DEFAULT_IRIS_SETTINGS } as OrbSettings
 
   if (!settings || typeof settings !== 'object') {
-    return normalized;
+    return normalized
   }
 
-  const hasPermissionConsentMarker = Object.prototype.hasOwnProperty.call(
-    settings,
-    '_permission_consent_v1',
-  );
+  const hasPermissionConsentMarker = Object.prototype.hasOwnProperty.call(settings, '_permission_consent_v1')
 
   const migratedAgentModels =
-    (!Array.isArray(settings.agent_models) || settings.agent_models.length === 0) &&
-    hasLegacyAgentSettings(settings)
+    (!Array.isArray(settings.agent_models) || settings.agent_models.length === 0) && hasLegacyAgentSettings(settings)
       ? legacyAgentModels(settings)
-      : [];
+      : []
 
   // Apply all known default keys from saved settings
   for (const key of Object.keys(DEFAULT_IRIS_SETTINGS)) {
     if (Object.prototype.hasOwnProperty.call(settings, key) && settings[key] !== undefined) {
-      normalized[key] = settings[key];
+      normalized[key] = settings[key]
     }
   }
 
   // Preserve forward-compatible extra keys, while deliberately dropping retired role fields.
   for (const key of Object.keys(settings)) {
-    if (
-      !LEGACY_AGENT_SETTING_KEYS.has(key) &&
-      !(key in normalized) &&
-      settings[key] !== undefined
-    ) {
-      normalized[key] = settings[key];
+    if (!LEGACY_AGENT_SETTING_KEYS.has(key) && !(key in normalized) && settings[key] !== undefined) {
+      normalized[key] = settings[key]
     }
   }
 
@@ -450,35 +429,35 @@ function normalizeSettings(settings: PartialOrbSettings): OrbSettings {
   // 'off' to 'auto' ONCE; a version marker means a later MANUAL revert to 'off'
   // (which carries the marker) is respected and not re-flipped.
   if (!normalized._stateful_cutover_v1) {
-    if (normalized.agent_stateful_loop === 'off') normalized.agent_stateful_loop = 'auto';
-    normalized._stateful_cutover_v1 = true;
+    if (normalized.agent_stateful_loop === 'off') normalized.agent_stateful_loop = 'auto'
+    normalized._stateful_cutover_v1 = true
   }
 
   // Earlier builds enabled file-read and screen-capture defaults without an explicit user
   // grant. Revoke those legacy defaults once so every capability begins fail-closed and future
   // approvals reflect real consent stored in encrypted settings.
   if (!hasPermissionConsentMarker) {
-    normalized.permissions_file_read = false;
-    normalized.permissions_file_write = false;
-    normalized.permissions_terminal = false;
-    normalized.permissions_screen_capture = false;
-    normalized.permissions_mouse_control = false;
-    normalized.permissions_microphone = false;
-    normalized.agent_block_sudo = true;
-    normalized.agent_allow_network_commands = false;
-    normalized._permission_consent_v1 = true;
+    normalized.permissions_file_read = false
+    normalized.permissions_file_write = false
+    normalized.permissions_terminal = false
+    normalized.permissions_screen_capture = false
+    normalized.permissions_mouse_control = false
+    normalized.permissions_microphone = false
+    normalized.agent_block_sudo = true
+    normalized.agent_allow_network_commands = false
+    normalized._permission_consent_v1 = true
   }
 
-  normalized.chat_persistence_enabled = true;
+  normalized.chat_persistence_enabled = true
 
   if (migratedAgentModels.length) {
     normalized.agent_models = readAgentModels({
       agent_models: migratedAgentModels,
-    });
+    })
   } else if (Array.isArray(normalized.agent_models)) {
     normalized.agent_models = readAgentModels({
       agent_models: normalized.agent_models,
-    });
+    })
   }
 
   // The orchestrator's primary model (Settings → Agents) IS the active model. Sync
@@ -486,38 +465,37 @@ function normalizeSettings(settings: PartialOrbSettings): OrbSettings {
   // configured in the Agents menu instead of a stale backup. ai_model remains only a fallback for
   // when no orchestrator model is bound. The API key is resolved per-provider at call time, so
   // syncing provider/model here is sufficient (no secret handling needed).
-  const agentModels = Array.isArray(normalized.agent_models) ? normalized.agent_models : [];
+  const agentModels = Array.isArray(normalized.agent_models) ? normalized.agent_models : []
   const orchestratorPrimary =
-    agentModels.find(
-      (entry) => entry?.role === 'orchestrator' && entry?.primary && entry?.provider,
-    ) || agentModels.find((entry) => entry?.role === 'orchestrator' && entry?.provider);
+    agentModels.find((entry) => entry?.role === 'orchestrator' && entry?.primary && entry?.provider) ||
+    agentModels.find((entry) => entry?.role === 'orchestrator' && entry?.provider)
   if (orchestratorPrimary?.provider) {
-    normalized.ai_provider = orchestratorPrimary.provider as OrbSettings['ai_provider'];
-    if (orchestratorPrimary.model) normalized.ai_model = String(orchestratorPrimary.model);
+    normalized.ai_provider = orchestratorPrimary.provider as OrbSettings['ai_provider']
+    if (orchestratorPrimary.model) normalized.ai_model = String(orchestratorPrimary.model)
   }
 
   // Credentials are owned exclusively by Electron safeStorage. Compatibility fields remain
   // in the shape so older callers do not break, but secrets are never accepted into SQLite.
-  normalized.ai_api_key = '';
-  normalized.search_web_google_cse_api_key = '';
-  normalized.search_web_tavily_api_key = '';
-  normalized.search_web_exa_api_key = '';
-  normalized.search_web_serper_api_key = '';
-  normalized.search_web_serpapi_api_key = '';
-  normalized.search_web_brave_api_key = '';
+  normalized.ai_api_key = ''
+  normalized.search_web_google_cse_api_key = ''
+  normalized.search_web_tavily_api_key = ''
+  normalized.search_web_exa_api_key = ''
+  normalized.search_web_serper_api_key = ''
+  normalized.search_web_serpapi_api_key = ''
+  normalized.search_web_brave_api_key = ''
 
-  return normalized;
+  return normalized
 }
 
 // Reads orb settings and converts it into the representation used by the settings compatibility
 // contract.
 export function readOrbSettings(): OrbSettings {
-  const parsed = readStorageJson<Record<string, unknown> | null>(SETTINGS_STORAGE_KEY, null);
-  const normalized = normalizeSettings(parsed);
+  const parsed = readStorageJson<Record<string, unknown> | null>(SETTINGS_STORAGE_KEY, null)
+  const normalized = normalizeSettings(parsed)
   if (parsed && hasLegacyAgentSettings(parsed)) {
-    writeStorageJson(SETTINGS_STORAGE_KEY, normalized);
+    writeStorageJson(SETTINGS_STORAGE_KEY, normalized)
   }
-  return normalized;
+  return normalized
 }
 
 // ── Immediate-apply broadcast ──────────────────────────────────────────────────
@@ -525,20 +503,20 @@ export function readOrbSettings(): OrbSettings {
 // (e.g. the sub-agent standby loops) can re-resolve provider/model/key/tier WITHOUT an app
 // restart. The React settings context already re-renders consumers; this covers the
 // module-singleton consumers that captured a one-time snapshot.
-type SettingsChangeListener = (settings: OrbSettings) => void;
-const settingsChangeListeners = new Set<SettingsChangeListener>();
+type SettingsChangeListener = (settings: OrbSettings) => void
+const settingsChangeListeners = new Set<SettingsChangeListener>()
 
 // Subscribes to settings writes; returns an unsubscribe function.
 export function subscribeSettingsChanged(listener: SettingsChangeListener): () => void {
-  if (typeof listener !== 'function') return () => {};
-  settingsChangeListeners.add(listener);
-  return () => settingsChangeListeners.delete(listener);
+  if (typeof listener !== 'function') return () => {}
+  settingsChangeListeners.add(listener)
+  return () => settingsChangeListeners.delete(listener)
 }
 
 function notifySettingsChanged(settings: OrbSettings): void {
   for (const listener of settingsChangeListeners) {
     try {
-      listener(settings);
+      listener(settings)
     } catch {
       /* listener errors are non-fatal */
     }
@@ -547,8 +525,8 @@ function notifySettingsChanged(settings: OrbSettings): void {
 
 // Persists orb settings while preserving the storage and compatibility rules of this module.
 export function writeOrbSettings(settings: PartialOrbSettings): OrbSettings {
-  const normalized = normalizeSettings(settings);
-  writeStorageJson(SETTINGS_STORAGE_KEY, normalized);
-  notifySettingsChanged(normalized);
-  return normalized;
+  const normalized = normalizeSettings(settings)
+  writeStorageJson(SETTINGS_STORAGE_KEY, normalized)
+  notifySettingsChanged(normalized)
+  return normalized
 }

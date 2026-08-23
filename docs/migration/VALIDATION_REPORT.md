@@ -65,15 +65,15 @@ The original UI/behavior directories below remain byte-for-byte identical to the
 
 ## Migrated implementation totals
 
-| Area | Files | Lines |
-| --- | ---: | ---: |
-| `src/platform/` | 81 | 33,966 |
-| `src/platform-context/` | 4 | 406 |
-| `src/platform-features/` | 26 | 5,921 |
-| `backend/` | 71 | 27,295 |
-| `electron/platform/` | 9 | 2,007 |
-| `migrated-tests/iris/` | 143 | ~19,721 |
-| `benchmarks/iris/` | 20 | 4,501 |
+| Area                     | Files |   Lines |
+| ------------------------ | ----: | ------: |
+| `src/platform/`          |    81 |  33,966 |
+| `src/platform-context/`  |     4 |     406 |
+| `src/platform-features/` |    26 |   5,921 |
+| `backend/`               |    71 |  27,295 |
+| `electron/platform/`     |     9 |   2,007 |
+| `migrated-tests/iris/`   |   143 | ~19,721 |
+| `benchmarks/iris/`       |    20 |   4,501 |
 
 The packaged migration tree contains **609 files** before archive creation and is approximately **13 MiB** unpacked (without `node_modules`).
 
@@ -150,7 +150,6 @@ The bulk migration is structurally complete for the scope documented in `MIGRATI
 - Backend functionality without a current editor surface remains preserved and explicitly tracked in `UNWIRED_BACKEND.md`.
 - Full dependency-aware build/runtime verification remains pending solely because the dependency tree could not be installed in this environment.
 
-
 ## AI Settings & Provider Configuration patch validation
 
 The first post-migration product-integration patch connects the existing Code Editor Settings modal to migrated IRIS provider/model/agent configuration while preserving the existing Settings shell.
@@ -195,7 +194,6 @@ The migration environment still does not contain the complete project dependency
 ```bash
 npm run verify:full
 ```
-
 
 ## Core Agent Chat Integration patch validation (P006)
 
@@ -298,4 +296,3 @@ P007 does not widen agent authority: the P006 per-session tool allowlist and dis
 ```bash
 npm run verify:full
 ```
-

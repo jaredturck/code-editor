@@ -1,7 +1,7 @@
 /** Verifies the Files hook connects browsing, semantic search, image preview, indexing, and save state. */
 
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   analyzeFileWithAI: vi.fn(),
@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
   writeTextFile: vi.fn(),
   writeClipboard: vi.fn(),
   setOrbState: vi.fn(),
-}));
+}))
 
 vi.mock('@/platform-context/AgentSettingsContext', () => ({
   useOrbSettings: () => ({
@@ -36,7 +36,7 @@ vi.mock('@/platform-context/AgentSettingsContext', () => ({
     },
   }),
   useOrbShell: () => ({ setOrbState: mocks.setOrbState }),
-}));
+}))
 
 vi.mock('@/platform/desktopBridge', () => ({
   analyzeFileWithAI: mocks.analyzeFileWithAI,
@@ -59,9 +59,9 @@ vi.mock('@/platform/desktopBridge', () => ({
   searchFileSemanticConcepts: mocks.searchFileSemanticConcepts,
   searchFileSemanticIndex: mocks.searchFileSemanticIndex,
   writeTextFile: mocks.writeTextFile,
-}));
+}))
 
-import { useFilePanel } from '@/platform-features/files/useFilePanel';
+import { useFilePanel } from '@/platform-features/files/useFilePanel'
 
 const homeSource = {
   id: 'home',
@@ -78,7 +78,7 @@ const homeSource = {
   available: true,
   alwaysSelected: true,
   selectedByDefault: true,
-};
+}
 
 const readyStatus = {
   ollamaAvailable: true,
@@ -93,15 +93,15 @@ const readyStatus = {
   skippedCount: 0,
   failedCount: 0,
   sources: [homeSource],
-};
+}
 
 beforeEach(() => {
-  for (const mock of Object.values(mocks)) mock.mockReset();
-  mocks.writeClipboard.mockResolvedValue(undefined);
+  for (const mock of Object.values(mocks)) mock.mockReset()
+  mocks.writeClipboard.mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: mocks.writeClipboard },
-  });
+  })
   mocks.browseDirectory.mockResolvedValue({
     currentPath: '/home/user',
     parentPath: null,
@@ -138,7 +138,7 @@ beforeEach(() => {
         isVideo: false,
       },
     ],
-  });
+  })
   mocks.listDirectory.mockResolvedValue({
     rootPath: '/home/user',
     tree: {
@@ -154,7 +154,7 @@ beforeEach(() => {
         },
       ],
     },
-  });
+  })
   mocks.preflightFileSemanticIndex.mockResolvedValue({
     rootPath: '/home/user',
     sources: [
@@ -173,67 +173,59 @@ beforeEach(() => {
     warningThreshold: 1_000_000,
     requiresConfirmation: false,
     scannedAt: 1,
-  });
+  })
   mocks.getFileIndexSources.mockResolvedValue({
     sources: [homeSource],
     selectedSourceIds: ['home'],
     locked: true,
-  });
+  })
   mocks.clearFileSemanticIndex.mockResolvedValue({
     ...readyStatus,
     indexStatus: 'missing',
     semanticCount: 0,
     sources: [],
-  });
-  mocks.getFileSemanticStatus.mockResolvedValue(readyStatus);
-  mocks.getFileMediaUrl.mockReturnValue('http://127.0.0.1:3210/api/local/fs/media?path=clip.mp4');
+  })
+  mocks.getFileSemanticStatus.mockResolvedValue(readyStatus)
+  mocks.getFileMediaUrl.mockReturnValue('http://127.0.0.1:3210/api/local/fs/media?path=clip.mp4')
   mocks.readTextFile.mockResolvedValue({
     path: '/home/user/small.txt',
     content: 'original',
     isBinary: false,
-  });
+  })
   mocks.getFileThumbnail.mockResolvedValue({
     dataUrl: 'data:image/png;base64,aW1hZ2U=',
     width: 100,
     height: 100,
     modifiedAt: 1,
-  });
+  })
   mocks.analyzeFileWithAI.mockResolvedValue({
     path: '/home/user/small.txt',
     name: 'small.txt',
     fileType: 'text',
     markdown: '## Analysis\n\nA useful summary.',
     model: 'qwen3.5:0.8b',
-  });
-  mocks.findSimilarFiles.mockResolvedValue([]);
-  mocks.searchFileSemanticConcepts.mockResolvedValue([]);
-  mocks.writeTextFile.mockResolvedValue({ saved: true, modifiedAt: 10 });
-});
+  })
+  mocks.findSimilarFiles.mockResolvedValue([])
+  mocks.searchFileSemanticConcepts.mockResolvedValue([])
+  mocks.writeTextFile.mockResolvedValue({ saved: true, modifiedAt: 10 })
+})
 
 describe('useFilePanel', () => {
   it('loads an immediate directory and sorts its entries by metadata', async () => {
-    const { result } = renderHook(() => useFilePanel());
+    const { result } = renderHook(() => useFilePanel())
 
-    await waitFor(() => expect(result.current.currentPath).toBe('/home/user'));
-    expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual([
-      'Pictures',
-      'large.txt',
-      'small.txt',
-    ]);
-    expect(result.current.tree?.path).toBe('/home/user');
-    expect(mocks.listDirectory).toHaveBeenCalledWith('~', 4);
+    await waitFor(() => expect(result.current.currentPath).toBe('/home/user'))
+    expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual(['Pictures', 'large.txt', 'small.txt'])
+    expect(result.current.tree?.path).toBe('/home/user')
+    expect(mocks.listDirectory).toHaveBeenCalledWith('~', 4)
 
     act(() => {
-      result.current.setSortField('size');
-      result.current.setSortDirection('desc');
-    });
+      result.current.setSortField('size')
+      result.current.setSortDirection('desc')
+    })
 
-    expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual([
-      'Pictures',
-      'large.txt',
-      'small.txt',
-    ]);
-  });
+    expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual(['Pictures', 'large.txt', 'small.txt'])
+  })
 
   it('sorts by modified date and groups file types with name sub-sorting', async () => {
     mocks.browseDirectory.mockResolvedValueOnce({
@@ -282,51 +274,51 @@ describe('useFilePanel', () => {
           isVideo: false,
         },
       ],
-    });
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(4));
+    })
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(4))
 
     act(() => {
-      result.current.setSortField('type');
-      result.current.setSortDirection('desc');
-    });
+      result.current.setSortField('type')
+      result.current.setSortDirection('desc')
+    })
     expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual([
       'older.txt',
       'zoo.png',
       'alpha.mp4',
       'beta.mp4',
-    ]);
+    ])
 
     act(() => {
-      result.current.setSortField('modified');
-      result.current.setSortDirection('desc');
-    });
+      result.current.setSortField('modified')
+      result.current.setSortDirection('desc')
+    })
     expect(result.current.visibleEntries.map((entry) => entry.name)).toEqual([
       'zoo.png',
       'alpha.mp4',
       'beta.mp4',
       'older.txt',
-    ]);
-  });
+    ])
+  })
 
   it('clears the selected preview when tree navigation opens a folder', async () => {
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3));
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3))
 
-    await act(async () => result.current.selectFile(result.current.visibleEntries[2]));
-    expect(result.current.selectedFile?.name).toBe('small.txt');
+    await act(async () => result.current.selectFile(result.current.visibleEntries[2]))
+    expect(result.current.selectedFile?.name).toBe('small.txt')
 
     mocks.browseDirectory.mockResolvedValueOnce({
       currentPath: '/home/user/Pictures',
       parentPath: '/home/user',
       truncated: false,
       entries: [],
-    });
-    await act(async () => result.current.openDirectory('/home/user/Pictures'));
+    })
+    await act(async () => result.current.openDirectory('/home/user/Pictures'))
 
-    expect(result.current.currentPath).toBe('/home/user/Pictures');
-    expect(result.current.selectedFile).toBeNull();
-  });
+    expect(result.current.currentPath).toBe('/home/user/Pictures')
+    expect(result.current.selectedFile).toBeNull()
+  })
 
   it('searches the shared semantic index and defaults results to relevance order', async () => {
     mocks.searchFileSemanticIndex.mockResolvedValue([
@@ -342,58 +334,58 @@ describe('useFilePanel', () => {
         semanticType: 'image',
         score: 0.91,
       },
-    ]);
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'));
+    ])
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'))
 
-    act(() => result.current.setSearchQuery('holiday near a beach'));
-    await act(async () => result.current.submitSearch());
+    act(() => result.current.setSearchQuery('holiday near a beach'))
+    await act(async () => result.current.submitSearch())
 
-    expect(mocks.searchFileSemanticIndex).toHaveBeenCalledWith('holiday near a beach', 100, 'all');
-    expect(result.current.activeSearchQuery).toBe('holiday near a beach');
-    expect(result.current.sortField).toBe('relevance');
+    expect(mocks.searchFileSemanticIndex).toHaveBeenCalledWith('holiday near a beach', 100, 'all')
+    expect(result.current.activeSearchQuery).toBe('holiday near a beach')
+    expect(result.current.sortField).toBe('relevance')
     expect(result.current.visibleEntries[0]).toMatchObject({
       name: 'beach.jpg',
       isImage: true,
-    });
-  });
+    })
+  })
 
   it('sends the selected semantic file type to the server', async () => {
-    mocks.searchFileSemanticIndex.mockResolvedValue([]);
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'));
+    mocks.searchFileSemanticIndex.mockResolvedValue([])
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'))
 
     act(() => {
-      result.current.setSearchQuery('anime girl');
-      result.current.setSearchKind('image');
-    });
-    await act(async () => result.current.submitSearch());
+      result.current.setSearchQuery('anime girl')
+      result.current.setSearchKind('image')
+    })
+    await act(async () => result.current.submitSearch())
 
-    expect(mocks.searchFileSemanticIndex).toHaveBeenCalledWith('anime girl', 100, 'image');
-  });
+    expect(mocks.searchFileSemanticIndex).toHaveBeenCalledWith('anime girl', 100, 'image')
+  })
 
   it('copies file contents and paths and reveals files in the system manager', async () => {
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3));
-    const file = result.current.visibleEntries.find((entry) => entry.name === 'small.txt')!;
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3))
+    const file = result.current.visibleEntries.find((entry) => entry.name === 'small.txt')!
 
-    await act(async () => result.current.copyFileContents(file));
+    await act(async () => result.current.copyFileContents(file))
     expect(mocks.readTextFile).toHaveBeenCalledWith('/home/user/small.txt', {
       fileManager: true,
-    });
-    expect(mocks.writeClipboard).toHaveBeenCalledWith('original');
-    expect(result.current.fileActionMessage).toContain('small.txt');
+    })
+    expect(mocks.writeClipboard).toHaveBeenCalledWith('original')
+    expect(result.current.fileActionMessage).toContain('small.txt')
 
-    await act(async () => result.current.copyFileLocation(file));
-    expect(mocks.writeClipboard).toHaveBeenCalledWith('/home/user/small.txt');
+    await act(async () => result.current.copyFileLocation(file))
+    expect(mocks.writeClipboard).toHaveBeenCalledWith('/home/user/small.txt')
 
-    await act(async () => result.current.openFileLocation(file));
-    expect(mocks.revealFileInFolder).toHaveBeenCalledWith('/home/user/small.txt', true);
-  });
+    await act(async () => result.current.openFileLocation(file))
+    expect(mocks.revealFileInFolder).toHaveBeenCalledWith('/home/user/small.txt', true)
+  })
 
   it('loads image previews and saves edited text with visible dirty state', async () => {
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3));
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3))
 
     await act(async () =>
       result.current.selectFile({
@@ -406,25 +398,25 @@ describe('useFilePanel', () => {
         isImage: true,
         isVideo: false,
       }),
-    );
-    expect(result.current.imagePreview).toMatch(/^data:image\/png/);
-    expect(result.current.selectedFile?.isBinary).toBe(true);
+    )
+    expect(result.current.imagePreview).toMatch(/^data:image\/png/)
+    expect(result.current.selectedFile?.isBinary).toBe(true)
 
-    await act(async () => result.current.selectFile(result.current.visibleEntries[2]));
-    act(() => result.current.setContent('changed'));
-    expect(result.current.isDirty).toBe(true);
+    await act(async () => result.current.selectFile(result.current.visibleEntries[2]))
+    act(() => result.current.setContent('changed'))
+    expect(result.current.isDirty).toBe(true)
 
-    await act(async () => result.current.saveFile());
+    await act(async () => result.current.saveFile())
     expect(mocks.writeTextFile).toHaveBeenCalledWith('/home/user/small.txt', 'changed', {
       fileManager: true,
-    });
-    expect(result.current.isDirty).toBe(false);
-    expect(result.current.saved).toBe(true);
-  });
+    })
+    expect(result.current.isDirty).toBe(false)
+    expect(result.current.saved).toBe(true)
+  })
 
   it('opens videos through the authenticated media route and closes back to the file list', async () => {
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3));
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3))
 
     await act(async () =>
       result.current.selectFile({
@@ -437,22 +429,22 @@ describe('useFilePanel', () => {
         isImage: false,
         isVideo: true,
       }),
-    );
+    )
 
-    expect(mocks.getFileMediaUrl).toHaveBeenCalledWith('/home/user/clip.mp4', true);
-    expect(result.current.videoPreview).toContain('/api/local/fs/media');
+    expect(mocks.getFileMediaUrl).toHaveBeenCalledWith('/home/user/clip.mp4', true)
+    expect(result.current.videoPreview).toContain('/api/local/fs/media')
     expect(result.current.selectedFile).toMatchObject({
       name: 'clip.mp4',
       isBinary: true,
       isVideo: true,
-    });
-    expect(mocks.readTextFile).not.toHaveBeenCalledWith('/home/user/clip.mp4');
+    })
+    expect(mocks.readTextFile).not.toHaveBeenCalledWith('/home/user/clip.mp4')
 
-    act(() => result.current.closePreview());
-    expect(result.current.selectedFile).toBeNull();
-    expect(result.current.videoPreview).toBe('');
-    expect(result.current.visibleEntries).toHaveLength(3);
-  });
+    act(() => result.current.closePreview())
+    expect(result.current.selectedFile).toBeNull()
+    expect(result.current.videoPreview).toBe('')
+    expect(result.current.visibleEntries).toHaveLength(3)
+  })
 
   it('installs the missing Ollama embedding model before starting the initial scan', async () => {
     const missingStatus = {
@@ -461,21 +453,21 @@ describe('useFilePanel', () => {
       embeddingModelInstalled: false,
       indexStatus: 'missing' as const,
       semanticCount: 0,
-    };
-    mocks.getFileSemanticStatus.mockResolvedValue(missingStatus);
+    }
+    mocks.getFileSemanticStatus.mockResolvedValue(missingStatus)
     mocks.installFileSemanticModels.mockResolvedValue({
       ...missingStatus,
       embeddingModelInstalled: true,
       indexStatus: 'building',
-    });
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('missing'));
+    })
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('missing'))
 
-    await act(async () => result.current.startInitialScan());
+    await act(async () => result.current.startInitialScan())
 
-    expect(mocks.installFileSemanticModels).toHaveBeenCalledTimes(1);
-    expect(mocks.rebuildFileSemanticIndex).toHaveBeenCalledWith(false, ['home']);
-  });
+    expect(mocks.installFileSemanticModels).toHaveBeenCalledTimes(1)
+    expect(mocks.rebuildFileSemanticIndex).toHaveBeenCalledWith(false, ['home'])
+  })
 
   it('discovers selectable index locations and unlocks them after deleting the index', async () => {
     const internalSource = {
@@ -485,7 +477,7 @@ describe('useFilePanel', () => {
       path: '/mnt/projects',
       kind: 'internal' as const,
       alwaysSelected: false,
-    };
+    }
     mocks.getFileIndexSources
       .mockResolvedValueOnce({
         sources: [homeSource, internalSource],
@@ -496,17 +488,17 @@ describe('useFilePanel', () => {
         sources: [homeSource, internalSource],
         selectedSourceIds: ['home', 'uuid:projects'],
         locked: false,
-      });
-    const { result } = renderHook(() => useFilePanel());
+      })
+    const { result } = renderHook(() => useFilePanel())
 
-    await waitFor(() => expect(result.current.indexSources).toHaveLength(2));
-    act(() => result.current.toggleIndexSource('uuid:projects'));
-    expect(result.current.selectedSourceIds).toEqual(['home']);
+    await waitFor(() => expect(result.current.indexSources).toHaveLength(2))
+    act(() => result.current.toggleIndexSource('uuid:projects'))
+    expect(result.current.selectedSourceIds).toEqual(['home'])
 
-    await act(async () => result.current.clearIndex());
-    expect(mocks.clearFileSemanticIndex).toHaveBeenCalledTimes(1);
-    expect(result.current.locationsLocked).toBe(false);
-  });
+    await act(async () => result.current.clearIndex())
+    expect(mocks.clearFileSemanticIndex).toHaveBeenCalledTimes(1)
+    expect(result.current.locationsLocked).toBe(false)
+  })
 
   it('keeps a model-install failure visible after refreshing missing index status', async () => {
     const missingStatus = {
@@ -515,30 +507,28 @@ describe('useFilePanel', () => {
       embeddingModelInstalled: true,
       indexStatus: 'missing' as const,
       semanticCount: 0,
-    };
-    mocks.getFileSemanticStatus.mockResolvedValue(missingStatus);
-    mocks.installFileSemanticModels.mockRejectedValue(
-      new Error('IRIS could not prepare the CLIP image model'),
-    );
+    }
+    mocks.getFileSemanticStatus.mockResolvedValue(missingStatus)
+    mocks.installFileSemanticModels.mockRejectedValue(new Error('IRIS could not prepare the CLIP image model'))
 
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('missing'));
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('missing'))
 
-    await act(async () => result.current.startInitialScan());
+    await act(async () => result.current.startInitialScan())
 
-    expect(result.current.indexError).toBe('IRIS could not prepare the CLIP image model');
-    expect(mocks.rebuildFileSemanticIndex).not.toHaveBeenCalled();
-  });
+    expect(result.current.indexError).toBe('IRIS could not prepare the CLIP image model')
+    expect(mocks.rebuildFileSemanticIndex).not.toHaveBeenCalled()
+  })
 
   it('analyzes selected text files and images through the full-file bridge route', async () => {
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3));
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.visibleEntries.length).toBe(3))
 
-    await act(async () => result.current.selectFile(result.current.visibleEntries[2]));
-    await act(async () => result.current.analyzeFile());
+    await act(async () => result.current.selectFile(result.current.visibleEntries[2]))
+    await act(async () => result.current.analyzeFile())
 
-    expect(mocks.analyzeFileWithAI).toHaveBeenCalledWith('/home/user/small.txt', true);
-    expect(result.current.aiAnalysis).toContain('## Analysis');
+    expect(mocks.analyzeFileWithAI).toHaveBeenCalledWith('/home/user/small.txt', true)
+    expect(result.current.aiAnalysis).toContain('## Analysis')
 
     mocks.analyzeFileWithAI.mockResolvedValue({
       path: '/home/user/photo.png',
@@ -546,7 +536,7 @@ describe('useFilePanel', () => {
       fileType: 'image',
       markdown: '## Image\n\nA beach holiday photograph.',
       model: 'qwen3.5:0.8b',
-    });
+    })
     await act(async () =>
       result.current.selectFile({
         name: 'photo.png',
@@ -558,12 +548,12 @@ describe('useFilePanel', () => {
         isImage: true,
         isVideo: false,
       }),
-    );
-    await act(async () => result.current.analyzeFile());
+    )
+    await act(async () => result.current.analyzeFile())
 
-    expect(mocks.analyzeFileWithAI).toHaveBeenLastCalledWith('/home/user/photo.png', true);
-    expect(result.current.aiAnalysis).toContain('beach holiday');
-  });
+    expect(mocks.analyzeFileWithAI).toHaveBeenLastCalledWith('/home/user/photo.png', true)
+    expect(result.current.aiAnalysis).toContain('beach holiday')
+  })
 
   it('opens concept groups and selected-file similarity results', async () => {
     mocks.searchFileSemanticConcepts.mockResolvedValue([
@@ -585,7 +575,7 @@ describe('useFilePanel', () => {
           },
         ],
       },
-    ]);
+    ])
     mocks.findSimilarFiles.mockResolvedValue([
       {
         id: 'large',
@@ -599,22 +589,22 @@ describe('useFilePanel', () => {
         semanticType: 'text',
         score: 0.82,
       },
-    ]);
-    const { result } = renderHook(() => useFilePanel());
-    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'));
+    ])
+    const { result } = renderHook(() => useFilePanel())
+    await waitFor(() => expect(result.current.semanticStatus?.indexStatus).toBe('ready'))
 
-    act(() => result.current.setSearchQuery('holiday near a beach'));
-    await act(async () => result.current.submitConceptSearch());
+    act(() => result.current.setSearchQuery('holiday near a beach'))
+    await act(async () => result.current.submitConceptSearch())
 
-    expect(mocks.searchFileSemanticConcepts).toHaveBeenCalledWith('holiday near a beach', 6, 12);
-    expect(result.current.resultMode).toBe('concepts');
-    expect(result.current.conceptGroups[0].title).toBe('Beach Holidays');
+    expect(mocks.searchFileSemanticConcepts).toHaveBeenCalledWith('holiday near a beach', 6, 12)
+    expect(result.current.resultMode).toBe('concepts')
+    expect(result.current.conceptGroups[0].title).toBe('Beach Holidays')
 
-    await act(async () => result.current.selectFile(result.current.visibleEntries[2]));
-    await act(async () => result.current.showSimilarFiles());
+    await act(async () => result.current.selectFile(result.current.visibleEntries[2]))
+    await act(async () => result.current.showSimilarFiles())
 
-    expect(mocks.findSimilarFiles).toHaveBeenCalledWith('/home/user/small.txt', 100);
-    expect(result.current.resultMode).toBe('similar');
-    expect(result.current.visibleEntries[0].name).toBe('large.txt');
-  });
-});
+    expect(mocks.findSimilarFiles).toHaveBeenCalledWith('/home/user/small.txt', 100)
+    expect(result.current.resultMode).toBe('similar')
+    expect(result.current.visibleEntries[0].name).toBe('large.txt')
+  })
+})

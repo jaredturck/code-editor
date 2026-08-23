@@ -1,54 +1,52 @@
 /** Verifies Linux index-location discovery, default selection, and unavailable-drive handling. */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const processMocks = vi.hoisted(() => ({
   run: vi.fn(),
-}));
+}))
 
 const databaseMocks = vi.hoisted(() => ({
   meta: null as Record<string, unknown> | null,
-}));
+}))
 
 vi.mock('../../server/desktopBridge/shared/processExecution.js', () => ({
   runProcess: processMocks.run,
-}));
+}))
 
 vi.mock('../../server/desktopBridge/storage/encryptedDatabase.js', () => ({
   readEncryptedFileIndexMeta: vi.fn(async () => databaseMocks.meta),
-}));
+}))
 
 import {
   discoverFileIndexSources,
   getFileIndexAccessRoots,
   getFileIndexSourceState,
   resolveSelectedFileIndexSources,
-} from '../../server/desktopBridge/services/fileIndexSourceService';
+} from '../../server/desktopBridge/services/fileIndexSourceService'
 
-let root = '';
-let home = '';
-let internal = '';
-let removable = '';
-let network = '';
-let loop = '';
+let root = ''
+let home = ''
+let internal = ''
+let removable = ''
+let network = ''
+let loop = ''
 
 beforeEach(async () => {
-  processMocks.run.mockReset();
-  databaseMocks.meta = null;
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-index-sources-'));
-  home = path.join(root, 'home');
-  internal = path.join(root, 'projects');
-  removable = path.join(root, 'usb');
-  network = path.join(root, 'share');
-  loop = path.join(root, 'loop');
+  processMocks.run.mockReset()
+  databaseMocks.meta = null
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-index-sources-'))
+  home = path.join(root, 'home')
+  internal = path.join(root, 'projects')
+  removable = path.join(root, 'usb')
+  network = path.join(root, 'share')
+  loop = path.join(root, 'loop')
   await Promise.all(
-    [home, internal, removable, network, loop].map((directory) =>
-      fs.mkdir(directory, { recursive: true }),
-    ),
-  );
+    [home, internal, removable, network, loop].map((directory) => fs.mkdir(directory, { recursive: true })),
+  )
 
   processMocks.run.mockImplementation(async (executable: string) => {
     if (executable === 'findmnt') {
@@ -95,7 +93,7 @@ beforeEach(async () => {
         }),
         stderr: '',
         exitCode: 0,
-      };
+      }
     }
     return {
       stdout: JSON.stringify({
@@ -156,38 +154,33 @@ beforeEach(async () => {
       }),
       stderr: '',
       exitCode: 0,
-    };
-  });
-});
+    }
+  })
+})
 
 afterEach(async () => {
-  if (root) await fs.rm(root, { recursive: true, force: true });
-});
+  if (root) await fs.rm(root, { recursive: true, force: true })
+})
 
 describe('file index source service', () => {
   it('selects Home and internal drives by default while leaving removable and network mounts optional', async () => {
-    const discovered = await discoverFileIndexSources(home);
+    const discovered = await discoverFileIndexSources(home)
 
-    expect(discovered.map((source) => source.kind)).toEqual([
-      'home',
-      'removable',
-      'internal',
-      'network',
-    ]);
-    expect(discovered.some((source) => source.path === loop)).toBe(false);
-    const projects = discovered.find((source) => source.path === internal)!;
-    expect(projects.id).toBe('uuid:projects-uuid');
+    expect(discovered.map((source) => source.kind)).toEqual(['home', 'removable', 'internal', 'network'])
+    expect(discovered.some((source) => source.path === loop)).toBe(false)
+    const projects = discovered.find((source) => source.path === internal)!
+    expect(projects.id).toBe('uuid:projects-uuid')
 
-    const selection = await resolveSelectedFileIndexSources(home);
-    expect(selection.sources.map((source) => source.label)).toEqual(['Home', 'Projects']);
+    const selection = await resolveSelectedFileIndexSources(home)
+    expect(selection.sources.map((source) => source.label)).toEqual(['Home', 'Projects'])
 
-    const usb = discovered.find((source) => source.path === removable)!;
-    const explicit = await resolveSelectedFileIndexSources(home, [usb.id]);
-    expect(explicit.sources.map((source) => source.label)).toEqual(['Home', 'Backup USB']);
-  });
+    const usb = discovered.find((source) => source.path === removable)!
+    const explicit = await resolveSelectedFileIndexSources(home, [usb.id])
+    expect(explicit.sources.map((source) => source.label)).toEqual(['Home', 'Backup USB'])
+  })
 
   it('keeps missing locked sources visible but omits them from active File Manager roots', async () => {
-    const missingPath = path.join(root, 'missing-drive');
+    const missingPath = path.join(root, 'missing-drive')
     databaseMocks.meta = {
       status: 'complete',
       sources: [
@@ -208,20 +201,20 @@ describe('file index source service', () => {
           selectedByDefault: true,
         },
       ],
-    };
+    }
 
-    const state = await getFileIndexSourceState(home);
-    expect(state.locked).toBe(true);
+    const state = await getFileIndexSourceState(home)
+    expect(state.locked).toBe(true)
     expect(state.sources.find((source) => source.id === 'uuid:missing')).toMatchObject({
       path: missingPath,
       available: false,
-    });
+    })
 
-    await expect(getFileIndexAccessRoots(home)).resolves.toEqual([await fs.realpath(home)]);
-  });
+    await expect(getFileIndexAccessRoots(home)).resolves.toEqual([await fs.realpath(home)])
+  })
 
   it('follows a UUID-backed drive when its mount path changes', async () => {
-    const oldPath = path.join(root, 'old-projects-mount');
+    const oldPath = path.join(root, 'old-projects-mount')
     databaseMocks.meta = {
       status: 'complete',
       sources: [
@@ -242,16 +235,13 @@ describe('file index source service', () => {
           selectedByDefault: true,
         },
       ],
-    };
+    }
 
-    const state = await getFileIndexSourceState(home);
+    const state = await getFileIndexSourceState(home)
     expect(state.sources.find((source) => source.id === 'uuid:projects-uuid')).toMatchObject({
       path: internal,
       available: true,
-    });
-    await expect(getFileIndexAccessRoots(home)).resolves.toEqual([
-      await fs.realpath(home),
-      await fs.realpath(internal),
-    ]);
-  });
-});
+    })
+    await expect(getFileIndexAccessRoots(home)).resolves.toEqual([await fs.realpath(home), await fs.realpath(internal)])
+  })
+})

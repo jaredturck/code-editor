@@ -22,9 +22,9 @@ describe('agent write leases', () => {
   it('rejects a second task that tries to claim the same file', () => {
     acquireAgentWriteLease('/workspace/a.ts', 'executor', 'task-a', { now: 1000 })
 
-    expect(() =>
-      acquireAgentWriteLease('/workspace/a.ts', 'scout', 'task-b', { now: 2000 }),
-    ).toThrow(/Write lease conflict/)
+    expect(() => acquireAgentWriteLease('/workspace/a.ts', 'scout', 'task-b', { now: 2000 })).toThrow(
+      /Write lease conflict/,
+    )
   })
 
   it('releases every file owned by a settled task', () => {

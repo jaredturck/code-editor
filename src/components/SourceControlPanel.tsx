@@ -158,7 +158,11 @@ function SourceControlPanel({ rootPath, onOpenFile }: SourceControlPanelProps) {
         </button>
       </div>
 
-      {error && <div className="shrink-0 border-b border-[var(--border)] px-3 py-2 text-[11px] leading-4 text-red-400">{error}</div>}
+      {error && (
+        <div className="shrink-0 border-b border-[var(--border)] px-3 py-2 text-[11px] leading-4 text-red-400">
+          {error}
+        </div>
+      )}
 
       {(status?.nested_repositories.length ?? 0) > 0 && (
         <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2">
@@ -175,7 +179,8 @@ function SourceControlPanel({ rootPath, onOpenFile }: SourceControlPanelProps) {
                 className="rounded border border-amber-500/40 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-500/15"
                 disabled={busy}
                 onClick={() => {
-                  if (!window.confirm(`Remove nested Git metadata at ${git_path}? The project files will be kept.`)) return
+                  if (!window.confirm(`Remove nested Git metadata at ${git_path}? The project files will be kept.`))
+                    return
                   void run_action(() => window.editor_api.git.remove_nested_repository(rootPath, git_path))
                 }}
                 type="button"
@@ -245,7 +250,9 @@ function SourceControlPanel({ rootPath, onOpenFile }: SourceControlPanelProps) {
             >
               {change.path}
             </button>
-            <span className="w-4 text-center text-[10px] font-semibold text-[var(--muted)]">{change_badge(change.status)}</span>
+            <span className="w-4 text-center text-[10px] font-semibold text-[var(--muted)]">
+              {change_badge(change.status)}
+            </span>
             {change.staged && <span className="text-[9px] text-emerald-400">S</span>}
             {(change.unstaged || change.untracked) && <span className="text-[9px] text-amber-400">U</span>}
             {(change.unstaged || change.untracked) && (
@@ -276,7 +283,9 @@ function SourceControlPanel({ rootPath, onOpenFile }: SourceControlPanelProps) {
 
         {diff && (diff.staged || diff.working) && (
           <div className="border-t border-[var(--border)]">
-            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">Diff</div>
+            <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Diff
+            </div>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all border-t border-[var(--border)] bg-[var(--editor-bg)] p-2 font-mono text-[10px] leading-4 text-[var(--text)]">
               {[diff.staged && `STAGED\n${diff.staged}`, diff.working && `WORKING TREE\n${diff.working}`]
                 .filter(Boolean)
@@ -286,11 +295,15 @@ function SourceControlPanel({ rootPath, onOpenFile }: SourceControlPanelProps) {
         )}
 
         <div className="border-t border-[var(--border)]">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">History</div>
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            History
+          </div>
           {history.map((commit_item, index) => (
             <div className="relative flex gap-2 border-t border-[var(--border)]/40 px-3 py-2" key={commit_item.hash}>
               <div className="relative flex w-3 shrink-0 justify-center">
-                {index < history.length - 1 && <span className="absolute bottom-[-9px] top-2 w-px bg-[var(--border)]" />}
+                {index < history.length - 1 && (
+                  <span className="absolute bottom-[-9px] top-2 w-px bg-[var(--border)]" />
+                )}
                 <span className="relative mt-1 h-2 w-2 rounded-full border border-sky-400 bg-[var(--surface-2)]" />
               </div>
               <div className="min-w-0 flex-1">

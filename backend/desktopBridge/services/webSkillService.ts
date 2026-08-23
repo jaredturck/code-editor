@@ -1,4 +1,4 @@
-import '../../developmentSkillRegistry.js';
+import '../../developmentSkillRegistry.js'
 /** Feature service surface for the corresponding desktop bridge routes. */
 export {
   deleteSkillFromProfile,
@@ -8,4 +8,4 @@ export {
   runWebResearch,
   sendJson,
   upsertSkillForProfile,
-} from './bridgeServiceRuntime.js';
+} from './bridgeServiceRuntime.js'

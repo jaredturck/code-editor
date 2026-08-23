@@ -4,11 +4,11 @@
  * unreachable and caused every agent call to fail as "not implemented".
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as desktopBridge from '@/platform/desktopBridge';
-import * as notesStorage from '@/platform/notesStorage';
-import { createModuleBroker } from '@/platform/agent/runtime/toolBroker';
-import { DEFAULT_ORB_SETTINGS } from '@/platform/settingsStorage';
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as desktopBridge from '@/platform/desktopBridge'
+import * as notesStorage from '@/platform/notesStorage'
+import { createModuleBroker } from '@/platform/agent/runtime/toolBroker'
+import { DEFAULT_ORB_SETTINGS } from '@/platform/settingsStorage'
 
 function createBroker() {
   return createModuleBroker({
@@ -39,11 +39,11 @@ function createBroker() {
     requestAI: vi.fn(),
     onApprovalRequest: undefined,
     stepHistory: [],
-  });
+  })
 }
 
 describe('tool broker web.fetch dispatch', () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks())
 
   it('reaches the existing bridge-backed web.fetch handler', async () => {
     const fetched = {
@@ -51,20 +51,20 @@ describe('tool broker web.fetch dispatch', () => {
       title: 'Example article',
       content: 'Readable article text',
       charsRead: 21,
-    };
-    const fetchSpy = vi.spyOn(desktopBridge, 'powerWebFetch').mockResolvedValue(fetched);
-    vi.spyOn(notesStorage, 'addNote').mockReturnValue({ id: 'cached-web-note' } as never);
+    }
+    const fetchSpy = vi.spyOn(desktopBridge, 'powerWebFetch').mockResolvedValue(fetched)
+    vi.spyOn(notesStorage, 'addNote').mockReturnValue({ id: 'cached-web-note' } as never)
 
     const result = await createBroker().execute('web.fetch', {
       url: fetched.url,
       extract: 'text',
       maxChars: 4096,
-    });
+    })
 
     expect(fetchSpy).toHaveBeenCalledWith(fetched.url, {
       extract: 'text',
       maxChars: 4096,
-    });
-    expect(result).toEqual(fetched);
-  });
-});
+    })
+    expect(result).toEqual(fetched)
+  })
+})

@@ -27,16 +27,7 @@ interface SearchResult {
 
 type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media' | 'concepts'
 
-const document_extensions = new Set([
-  '.pdf',
-  '.docx',
-  '.xlsx',
-  '.pptx',
-  '.odt',
-  '.ods',
-  '.odp',
-  '.zip',
-])
+const document_extensions = new Set(['.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.zip'])
 
 function normalize_path(value: string) {
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -75,10 +66,7 @@ function format_timestamp(value?: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function concept_results_for_workspace(
-  root_path: string,
-  groups: BridgeFileSemanticConceptGroup[],
-) {
+function concept_results_for_workspace(root_path: string, groups: BridgeFileSemanticConceptGroup[]) {
   let visible_groups = 0
   const results: SearchResult[] = []
 
@@ -154,7 +142,11 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
     return items
       .filter((item) => path_is_in_workspace(rootPath, item.path))
-      .filter((item) => target === 'media' ? item.semanticType === 'image' || item.semanticType === 'video' : item.semanticType === 'text')
+      .filter((item) =>
+        target === 'media'
+          ? item.semanticType === 'image' || item.semanticType === 'video'
+          : item.semanticType === 'text',
+      )
       .filter((item) => !documents_only || is_document_path(item.path))
       .map((item) => ({
         path: item.path,
@@ -239,7 +231,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         const next_results = Array.isArray(response.results)
           ? response.results
               .map((item) => {
-                const source = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+                const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
                 const path = String(source.path || '')
                 return path ? { path, line: null, content: '', document: is_document_path(path) } : null
               })
@@ -248,7 +240,12 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         set_results(next_results)
         set_result_label('File-name matches')
         set_error(String(response.error || ''))
-      } else if (search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') {
+      } else if (
+        search_mode === 'semantic' ||
+        search_mode === 'documents' ||
+        search_mode === 'media' ||
+        search_mode === 'concepts'
+      ) {
         const status = await refresh_semantic_status(search_mode)
 
         if (!status || status.indexStatus !== 'ready') {
@@ -270,9 +267,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             searchFileSemanticIndex(search_query, 100, 'image'),
             searchFileSemanticIndex(search_query, 100, 'video'),
           ])
-          const media = [...images, ...videos]
-            .sort((left, right) => right.score - left.score)
-            .slice(0, 200)
+          const media = [...images, ...videos].sort((left, right) => right.score - left.score).slice(0, 200)
           set_results(semantic_results(media, 'media'))
           set_result_label('Image and video matches')
         } else if (search_mode === 'concepts') {
@@ -286,9 +281,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
           const groups = await searchFileSemanticConcepts(search_query, 10, 20)
           const discovered = concept_results_for_workspace(rootPath, groups)
           set_results(discovered.results)
-          set_result_label(
-            `${discovered.visible_groups} concept cluster${discovered.visible_groups === 1 ? '' : 's'}`,
-          )
+          set_result_label(`${discovered.visible_groups} concept cluster${discovered.visible_groups === 1 ? '' : 's'}`)
         } else {
           const response = await searchFileSemanticIndex(search_query, 200, 'text')
           const documents_only = search_mode === 'documents'
@@ -308,7 +301,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         const next_results = Array.isArray(response.matches)
           ? response.matches
               .map((item) => {
-                const source = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+                const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
                 const path = String(source.file || '')
                 return path
                   ? {
@@ -460,9 +453,27 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
               {search_mode === 'text' && (
                 <div className="ml-1 flex items-center gap-0.5">
-                  <SearchToggle active={match_case} label="Match case" onClick={() => set_match_case((value) => !value)}>Aa</SearchToggle>
-                  <SearchToggle active={match_word} label="Match whole word" onClick={() => set_match_word((value) => !value)}>ab</SearchToggle>
-                  <SearchToggle active={use_regex} label="Use regular expression" onClick={() => set_use_regex((value) => !value)}>.*</SearchToggle>
+                  <SearchToggle
+                    active={match_case}
+                    label="Match case"
+                    onClick={() => set_match_case((value) => !value)}
+                  >
+                    Aa
+                  </SearchToggle>
+                  <SearchToggle
+                    active={match_word}
+                    label="Match whole word"
+                    onClick={() => set_match_word((value) => !value)}
+                  >
+                    ab
+                  </SearchToggle>
+                  <SearchToggle
+                    active={use_regex}
+                    label="Use regular expression"
+                    onClick={() => set_use_regex((value) => !value)}
+                  >
+                    .*
+                  </SearchToggle>
                 </div>
               )}
             </div>
@@ -475,17 +486,27 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                   placeholder="Replace"
                   type="text"
                 />
-                <SearchToggle active={preserve_case} label="Preserve case" onClick={() => set_preserve_case((value) => !value)}>AB</SearchToggle>
+                <SearchToggle
+                  active={preserve_case}
+                  label="Preserve case"
+                  onClick={() => set_preserve_case((value) => !value)}
+                >
+                  AB
+                </SearchToggle>
               </div>
             )}
 
-            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') && (
+            {(search_mode === 'semantic' ||
+              search_mode === 'documents' ||
+              search_mode === 'media' ||
+              search_mode === 'concepts') && (
               <div className="px-0.5 text-[10px] leading-4 text-[var(--muted)]">
-                {semantic_status || (search_mode === 'media'
-                  ? 'Uses the existing encrypted IRIS CLIP image/video index.'
-                  : search_mode === 'concepts'
-                    ? 'Uses the existing encrypted IRIS concept centroids and memberships.'
-                    : 'Uses the existing encrypted IRIS text-embedding index.')}
+                {semantic_status ||
+                  (search_mode === 'media'
+                    ? 'Uses the existing encrypted IRIS CLIP image/video index.'
+                    : search_mode === 'concepts'
+                      ? 'Uses the existing encrypted IRIS concept centroids and memberships.'
+                      : 'Uses the existing encrypted IRIS text-embedding index.')}
               </div>
             )}
           </div>
@@ -499,10 +520,14 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               <div className="truncate text-[11px] font-medium text-[var(--text)]">{document_inspection.name}</div>
               <div className="mt-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">
                 {document_inspection.sourceType} · {document_inspection.extractionMethod}
-                {document_inspection.pagesRead ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}` : ''}
+                {document_inspection.pagesRead
+                  ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}`
+                  : ''}
               </div>
               {document_inspection.archiveEntry && (
-                <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">Archive entry: {document_inspection.archiveEntry}</div>
+                <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">
+                  Archive entry: {document_inspection.archiveEntry}
+                </div>
               )}
             </div>
             <button
@@ -548,10 +573,16 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                       {result.line ? `:${result.line}` : ''}
                     </span>
                     {result.document && <span className="shrink-0 text-[9px] text-[var(--muted)]">DOC</span>}
-                    {result.semantic_type === 'image' && <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>}
-                    {result.semantic_type === 'video' && <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>}
+                    {result.semantic_type === 'image' && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>
+                    )}
+                    {result.semantic_type === 'video' && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>
+                    )}
                     {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && (
-                      <span className="shrink-0 text-[9px] text-[var(--muted)]">{format_timestamp(result.timestamp_ms)}</span>
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">
+                        {format_timestamp(result.timestamp_ms)}
+                      </span>
                     )}
                     {typeof result.score === 'number' && (
                       <span className="shrink-0 text-[9px] text-[var(--muted)]">
@@ -565,7 +596,9 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                     </div>
                   )}
                   {result.content && (
-                    <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">{result.content}</div>
+                    <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">
+                      {result.content}
+                    </div>
                   )}
                 </button>
                 {result.semantic && (

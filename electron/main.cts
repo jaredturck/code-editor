@@ -1,4 +1,18 @@
-import { app, BrowserWindow, desktopCapturer, dialog, globalShortcut, ipcMain, Menu, net, protocol, safeStorage, session, shell, WebContentsView } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  net,
+  protocol,
+  safeStorage,
+  session,
+  shell,
+  WebContentsView,
+} from 'electron'
 import { open, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -47,7 +61,11 @@ import {
   updateLocalBridgePermissions,
   type BridgePermissionState,
 } from './platform/localBridge.cjs'
-import { loadOrCreateStorageKey, removeLegacyRendererStorage, type StorageKeyContext } from './platform/storageKeyStore.cjs'
+import {
+  loadOrCreateStorageKey,
+  removeLegacyRendererStorage,
+  type StorageKeyContext,
+} from './platform/storageKeyStore.cjs'
 
 interface BrowserEntry {
   owner_id: number
@@ -629,9 +647,8 @@ ipcMain.handle('ai:transcribe', async (_event, base_url: string, speech_model: s
   return transcribe_audio(base_url, speech_model, audio)
 })
 
-ipcMain.handle(
-  'browser:inspect-runtime',
-  async (_event, url: string, options?: BrowserInspectionOptions) => inspect_local_browser_runtime(url, options),
+ipcMain.handle('browser:inspect-runtime', async (_event, url: string, options?: BrowserInspectionOptions) =>
+  inspect_local_browser_runtime(url, options),
 )
 
 ipcMain.handle('browser:create', (event, browser_id: number, initial_url: string) => {

@@ -19,23 +19,23 @@
  * fallback payload.
  */
 
-import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security';
+import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
 
-type ControllerTier = 'lean' | 'structured';
-type ControllerRole = 'orchestrator' | 'executor' | 'scout' | 'consultant' | 'overwatcher';
+type ControllerTier = 'lean' | 'structured'
+type ControllerRole = 'orchestrator' | 'executor' | 'scout' | 'consultant' | 'overwatcher'
 
 interface ControllerPromptOptions {
-  tier?: ControllerTier;
-  orchestration?: boolean;
-  debriefLine?: string;
+  tier?: ControllerTier
+  orchestration?: boolean
+  debriefLine?: string
   /** Ability tags for the backing model (modelTags.deriveModelTags) — compose capability fragments. */
-  tags?: readonly string[];
+  tags?: readonly string[]
   /** This agent's role — composes a short "who you are in the mesh" fragment. */
-  role?: ControllerRole;
+  role?: ControllerRole
   /** When the communication bridge + peer consultation are on, add the light mesh suggestion. */
-  meshEnabled?: boolean;
+  meshEnabled?: boolean
   /** Planning mode (/plan): the agent is executing a user-approved plan split across agents. */
-  planning?: boolean;
+  planning?: boolean
 }
 
 // Tag → a single, additive capability fragment. Only tags that change BEHAVIOUR appear here;
@@ -45,13 +45,12 @@ const TAG_FRAGMENTS: Readonly<Record<string, string>> = {
   reasoning:
     'You deliberate internally — think, then act. Do not narrate long chain-of-thought in prose; keep any visible reasoning brief.',
   code: 'For code work, prefer running and editing via the terminal/file tools and verify with a build or test before declaring done.',
-  vision:
-    'You can interpret images/screenshots — use screen.capabilities or an attached image when a task is visual.',
+  vision: 'You can interpret images/screenshots — use screen.capabilities or an attached image when a task is visual.',
   'long-context':
     'You have a large context window: you can read more of a file/result before summarizing rather than truncating early.',
   local:
     'You are a smaller local model — lean on the structured tools and concrete recipes; keep your actions simple and explicit.',
-};
+}
 
 const ROLE_FRAGMENTS: Readonly<Record<ControllerRole, string>> = {
   orchestrator:
@@ -64,10 +63,10 @@ const ROLE_FRAGMENTS: Readonly<Record<ControllerRole, string>> = {
     'You are being consulted as a peer. Answer the focused question from your own knowledge, terse and concrete; do not use tools unless asked.',
   overwatcher:
     'You are the Overwatcher: a reasoning model that supervises the active agent. Your only job is to judge task complexity and guide it — assess how hard the task is, give concise steering, and decide whether the agent should pull in a stronger or specialist peer. You do not execute the task yourself; you advise.',
-};
+}
 
 interface ControllerContentBlock extends Record<string, unknown> {
-  type: string;
+  type: string
 }
 
 // ── System prompt ─────────────────────────────────────────────────────────────
@@ -86,14 +85,14 @@ export function buildControllerSystemPrompt({
   meshEnabled = false,
   planning = false,
 }: ControllerPromptOptions = {}) {
-  const lean = tier !== 'structured';
-  const sections = [];
+  const lean = tier !== 'structured'
+  const sections = []
 
   sections.push(
     '# Role\n' +
       "You are IRIS's agent controller. Take exactly ONE action per turn: call one tool to make " +
       'progress, or — if the task is complete or needs no tools — reply with your final answer.',
-  );
+  )
 
   sections.push(
     '# Reasoning\n' +
@@ -101,21 +100,21 @@ export function buildControllerSystemPrompt({
       '(shown as a thinking block); for a simple reply or an obvious action, just do it — no preamble. ' +
       'Never pad with filler or restate the action. Do not narrate your work as numbered "steps" or ' +
       'say "the first/next step" — describe what you are doing in plain language.',
-  );
+  )
 
   const acting = [
     '# Acting',
     '- Answer directly from your own knowledge for conceptual or explanatory questions; reach for ' +
       'tools when asked to inspect, run, read, write, search, launch, or verify something.',
-  ];
+  ]
   if (lean) {
     acting.push(
       '- Prefer `terminal.exec` for discovery and system work (ls, find, rg, stat, ps), builds/tests, git, and genuine bulk transformations. For localized edits to existing source, read the relevant region and prefer `files.edit`; use `files.patch` for a unified multi-hunk diff and `files.write` only for a new file or a genuine wholesale rewrite so editor revision/collision safeguards remain in the path.',
-    );
+    )
   } else {
     acting.push(
       '- Prefer the structured file tools over hand-written shell for file content. For a localized change to existing source, read the relevant region and use `files.edit` with an exact unique oldText/newText replacement; use `files.patch` for a unified multi-hunk diff, and `files.write` only for a new file or genuine full rewrite. Use terminal.exec for commands, tests, discovery, and bulk transformations when no dedicated editor-aware tool fits.',
-    );
+    )
   }
   acting.push(
     '- For software development, inspect the current project and toolchain before substantive changes. Preserve existing conventions; when environment or dependency setup is missing, establish only the normal project-local setup for the ecosystem you actually observe. After changes, choose appropriate real-world verification, and if it fails, diagnose the exact failure, fix it, and verify again before finishing.',
@@ -137,22 +136,22 @@ export function buildControllerSystemPrompt({
       'destructive actions still need approval first.',
     '- Only claim a tool or permission is missing after an actual tool error in this session shows it.',
     '- Treat every tool result as new evidence. When an action fails, reason from the exact error, the original goal, and prior results before choosing what to do next. Do not blindly repeat an unchanged failed action; retry only when you have a concrete reason the outcome may differ.',
-  );
-  sections.push(acting.join('\n'));
+  )
+  sections.push(acting.join('\n'))
 
   // Tag/role-composed fragments (Workstream D): a prompt built from WHO this model is, not a
   // binary capable-vs-weak branch. Stable per model+role per session → caches cleanly.
   const tagLines = Array.from(new Set((Array.isArray(tags) ? tags : []).map(String)))
     .map((t) => TAG_FRAGMENTS[t])
-    .filter(Boolean);
+    .filter(Boolean)
   if (tagLines.length) {
-    sections.push(`# Your capabilities\n${tagLines.map((l) => `- ${l}`).join('\n')}`);
+    sections.push(`# Your capabilities\n${tagLines.map((l) => `- ${l}`).join('\n')}`)
   }
   if (role && ROLE_FRAGMENTS[role]) {
-    sections.push(`# Your role\n${ROLE_FRAGMENTS[role]}`);
+    sections.push(`# Your role\n${ROLE_FRAGMENTS[role]}`)
   }
 
-  sections.push('# Trust boundaries\n' + UNTRUSTED_CONTENT_SYSTEM_RULES);
+  sections.push('# Trust boundaries\n' + UNTRUSTED_CONTENT_SYSTEM_RULES)
 
   sections.push(
     '# Skills\n' +
@@ -163,7 +162,7 @@ export function buildControllerSystemPrompt({
       'alone is just a pointer, not the method. If an active skill is clearly irrelevant, call ' +
       'skills.offload to free context. Skills are guidance, not law: apply only what fits, and if a ' +
       'skill conflicts with user intent, safety, or observed results, prioritize correctness.',
-  );
+  )
 
   if (orchestration) {
     sections.push(
@@ -175,7 +174,7 @@ export function buildControllerSystemPrompt({
         "subproblem's answer, a complexity read — use the peer tools below (agent.consult / agent.review " +
         '/ agent.overwatch), which every model may call. If you are not the orchestrator, do NOT try ' +
         'agent.delegate; consult instead.',
-    );
+    )
   }
 
   // Light, opt-in mesh suggestion — a guard, NOT a mandate. Only when the bridge is on.
@@ -191,7 +190,7 @@ export function buildControllerSystemPrompt({
         'you agree, delegate it to that peer (it runs under its own permissions, not yours). If an ' +
         'Overwatcher is configured, agent.overwatch asks it to gauge complexity and advise whether to ' +
         'escalate; heed its guidance. You own the final answer.',
-    );
+    )
   }
 
   if (planning) {
@@ -204,7 +203,7 @@ export function buildControllerSystemPrompt({
         'agents collaborate via the peer tools. Keep each todo under its owner and update statuses ' +
         "as parts complete. Integrate the parts into one coherent result; verify others' work before " +
         'trusting it.',
-    );
+    )
   }
 
   if (!lean) {
@@ -214,55 +213,58 @@ export function buildControllerSystemPrompt({
         '{"thinking":"your reasoning for this turn",' +
         '"todo_updates":[{"op":"add|set|set_status|rename|remove","id":0,"text":"","status":"pending|in_progress|done|blocked"}],' +
         '"action":{"type":"tool|final","tool":"tool name when type=tool","args":{},"message":"answer when type=final"}}',
-    );
+    )
   } else {
     sections.push(
       '# Progress\n' +
         'Only for genuinely multi-part work, track the real tasks with the todo.update tool (keep one ' +
         'in_progress, mark each done or blocked) — a simple request needs no todo list. Reply with plain ' +
         'text (not a JSON control object) when the task is complete.',
-    );
+    )
   }
 
-  let prompt = sections.join('\n\n');
-  if (debriefLine) prompt += `\n\n# Session context\n${debriefLine}`;
-  return prompt;
+  let prompt = sections.join('\n\n')
+  if (debriefLine) prompt += `\n\n# Session context\n${debriefLine}`
+  return prompt
 }
 
 // ── Per-step user turn (lean / native path): natural-language state header ──────
 
 function _fmtTodos(todos: unknown) {
-  if (!Array.isArray(todos) || !todos.length) return 'none yet';
+  if (!Array.isArray(todos) || !todos.length) return 'none yet'
   return todos
     .slice(0, 12)
     .map((t) => `- [${String(t?.status || 'pending')}] ${String(t?.text || '').slice(0, 120)}`)
-    .join('\n');
+    .join('\n')
 }
 
 // Formats recent agent actions into a compact controller-prompt section.
 function _fmtRecentSteps(steps: unknown) {
-  if (!Array.isArray(steps) || !steps.length) return 'nothing yet';
+  if (!Array.isArray(steps) || !steps.length) return 'nothing yet'
   return steps
     .slice(-6)
     .map((s) => {
-      const status = s?.ok ? 'ok' : `error: ${String(s?.error || '').slice(0, 120)}`;
-      const reflex = String(s?.reflexGuidance || '').replace(/\s+/g, ' ').trim().slice(0, 300);
-      return `- ${String(s?.tool || '?')}: ${status} — ${String(s?.summary || '').slice(0, 200)}${reflex ? ` — recovery guidance: ${reflex}` : ''}`;
+      const status = s?.ok ? 'ok' : `error: ${String(s?.error || '').slice(0, 120)}`
+      const reflex = String(s?.reflexGuidance || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 300)
+      return `- ${String(s?.tool || '?')}: ${status} — ${String(s?.summary || '').slice(0, 200)}${reflex ? ` — recovery guidance: ${reflex}` : ''}`
     })
-    .join('\n');
+    .join('\n')
 }
 
 // Formats active skill cards into the controller prompt without loading full skill bodies.
 function _fmtSkills(skills: any) {
-  const active: any[] = Array.isArray(skills?.active_skills) ? skills.active_skills : [];
-  const cards: any[] = Array.isArray(skills?.cards) ? skills.cards : [];
-  const lines: string[] = [];
+  const active: any[] = Array.isArray(skills?.active_skills) ? skills.active_skills : []
+  const cards: any[] = Array.isArray(skills?.cards) ? skills.cards : []
+  const lines: string[] = []
   if (active.length) {
-    lines.push('Active (full instructions already in context):');
-    for (const s of active.slice(0, 8)) lines.push(`- ${s.title}`);
+    lines.push('Active (full instructions already in context):')
+    for (const s of active.slice(0, 8)) lines.push(`- ${s.title}`)
   }
-  const activeIds = new Set(active.map((s) => String(s.id)));
-  const loadable = cards.filter((c) => !activeIds.has(String(c.id)));
+  const activeIds = new Set(active.map((s) => String(s.id)))
+  const loadable = cards.filter((c) => !activeIds.has(String(c.id)))
   if (loadable.length) {
     // Each card leads with its description (when-to-use) — that is what the model
     // matches the task against before deciding to skills.load its full body.
@@ -270,7 +272,7 @@ function _fmtSkills(skills: any) {
       active.length
         ? 'Loadable — call skills.load <id> to read the full instructions:'
         : `${loadable.length} skill card(s) — call skills.load <id> to read the full instructions:`,
-    );
+    )
     // Cards are already tier-sized upstream (agentSkillEngine: the whole relevant
     // set for lean, a short menu for structured), so show them all here rather than
     // re-cutting the menu at the render layer.
@@ -280,10 +282,10 @@ function _fmtSkills(skills: any) {
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 240)}`,
-      );
+      )
     }
   }
-  return lines.length ? lines.join('\n') : 'none relevant';
+  return lines.length ? lines.join('\n') : 'none relevant'
 }
 
 /**
@@ -296,24 +298,24 @@ export function buildControllerStateHeader(
   payload: any,
   screenContext?: string | null,
 ): string | ControllerContentBlock[] {
-  const guard = payload?.constraints?.guardrails || {};
-  const recall = payload?.relevant_memory || {};
+  const guard = payload?.constraints?.guardrails || {}
+  const recall = payload?.relevant_memory || {}
 
-  const todoList = Array.isArray(payload?.todos) ? payload.todos : [];
-  const recentSteps = Array.isArray(payload?.previous_steps) ? payload.previous_steps : [];
+  const todoList = Array.isArray(payload?.todos) ? payload.todos : []
+  const recentSteps = Array.isArray(payload?.previous_steps) ? payload.previous_steps : []
   // No step counter: telling the model "step N of M" just anchors it to a budget it
   // shouldn't reason about. It works the task, not a step count; the runtime owns pacing.
   const parts = [
     `# Task\n${String(payload?.user_request || '').trim() || '(no explicit request — use conversation context)'}`,
-  ];
+  ]
   // Omit empty sections so a trivial first turn stays tiny (no "none yet" filler).
-  if (todoList.length) parts.push(`## Todos\n${_fmtTodos(todoList)}`);
-  if (recentSteps.length) parts.push(`## Recent actions\n${_fmtRecentSteps(recentSteps)}`);
-  parts.push(`## Skills\n${_fmtSkills(payload?.skills)}`);
+  if (todoList.length) parts.push(`## Todos\n${_fmtTodos(todoList)}`)
+  if (recentSteps.length) parts.push(`## Recent actions\n${_fmtRecentSteps(recentSteps)}`)
+  parts.push(`## Skills\n${_fmtSkills(payload?.skills)}`)
 
   // Relevance-gated recall: only notes that actually matched this request. If the
   // model needs more, it can call memory.query. Nothing is injected when empty.
-  const recallNotes = Array.isArray(recall.notes) ? recall.notes : [];
+  const recallNotes = Array.isArray(recall.notes) ? recall.notes : []
   if (recallNotes.length) {
     const rendered = recallNotes
       .slice(0, 3)
@@ -324,43 +326,41 @@ export function buildControllerStateHeader(
             .trim()
             .slice(0, 280)}`,
       )
-      .join('\n');
-    const header = recall.resume_intent
-      ? 'Relevant memory (resuming earlier work)'
-      : 'Relevant memory';
-    parts.push(`## ${header}\n${rendered}`);
+      .join('\n')
+    const header = recall.resume_intent ? 'Relevant memory (resuming earlier work)' : 'Relevant memory'
+    parts.push(`## ${header}\n${rendered}`)
   } else if (recall.resume_intent) {
     parts.push(
       '## Continuity\nUser intends to resume earlier work, but no prior note matched. Ask what to resume if unclear, or use memory.query.',
-    );
+    )
   }
 
   // Per-chat encrypted memory: the durable plan for THIS chat. Always shown so
   // the agent keeps the goal in sight; it maintains the file via chat.remember.
   // Earlier turns are NOT here — pull them with chat.recall only if this relates.
-  const chatMemory = String(payload?.chat_memory || '').trim();
+  const chatMemory = String(payload?.chat_memory || '').trim()
   if (chatMemory) {
     parts.push(
       `## Chat memory (your plan for this chat)\n${chatMemory.slice(0, 2000)}\n\nThis is your continuity for this chat — keep it current with chat.remember as goals evolve: record progress and the concrete next steps so the work can be resumed later. chat.recall pulls earlier context if this request relates to it.`,
-    );
+    )
   } else if (payload?.chat_memory !== undefined) {
     parts.push(
       '## Chat memory\n(empty) — on multi-step or ongoing work, record the goal and plan with chat.remember so you never lose the thread.',
-    );
+    )
   }
 
   if (guard.user_approved_for_risky_tools) {
-    parts.push('## Permissions\nUser has pre-approved risky tools for this run.');
+    parts.push('## Permissions\nUser has pre-approved risky tools for this run.')
   }
 
-  parts.push('Take the next action now.');
-  const text = parts.join('\n\n');
+  parts.push('Take the next action now.')
+  const text = parts.join('\n\n')
 
   if (screenContext) {
     return [
       { type: 'text', text },
       { type: 'image_url', image_url: { url: screenContext } },
-    ];
+    ]
   }
-  return text;
+  return text
 }

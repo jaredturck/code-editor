@@ -2,19 +2,19 @@ export const ORB_SIZES = {
   small: 56,
   medium: 72,
   large: 140,
-} as const;
+} as const
 
-export type OrbSizeName = keyof typeof ORB_SIZES;
+export type OrbSizeName = keyof typeof ORB_SIZES
 
 export interface AccentPreset {
-  label: string;
-  main: string;
-  soft: string;
-  rgb: string;
-  secondary: string;
-  orbHot: string;
-  orbWarm: string;
-  orbBright: string;
+  label: string
+  main: string
+  soft: string
+  rgb: string
+  secondary: string
+  orbHot: string
+  orbWarm: string
+  orbBright: string
 }
 
 // Solid hint/accent colours. These are theme-neutral building blocks; each theme below points at
@@ -211,9 +211,9 @@ export const ORB_ACCENT_PRESETS = {
     orbWarm: '#64748B',
     orbBright: '#EAF0F7',
   },
-} as const satisfies Record<string, AccentPreset>;
+} as const satisfies Record<string, AccentPreset>
 
-export type OrbAccentName = keyof typeof ORB_ACCENT_PRESETS;
+export type OrbAccentName = keyof typeof ORB_ACCENT_PRESETS
 
 // Each theme carries a default accent key so its hint colour coordinates with the palette.
 export const ORB_THEME_PRESETS = {
@@ -231,42 +231,40 @@ export const ORB_THEME_PRESETS = {
   nightOwl: { label: 'Night Owl', accent: 'blue' },
   solarizedDark: { label: 'Solarized', accent: 'cyan' },
   githubDark: { label: 'GitHub', accent: 'blue' },
-} as const satisfies Record<string, { label: string; accent: OrbAccentName }>;
+} as const satisfies Record<string, { label: string; accent: OrbAccentName }>
 
-export type OrbThemeName = keyof typeof ORB_THEME_PRESETS;
+export type OrbThemeName = keyof typeof ORB_THEME_PRESETS
 
 export function normalizeOrbSize(value: unknown): OrbSizeName {
-  return value === 'small' || value === 'large' ? value : 'medium';
+  return value === 'small' || value === 'large' ? value : 'medium'
 }
 
 export function normalizeOrbTheme(value: unknown): OrbThemeName {
   // Legacy alias: the warm-grey theme was renamed 'claude' → 'ember'. Preserve old saved selections.
-  if (value === 'claude') return 'ember';
-  return typeof value === 'string' && value in ORB_THEME_PRESETS ? (value as OrbThemeName) : 'dark';
+  if (value === 'claude') return 'ember'
+  return typeof value === 'string' && value in ORB_THEME_PRESETS ? (value as OrbThemeName) : 'dark'
 }
 
 export function normalizeOrbAccent(value: unknown): OrbAccentName {
-  return typeof value === 'string' && value in ORB_ACCENT_PRESETS
-    ? (value as OrbAccentName)
-    : 'blue';
+  return typeof value === 'string' && value in ORB_ACCENT_PRESETS ? (value as OrbAccentName) : 'blue'
 }
 
 // Resolves the effective accent name. An explicit preset wins; anything else (the 'auto' sentinel,
 // undefined, or a stale value) falls back to the selected theme's default so hints follow the theme.
 export function resolveAccentName(theme: unknown, accent: unknown): OrbAccentName {
-  if (typeof accent === 'string' && accent in ORB_ACCENT_PRESETS) return accent as OrbAccentName;
-  return ORB_THEME_PRESETS[normalizeOrbTheme(theme)].accent;
+  if (typeof accent === 'string' && accent in ORB_ACCENT_PRESETS) return accent as OrbAccentName
+  return ORB_THEME_PRESETS[normalizeOrbTheme(theme)].accent
 }
 
 export function orbSizePixels(value: unknown): number {
-  return ORB_SIZES[normalizeOrbSize(value)];
+  return ORB_SIZES[normalizeOrbSize(value)]
 }
 
 export function accentPreset(value: unknown): AccentPreset {
-  return ORB_ACCENT_PRESETS[normalizeOrbAccent(value)];
+  return ORB_ACCENT_PRESETS[normalizeOrbAccent(value)]
 }
 
 // Theme-aware accent resolution (use this where the active theme is known so 'auto' follows it).
 export function resolveAccentPreset(theme: unknown, accent: unknown): AccentPreset {
-  return ORB_ACCENT_PRESETS[resolveAccentName(theme, accent)];
+  return ORB_ACCENT_PRESETS[resolveAccentName(theme, accent)]
 }

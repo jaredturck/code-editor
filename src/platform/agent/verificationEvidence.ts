@@ -47,7 +47,9 @@ export interface VerificationGateResult {
 }
 
 function compactText(value: unknown, maxChars = 320) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return text.length <= maxChars ? text : `${text.slice(0, maxChars)}…`
 }
 
@@ -78,7 +80,7 @@ function evaluateCandidateStatus(toolName: string, result: Record<string, unknow
   if (toolName === 'terminal.exec' || toolName === 'launch.run') {
     const exitCode = Number(result.exitCode)
     if (!Number.isFinite(exitCode)) return 'unknown' as const
-    return exitCode === 0 ? 'passed' as const : 'failed' as const
+    return exitCode === 0 ? ('passed' as const) : ('failed' as const)
   }
 
   if (toolName === 'browser.inspect') {
@@ -99,11 +101,17 @@ function evaluateCandidateStatus(toolName: string, result: Record<string, unknow
     const reviews = Array.isArray(result.reviews) ? result.reviews : []
     const reviewerVerdicts = reviews
       .filter((review) => review && typeof review === 'object')
-      .map((review) => String((review as Record<string, unknown>).verdict || '').trim().toLowerCase())
+      .map((review) =>
+        String((review as Record<string, unknown>).verdict || '')
+          .trim()
+          .toLowerCase(),
+      )
     const substantive = reviewerVerdicts.filter((verdict) => ['approved', 'changes_requested'].includes(verdict))
     if (!substantive.length) return 'unknown' as const
     if (substantive.includes('changes_requested')) return 'failed' as const
-    const verdict = String(result.overallVerdict || '').trim().toLowerCase()
+    const verdict = String(result.overallVerdict || '')
+      .trim()
+      .toLowerCase()
     if (verdict === 'approved' && substantive.includes('approved')) return 'passed' as const
     if (verdict === 'changes_requested' || verdict === 'mixed' || verdict === 'rejected') return 'failed' as const
     return 'unknown' as const
@@ -142,7 +150,6 @@ function candidateDetail(toolName: string, result: Record<string, unknown>) {
   return 'Verification status is unknown.'
 }
 
-
 function pruneVerificationCandidates(state: VerificationState) {
   const entries = Object.values(state.candidates)
   if (entries.length <= MAX_PERSISTED_CANDIDATES) return
@@ -157,9 +164,7 @@ function pruneVerificationCandidates(state: VerificationState) {
     .slice(0, MAX_PERSISTED_CANDIDATES)) {
     retained.add(candidate.id)
   }
-  state.candidates = Object.fromEntries(
-    Object.entries(state.candidates).filter(([id]) => retained.has(id)),
-  )
+  state.candidates = Object.fromEntries(Object.entries(state.candidates).filter(([id]) => retained.has(id)))
 }
 
 export function snapshotVerificationState(state: VerificationState): VerificationState {
@@ -171,15 +176,12 @@ export function snapshotVerificationState(state: VerificationState): Verificatio
     mutationEpoch: state.mutationEpoch,
     nextCandidate: state.nextCandidate,
     requirements: [...state.requirements],
-    candidates: Object.fromEntries(
-      Object.entries(state.candidates).map(([id, candidate]) => [id, { ...candidate }]),
-    ),
+    candidates: Object.fromEntries(Object.entries(state.candidates).map(([id, candidate]) => [id, { ...candidate }])),
     evidence: Object.fromEntries(
       Object.entries(state.evidence).map(([requirement, evidence]) => [requirement, { ...evidence }]),
     ),
   }
 }
-
 
 export function buildVerificationContractKey(plan: Record<string, unknown> | null | undefined) {
   if (!plan) return 'none'
@@ -207,11 +209,7 @@ export function createVerificationState(contractKey: string, required: boolean):
   }
 }
 
-export function ensureVerificationState(
-  value: unknown,
-  contractKey: string,
-  required: boolean,
-): VerificationState {
+export function ensureVerificationState(value: unknown, contractKey: string, required: boolean): VerificationState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return createVerificationState(contractKey, required)
   }
@@ -231,17 +229,11 @@ export function ensureVerificationState(
   return state
 }
 
-export function declareVerificationRequirements(
-  state: VerificationState,
-  values: unknown,
-  mode = 'replace',
-) {
+export function declareVerificationRequirements(state: VerificationState, values: unknown, mode = 'replace') {
   const next = uniqueRequirements(values)
   if (!next.length) throw new Error('verification.require needs at least one model-chosen requirement.')
 
-  state.requirements = mode === 'add'
-    ? uniqueRequirements([...state.requirements, ...next])
-    : next
+  state.requirements = mode === 'add' ? uniqueRequirements([...state.requirements, ...next]) : next
 
   for (const requirement of Object.keys(state.evidence)) {
     if (!state.requirements.includes(requirement)) delete state.evidence[requirement]
@@ -277,11 +269,7 @@ export function addVerificationCandidate(
   return candidate
 }
 
-export function recordVerificationEvidence(
-  state: VerificationState,
-  requirement: unknown,
-  candidateId: unknown,
-) {
+export function recordVerificationEvidence(state: VerificationState, requirement: unknown, candidateId: unknown) {
   const requirementId = compactText(requirement, 80)
   const candidateKey = String(candidateId || '').trim()
   if (!state.requirements.includes(requirementId)) {
@@ -334,9 +322,8 @@ export function evaluateVerificationGate(state: VerificationState): Verification
     const candidate = evidence ? state.candidates[evidence.candidateId] : null
     let status: VerificationStatus | 'missing' | 'stale' = 'missing'
     if (candidate && evidence) {
-      status = evidence.epoch === state.mutationEpoch && candidate.epoch === state.mutationEpoch
-        ? candidate.status
-        : 'stale'
+      status =
+        evidence.epoch === state.mutationEpoch && candidate.epoch === state.mutationEpoch ? candidate.status : 'stale'
     }
     return {
       requirement,

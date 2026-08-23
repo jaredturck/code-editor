@@ -15,6 +15,6 @@ export {
   readJsonBody,
   resolvePath,
   sendJson,
-} from './bridgeServiceRuntime.js';
+} from './bridgeServiceRuntime.js'
 
-export { commandExists, runProcess } from '../shared/processExecution.js';
+export { commandExists, runProcess } from '../shared/processExecution.js'

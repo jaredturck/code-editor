@@ -3,46 +3,38 @@
 import {
   buildControllerSystemPrompt,
   buildControllerStateHeader,
-} from '../../../src/platform/agent/controllerPrompt.js';
+} from '../../../src/platform/agent/controllerPrompt.js'
 import {
   looksLikeControllerSchemaText,
   recoverDecisionFromSchemaText,
-} from '../../../src/platform/agent/controllerDecision.js';
+} from '../../../src/platform/agent/controllerDecision.js'
 import {
   buildJsonSchemaTools,
   toAnthropicTools,
   toGeminiTools,
   toOpenAITools,
-} from '../../../src/platform/agent/toolSchema.js';
-import { TOOL_DEFINITIONS } from '../../../src/platform/agent/toolCatalog.js';
-import { estimateMessagesTokens, estimateTokenCount } from '../../../src/platform/chatContextBuilder.js';
+} from '../../../src/platform/agent/toolSchema.js'
+import { TOOL_DEFINITIONS } from '../../../src/platform/agent/toolCatalog.js'
+import { estimateMessagesTokens, estimateTokenCount } from '../../../src/platform/chatContextBuilder.js'
 import {
   getModelCapabilities,
   resolveContextWindow,
   resolveMaxOutputTokens,
-} from '../../../src/platform/modelProfiles.js';
-import {
-  buildSubAgentModelMessages,
-  parseSubAgentModelJson,
-} from '../../../src/platform/subAgentRuntime.js';
-import {
-  buildSTP,
-  buildSTPSystemPrompt,
-  summariseSTP,
-  validateSTPResult,
-} from '../../../src/platform/stpBuilder.js';
-import type { BenchmarkDefinition } from '../core/types.js';
+} from '../../../src/platform/modelProfiles.js'
+import { buildSubAgentModelMessages, parseSubAgentModelJson } from '../../../src/platform/subAgentRuntime.js'
+import { buildSTP, buildSTPSystemPrompt, summariseSTP, validateSTPResult } from '../../../src/platform/stpBuilder.js'
+import type { BenchmarkDefinition } from '../core/types.js'
 
 /** Creates a large but bounded agent transcript for token-estimation and context-cost benchmarks. */
 function transcript(turns = 200): Array<{ role: string; content: string }> {
-  const messages = [{ role: 'system', content: 'IRIS benchmark system instructions.' }];
+  const messages = [{ role: 'system', content: 'IRIS benchmark system instructions.' }]
   for (let index = 0; index < turns; index += 1) {
     messages.push({
       role: index % 2 ? 'assistant' : 'user',
       content: `Benchmark turn ${index}. ${'The agent preserves relevant context and tool results. '.repeat(20)}`,
-    });
+    })
   }
-  return messages;
+  return messages
 }
 
 /** Creates a representative delegated task with tools, constraints, steps, and output schema. */
@@ -51,11 +43,7 @@ function delegatedTask() {
     type: 'execute',
     goal: 'Inspect the project and return a verified implementation summary.',
     scope: 'Only authored source files under server and src.',
-    constraints: [
-      'Do not edit generated output.',
-      'Preserve public contracts.',
-      'Run tests before returning.',
-    ],
+    constraints: ['Do not edit generated output.', 'Preserve public contracts.', 'Run tests before returning.'],
     tools: {
       available: ['files.read', 'files.write', 'terminal.exec', 'search.ripgrep'],
       preferred: ['search.ripgrep', 'files.read'],
@@ -79,7 +67,7 @@ function delegatedTask() {
     context: { projectRoot: '/tmp/iris', branch: 'benchmark' },
     priority: 'normal',
     toAgent: 'executor',
-  });
+  })
 }
 
 /** Measures CPU-side agent orchestration preparation without contacting a model. */
@@ -88,13 +76,12 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'agents.controller-prompt.compose',
     suite: 'Agent runtime',
     name: 'Controller system prompt composition',
-    description:
-      'Composes role, capability, trust-boundary, skill, delegation, mesh, and planning instructions.',
+    description: 'Composes role, capability, trust-boundary, skill, delegation, mesh, and planning instructions.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 1000,
     run: () => {
-      let prompt = '';
+      let prompt = ''
       for (let index = 0; index < 1000; index += 1) {
         prompt = buildControllerSystemPrompt({
           tier: index % 2 ? 'lean' : 'structured',
@@ -103,22 +90,21 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
           role: 'orchestrator',
           meshEnabled: true,
           planning: true,
-        });
+        })
       }
-      return prompt;
+      return prompt
     },
   },
   {
     id: 'agents.controller-state-header.compose',
     suite: 'Agent runtime',
     name: 'Controller state-header composition',
-    description:
-      'Builds the volatile per-step session context kept outside the stable system prompt.',
+    description: 'Builds the volatile per-step session context kept outside the stable system prompt.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 1000,
     run: () => {
-      let header: string | unknown[] = '';
+      let header: string | unknown[] = ''
       for (let index = 0; index < 1000; index += 1) {
         header = buildControllerStateHeader({
           step: index % 20,
@@ -129,28 +115,27 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
           ],
           activeSkills: ['typescript', 'electron'],
           role: 'orchestrator',
-        } as any);
+        } as any)
       }
-      return header;
+      return header
     },
   },
   {
     id: 'agents.tool-schema.all-providers',
     suite: 'Agent runtime',
     name: 'Canonical tool schema conversion',
-    description:
-      'Converts the complete tool catalog into JSON Schema, Anthropic, OpenAI, and Gemini definitions.',
+    description: 'Converts the complete tool catalog into JSON Schema, Anthropic, OpenAI, and Gemini definitions.',
     iterations: 12,
     warmupIterations: 3,
     operationsPerIteration: TOOL_DEFINITIONS.length,
     run: () => {
-      const json = buildJsonSchemaTools(TOOL_DEFINITIONS as any);
+      const json = buildJsonSchemaTools(TOOL_DEFINITIONS as any)
       return {
         json,
         anthropic: toAnthropicTools(json),
         openai: toOpenAITools(json),
         gemini: toGeminiTools(json),
-      };
+      }
     },
   },
   {
@@ -162,29 +147,25 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
     warmupIterations: 4,
     operationsPerIteration: 500,
     run: () => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 500; index += 1) {
-        const stp = delegatedTask();
+        const stp = delegatedTask()
         result = {
           prompt: buildSTPSystemPrompt(stp, ['Use repository conventions and verify behavior.'], {
             native: index % 2 === 0,
           }),
           summary: summariseSTP(stp),
-          validation: validateSTPResult(
-            { summary: 'ok', filesChanged: [], verification: [] },
-            stp.output.schema,
-          ),
-        };
+          validation: validateSTPResult({ summary: 'ok', filesChanged: [], verification: [] }, stp.output.schema),
+        }
       }
-      return result;
+      return result
     },
   },
   {
     id: 'agents.context-token-estimation.200-turns',
     suite: 'Agent runtime',
     name: 'Conversation token estimation · 200 turns',
-    description:
-      'Estimates message and text token usage for a long retained conversation before compaction decisions.',
+    description: 'Estimates message and text token usage for a long retained conversation before compaction decisions.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 201,
@@ -198,8 +179,7 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'agents.model-capability-resolution',
     suite: 'Agent runtime',
     name: 'Model capability and budget resolution',
-    description:
-      'Resolves tool protocol, context window, reasoning behavior, and output limits across model families.',
+    description: 'Resolves tool protocol, context window, reasoning behavior, and output limits across model families.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 1000,
@@ -214,9 +194,9 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
       ],
     }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 1000; index += 1) {
-        const [provider, model] = context.models[index % context.models.length];
+        const [provider, model] = context.models[index % context.models.length]
         result = {
           capabilities: getModelCapabilities(provider, model),
           context: resolveContextWindow({
@@ -227,17 +207,16 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
             ai_provider: provider,
             ai_model: model,
           } as any),
-        };
+        }
       }
-      return result;
+      return result
     },
   },
   {
     id: 'agents.controller-json-recovery',
     suite: 'Agent runtime',
     name: 'Controller JSON recovery · malformed wrappers',
-    description:
-      'Recovers bounded tool/final decisions from common prose and fenced schema output.',
+    description: 'Recovers bounded tool/final decisions from common prose and fenced schema output.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 2000,
@@ -248,26 +227,25 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
       ],
     }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 2000; index += 1) {
-        const text = context.values[index % context.values.length];
-        result = looksLikeControllerSchemaText(text) ? recoverDecisionFromSchemaText(text) : null;
+        const text = context.values[index % context.values.length]
+        result = looksLikeControllerSchemaText(text) ? recoverDecisionFromSchemaText(text) : null
       }
-      return result;
+      return result
     },
   },
   {
     id: 'agents.subagent-json-recovery',
     suite: 'Agent runtime',
     name: 'Sub-agent output JSON recovery',
-    description:
-      'Parses strict, fenced, and prose-wrapped delegated results and builds final model messages.',
+    description: 'Parses strict, fenced, and prose-wrapped delegated results and builds final model messages.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 2000,
     setup: () => ({ stp: delegatedTask() }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 2000; index += 1) {
         result = {
           parsed: parseSubAgentModelJson(
@@ -276,9 +254,9 @@ export const agentBenchmarks: BenchmarkDefinition<any>[] = [
               : 'Result follows: {"summary":"ok","filesChanged":[],"verification":[]} thanks',
           ),
           messages: buildSubAgentModelMessages(context.stp, 'system prompt', 'step output'),
-        };
+        }
       }
-      return result;
+      return result
     },
   },
-];
+]

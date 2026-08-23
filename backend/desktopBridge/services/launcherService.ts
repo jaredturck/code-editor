@@ -4,11 +4,11 @@
  * discovery validates cached paths before doing bounded desktop-default and PATH lookups.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { runProcess } from '../shared/processExecution.js';
+import { spawn, type ChildProcess } from 'node:child_process'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { runProcess } from '../shared/processExecution.js'
 
 export type LauncherApplicationCapability =
   | 'file_manager'
@@ -21,89 +21,82 @@ export type LauncherApplicationCapability =
   | 'system_monitor'
   | 'email_client'
   | 'software_center'
-  | 'password_manager';
+  | 'password_manager'
 
 export type LauncherToolCapability =
-  | 'package_manager'
-  | 'privilege_helper'
-  | 'docker'
-  | 'docker_desktop'
-  | 'podman'
-  | 'podman_desktop'
-  | 'git'
-  | 'shell';
+  'package_manager' | 'privilege_helper' | 'docker' | 'docker_desktop' | 'podman' | 'podman_desktop' | 'git' | 'shell'
 
 export interface LauncherCapabilityResolution {
-  capability: LauncherApplicationCapability | LauncherToolCapability;
-  displayName: string;
-  executable: string;
-  args: string[];
-  source: 'cache' | 'desktop-default' | 'desktop-candidate' | 'path-candidate' | 'environment';
-  desktopEntry?: string;
-  discoveredAt: number;
+  capability: LauncherApplicationCapability | LauncherToolCapability
+  displayName: string
+  executable: string
+  args: string[]
+  source: 'cache' | 'desktop-default' | 'desktop-candidate' | 'path-candidate' | 'environment'
+  desktopEntry?: string
+  discoveredAt: number
 }
 
 export interface LauncherDiscoveryResult {
-  desktop: string;
-  applications: LauncherCapabilityResolution[];
-  tools: LauncherCapabilityResolution[];
+  desktop: string
+  applications: LauncherCapabilityResolution[]
+  tools: LauncherCapabilityResolution[]
 }
 
 export interface LauncherDiscoveryOptions {
-  cached?: unknown;
-  force?: boolean;
-  env?: NodeJS.ProcessEnv;
-  homeDir?: string;
+  cached?: unknown
+  force?: boolean
+  env?: NodeJS.ProcessEnv
+  homeDir?: string
 }
 
 export interface DevEnvironmentStatus {
-  configured: boolean;
-  available: boolean;
-  running: boolean;
-  pid?: number;
-  cwd?: string;
-  projectName?: string;
-  executable?: string;
-  args?: string[];
-  command?: string;
-  startedAt?: number;
-  reason?: string;
+  configured: boolean
+  available: boolean
+  running: boolean
+  pid?: number
+  cwd?: string
+  projectName?: string
+  executable?: string
+  args?: string[]
+  command?: string
+  startedAt?: number
+  reason?: string
 }
 
 interface ApplicationCandidate {
-  executable: string;
-  displayName: string;
+  executable: string
+  displayName: string
 }
 
 interface ApplicationDefinition {
-  capability: LauncherApplicationCapability;
-  genericName: string;
-  mimeTypes?: string[];
-  candidates: ApplicationCandidate[];
-  desktopCandidates?: Record<string, ApplicationCandidate[]>;
+  capability: LauncherApplicationCapability
+  genericName: string
+  mimeTypes?: string[]
+  candidates: ApplicationCandidate[]
+  desktopCandidates?: Record<string, ApplicationCandidate[]>
 }
 
 interface ToolDefinition {
-  capability: LauncherToolCapability;
-  candidates: ApplicationCandidate[];
+  capability: LauncherToolCapability
+  candidates: ApplicationCandidate[]
 }
 
 interface DesktopEntryApplication {
-  displayName: string;
-  executable: string;
-  args: string[];
-  desktopEntry: string;
+  displayName: string
+  executable: string
+  args: string[]
+  desktopEntry: string
 }
 
 interface ManagedDevProcess {
-  child: ChildProcess;
-  pid: number;
-  cwd: string;
-  projectName: string;
-  executable: string;
-  args: string[];
-  command: string;
-  startedAt: number;
+  child: ChildProcess
+  pid: number
+  cwd: string
+  projectName: string
+  executable: string
+  args: string[]
+  command: string
+  startedAt: number
 }
 
 const APPLICATION_DEFINITIONS: ApplicationDefinition[] = [
@@ -338,7 +331,7 @@ const APPLICATION_DEFINITIONS: ApplicationDefinition[] = [
       { executable: 'seahorse', displayName: 'Passwords and Keys' },
     ],
   },
-];
+]
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -380,106 +373,102 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     capability: 'git',
     candidates: [{ executable: 'git', displayName: 'Git' }],
   },
-];
+]
 
-let managedDevProcess: ManagedDevProcess | null = null;
+let managedDevProcess: ManagedDevProcess | null = null
 
 function normalizeDesktop(env: NodeJS.ProcessEnv): string {
-  return [env.XDG_CURRENT_DESKTOP, env.DESKTOP_SESSION, env.GDMSESSION]
-    .filter(Boolean)
-    .join(':')
-    .toLowerCase();
+  return [env.XDG_CURRENT_DESKTOP, env.DESKTOP_SESSION, env.GDMSESSION].filter(Boolean).join(':').toLowerCase()
 }
 
 function desktopFamily(desktop: string): string {
-  if (desktop.includes('kde') || desktop.includes('plasma')) return 'kde';
-  if (desktop.includes('gnome') || desktop.includes('unity') || desktop.includes('cinnamon'))
-    return 'gnome';
-  if (desktop.includes('xfce')) return 'xfce';
-  if (desktop.includes('mate')) return 'mate';
-  if (desktop.includes('lxqt')) return 'lxqt';
-  return '';
+  if (desktop.includes('kde') || desktop.includes('plasma')) return 'kde'
+  if (desktop.includes('gnome') || desktop.includes('unity') || desktop.includes('cinnamon')) return 'gnome'
+  if (desktop.includes('xfce')) return 'xfce'
+  if (desktop.includes('mate')) return 'mate'
+  if (desktop.includes('lxqt')) return 'lxqt'
+  return ''
 }
 
 async function isExecutable(filePath: string): Promise<boolean> {
-  const stats = await fs.stat(filePath).catch(() => null);
-  if (!stats?.isFile()) return false;
+  const stats = await fs.stat(filePath).catch(() => null)
+  if (!stats?.isFile()) return false
   return fs.access(filePath, 0o1).then(
     () => true,
     () => false,
-  );
+  )
 }
 
 export async function resolveLauncherExecutable(
   executable: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | null> {
-  const value = String(executable || '').trim();
-  if (!value) return null;
-  if (path.isAbsolute(value)) return (await isExecutable(value)) ? value : null;
+  const value = String(executable || '').trim()
+  if (!value) return null
+  if (path.isAbsolute(value)) return (await isExecutable(value)) ? value : null
 
-  const pathValue = String(env.PATH || '');
+  const pathValue = String(env.PATH || '')
   for (const directory of pathValue.split(path.delimiter).filter(Boolean)) {
-    const candidate = path.join(directory, value);
-    if (await isExecutable(candidate)) return candidate;
+    const candidate = path.join(directory, value)
+    if (await isExecutable(candidate)) return candidate
   }
-  return null;
+  return null
 }
 
 function desktopEntryDirectories(homeDir: string, env: NodeJS.ProcessEnv): string[] {
-  const dataHome = env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share');
+  const dataHome = env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share')
   const dataDirs = String(env.XDG_DATA_DIRS || '/usr/local/share:/usr/share')
     .split(':')
-    .filter(Boolean);
-  return [dataHome, ...dataDirs].map((directory) => path.join(directory, 'applications'));
+    .filter(Boolean)
+  return [dataHome, ...dataDirs].map((directory) => path.join(directory, 'applications'))
 }
 
 function parseDesktopExec(value: string): string[] {
-  const tokens: string[] = [];
-  let current = '';
-  let quote = '';
-  let escaped = false;
+  const tokens: string[] = []
+  let current = ''
+  let quote = ''
+  let escaped = false
 
   for (const character of value) {
     if (escaped) {
-      current += character;
-      escaped = false;
-      continue;
+      current += character
+      escaped = false
+      continue
     }
     if (character === '\\') {
-      escaped = true;
-      continue;
+      escaped = true
+      continue
     }
     if (quote) {
-      if (character === quote) quote = '';
-      else current += character;
-      continue;
+      if (character === quote) quote = ''
+      else current += character
+      continue
     }
     if (character === '"' || character === "'") {
-      quote = character;
-      continue;
+      quote = character
+      continue
     }
     if (/\s/.test(character)) {
-      if (current) tokens.push(current);
-      current = '';
-      continue;
+      if (current) tokens.push(current)
+      current = ''
+      continue
     }
-    current += character;
+    current += character
   }
 
-  if (current) tokens.push(current);
+  if (current) tokens.push(current)
   return tokens
     .filter((token) => !token.startsWith('@@'))
     .map((token) => token.replace(/%[fFuUdDnNickvm]/g, '').replace(/%%/g, '%'))
-    .filter(Boolean);
+    .filter(Boolean)
 }
 
 function normalizeDesktopExecTokens(tokens: string[]): string[] {
-  if (!tokens.length) return [];
-  if (tokens[0] !== 'env') return tokens;
-  let index = 1;
-  while (index < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index])) index += 1;
-  return tokens.slice(index);
+  if (!tokens.length) return []
+  if (tokens[0] !== 'env') return tokens
+  let index = 1
+  while (index < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[index])) index += 1
+  return tokens.slice(index)
 }
 
 async function readDesktopEntry(
@@ -487,52 +476,48 @@ async function readDesktopEntry(
   homeDir: string,
   env: NodeJS.ProcessEnv,
 ): Promise<DesktopEntryApplication | null> {
-  const normalizedId = path.basename(String(desktopId || '').trim());
-  if (!normalizedId || normalizedId.includes('..')) return null;
+  const normalizedId = path.basename(String(desktopId || '').trim())
+  if (!normalizedId || normalizedId.includes('..')) return null
 
   for (const directory of desktopEntryDirectories(homeDir, env)) {
-    const entryPath = path.join(directory, normalizedId);
-    const content = await fs.readFile(entryPath, 'utf8').catch(() => '');
-    if (!content) continue;
+    const entryPath = path.join(directory, normalizedId)
+    const content = await fs.readFile(entryPath, 'utf8').catch(() => '')
+    if (!content) continue
 
-    const values = new Map<string, string>();
-    let inDesktopEntry = false;
+    const values = new Map<string, string>()
+    let inDesktopEntry = false
     for (const rawLine of content.split(/\r?\n/)) {
-      const line = rawLine.trim();
+      const line = rawLine.trim()
       if (line.startsWith('[')) {
-        inDesktopEntry = line === '[Desktop Entry]';
-        continue;
+        inDesktopEntry = line === '[Desktop Entry]'
+        continue
       }
-      if (!inDesktopEntry || !line || line.startsWith('#')) continue;
-      const separator = line.indexOf('=');
-      if (separator < 1) continue;
-      const key = line.slice(0, separator).trim();
-      if (!values.has(key)) values.set(key, line.slice(separator + 1).trim());
+      if (!inDesktopEntry || !line || line.startsWith('#')) continue
+      const separator = line.indexOf('=')
+      if (separator < 1) continue
+      const key = line.slice(0, separator).trim()
+      if (!values.has(key)) values.set(key, line.slice(separator + 1).trim())
     }
 
-    if (values.get('Type') && values.get('Type') !== 'Application') continue;
-    if (values.get('Hidden') === 'true') continue;
-    const tokens = normalizeDesktopExecTokens(parseDesktopExec(values.get('Exec') || ''));
-    if (!tokens.length) continue;
-    const executable = await resolveLauncherExecutable(tokens[0], env);
-    if (!executable) continue;
+    if (values.get('Type') && values.get('Type') !== 'Application') continue
+    if (values.get('Hidden') === 'true') continue
+    const tokens = normalizeDesktopExecTokens(parseDesktopExec(values.get('Exec') || ''))
+    if (!tokens.length) continue
+    const executable = await resolveLauncherExecutable(tokens[0], env)
+    if (!executable) continue
 
     return {
       displayName: values.get('Name') || path.basename(executable),
       executable,
       args: tokens.slice(1),
       desktopEntry: normalizedId,
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
-async function runOptional(
-  executable: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-): Promise<string> {
+async function runOptional(executable: string, args: string[], env: NodeJS.ProcessEnv): Promise<string> {
   return runProcess(executable, args, {
     env,
     timeoutMs: 1500,
@@ -540,7 +525,7 @@ async function runOptional(
   }).then(
     (result) => result.stdout.trim(),
     () => '',
-  );
+  )
 }
 
 async function resolveDesktopDefault(
@@ -548,36 +533,36 @@ async function resolveDesktopDefault(
   homeDir: string,
   env: NodeJS.ProcessEnv,
 ): Promise<LauncherCapabilityResolution | null> {
-  const desktopIds: string[] = [];
+  const desktopIds: string[] = []
 
   if (definition.capability === 'web_browser') {
-    const xdgSettings = await resolveLauncherExecutable('xdg-settings', env);
+    const xdgSettings = await resolveLauncherExecutable('xdg-settings', env)
     if (xdgSettings) {
-      const browserId = await runOptional(xdgSettings, ['get', 'default-web-browser'], env);
-      if (browserId) desktopIds.push(browserId);
+      const browserId = await runOptional(xdgSettings, ['get', 'default-web-browser'], env)
+      if (browserId) desktopIds.push(browserId)
     }
   }
 
-  const xdgMime = await resolveLauncherExecutable('xdg-mime', env);
+  const xdgMime = await resolveLauncherExecutable('xdg-mime', env)
   if (xdgMime) {
     for (const mimeType of definition.mimeTypes || []) {
-      const desktopId = await runOptional(xdgMime, ['query', 'default', mimeType], env);
-      if (desktopId) desktopIds.push(desktopId);
+      const desktopId = await runOptional(xdgMime, ['query', 'default', mimeType], env)
+      if (desktopId) desktopIds.push(desktopId)
     }
   }
 
-  const gio = await resolveLauncherExecutable('gio', env);
+  const gio = await resolveLauncherExecutable('gio', env)
   if (gio) {
     for (const mimeType of definition.mimeTypes || []) {
-      const output = await runOptional(gio, ['mime', mimeType], env);
-      const desktopId = output.match(/Default application[^:]*:\s*([^\s]+\.desktop)/i)?.[1];
-      if (desktopId) desktopIds.push(desktopId);
+      const output = await runOptional(gio, ['mime', mimeType], env)
+      const desktopId = output.match(/Default application[^:]*:\s*([^\s]+\.desktop)/i)?.[1]
+      if (desktopId) desktopIds.push(desktopId)
     }
   }
 
   for (const desktopId of [...new Set(desktopIds)]) {
-    const application = await readDesktopEntry(desktopId, homeDir, env);
-    if (!application) continue;
+    const application = await readDesktopEntry(desktopId, homeDir, env)
+    if (!application) continue
     return {
       capability: definition.capability,
       displayName: application.displayName,
@@ -586,23 +571,20 @@ async function resolveDesktopDefault(
       source: 'desktop-default',
       desktopEntry: application.desktopEntry,
       discoveredAt: Date.now(),
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
-function applicationCandidates(
-  definition: ApplicationDefinition,
-  family: string,
-): ApplicationCandidate[] {
-  const preferred = family ? definition.desktopCandidates?.[family] || [] : [];
-  const seen = new Set<string>();
+function applicationCandidates(definition: ApplicationDefinition, family: string): ApplicationCandidate[] {
+  const preferred = family ? definition.desktopCandidates?.[family] || [] : []
+  const seen = new Set<string>()
   return [...preferred, ...definition.candidates].filter((candidate) => {
-    if (seen.has(candidate.executable)) return false;
-    seen.add(candidate.executable);
-    return true;
-  });
+    if (seen.has(candidate.executable)) return false
+    seen.add(candidate.executable)
+    return true
+  })
 }
 
 async function resolveCandidate(
@@ -612,8 +594,8 @@ async function resolveCandidate(
   source: LauncherCapabilityResolution['source'],
 ): Promise<LauncherCapabilityResolution | null> {
   for (const candidate of candidates) {
-    const executable = await resolveLauncherExecutable(candidate.executable, env);
-    if (!executable) continue;
+    const executable = await resolveLauncherExecutable(candidate.executable, env)
+    if (!executable) continue
     return {
       capability,
       displayName: candidate.displayName,
@@ -621,47 +603,43 @@ async function resolveCandidate(
       args: [],
       source,
       discoveredAt: Date.now(),
-    };
+    }
   }
-  return null;
+  return null
 }
 
 function cachedResolutions(value: unknown): LauncherCapabilityResolution[] {
-  if (!value || typeof value !== 'object') return [];
-  const record = value as { applications?: unknown; tools?: unknown };
+  if (!value || typeof value !== 'object') return []
+  const record = value as { applications?: unknown; tools?: unknown }
   return [
     ...(Array.isArray(record.applications) ? record.applications : []),
     ...(Array.isArray(record.tools) ? record.tools : []),
   ]
-    .filter((item): item is LauncherCapabilityResolution =>
-      Boolean(item && typeof item === 'object'),
-    )
+    .filter((item): item is LauncherCapabilityResolution => Boolean(item && typeof item === 'object'))
     .map((item) => ({
       capability: String(item.capability || '') as LauncherCapabilityResolution['capability'],
       displayName: String(item.displayName || ''),
       executable: String(item.executable || ''),
-      args: Array.isArray(item.args)
-        ? item.args.map((argument) => String(argument)).slice(0, 50)
-        : [],
+      args: Array.isArray(item.args) ? item.args.map((argument) => String(argument)).slice(0, 50) : [],
       source: 'cache' as const,
       desktopEntry: item.desktopEntry ? String(item.desktopEntry) : undefined,
       discoveredAt: Number(item.discoveredAt) || Date.now(),
-    }));
+    }))
 }
 
 async function validCachedResolution(
   capability: LauncherCapabilityResolution['capability'],
   cached: LauncherCapabilityResolution[],
 ): Promise<LauncherCapabilityResolution | null> {
-  const resolution = cached.find((item) => item.capability === capability);
-  if (!resolution || !resolution.displayName || !resolution.executable) return null;
-  if (!(await isExecutable(resolution.executable))) return null;
-  return { ...resolution, source: 'cache' };
+  const resolution = cached.find((item) => item.capability === capability)
+  if (!resolution || !resolution.displayName || !resolution.executable) return null
+  if (!(await isExecutable(resolution.executable))) return null
+  return { ...resolution, source: 'cache' }
 }
 
 function resolveShell(env: NodeJS.ProcessEnv): LauncherCapabilityResolution | null {
-  const shell = String(env.SHELL || '').trim();
-  if (!shell || !path.isAbsolute(shell)) return null;
+  const shell = String(env.SHELL || '').trim()
+  if (!shell || !path.isAbsolute(shell)) return null
   return {
     capability: 'shell',
     displayName: path.basename(shell),
@@ -669,7 +647,7 @@ function resolveShell(env: NodeJS.ProcessEnv): LauncherCapabilityResolution | nu
     args: [],
     source: 'environment',
     discoveredAt: Date.now(),
-  };
+  }
 }
 
 /**
@@ -680,38 +658,38 @@ function resolveShell(env: NodeJS.ProcessEnv): LauncherCapabilityResolution | nu
 export async function discoverLauncherCapabilities(
   options: LauncherDiscoveryOptions = {},
 ): Promise<LauncherDiscoveryResult> {
-  const env = options.env || process.env;
-  const homeDir = options.homeDir || os.homedir();
-  const desktop = normalizeDesktop(env);
-  const family = desktopFamily(desktop);
-  const cached = options.force ? [] : cachedResolutions(options.cached);
-  const applications: LauncherCapabilityResolution[] = [];
-  const tools: LauncherCapabilityResolution[] = [];
+  const env = options.env || process.env
+  const homeDir = options.homeDir || os.homedir()
+  const desktop = normalizeDesktop(env)
+  const family = desktopFamily(desktop)
+  const cached = options.force ? [] : cachedResolutions(options.cached)
+  const applications: LauncherCapabilityResolution[] = []
+  const tools: LauncherCapabilityResolution[] = []
 
   for (const definition of APPLICATION_DEFINITIONS) {
-    const cachedApplication = await validCachedResolution(definition.capability, cached);
+    const cachedApplication = await validCachedResolution(definition.capability, cached)
     if (cachedApplication) {
-      applications.push(cachedApplication);
-      continue;
+      applications.push(cachedApplication)
+      continue
     }
 
-    const desktopDefault = await resolveDesktopDefault(definition, homeDir, env);
+    const desktopDefault = await resolveDesktopDefault(definition, homeDir, env)
     if (desktopDefault) {
-      applications.push(desktopDefault);
-      continue;
+      applications.push(desktopDefault)
+      continue
     }
 
-    const preferredCount = family ? definition.desktopCandidates?.[family]?.length || 0 : 0;
-    const candidates = applicationCandidates(definition, family);
+    const preferredCount = family ? definition.desktopCandidates?.[family]?.length || 0 : 0
+    const candidates = applicationCandidates(definition, family)
     const preferred = await resolveCandidate(
       definition.capability,
       candidates.slice(0, preferredCount),
       env,
       'desktop-candidate',
-    );
+    )
     if (preferred) {
-      applications.push(preferred);
-      continue;
+      applications.push(preferred)
+      continue
     }
 
     const fallback = await resolveCandidate(
@@ -719,62 +697,54 @@ export async function discoverLauncherCapabilities(
       candidates.slice(preferredCount),
       env,
       'path-candidate',
-    );
-    if (fallback) applications.push(fallback);
+    )
+    if (fallback) applications.push(fallback)
   }
 
   for (const definition of TOOL_DEFINITIONS) {
-    const cachedTool = await validCachedResolution(definition.capability, cached);
+    const cachedTool = await validCachedResolution(definition.capability, cached)
     if (cachedTool) {
-      tools.push(cachedTool);
-      continue;
+      tools.push(cachedTool)
+      continue
     }
-    const resolution = await resolveCandidate(
-      definition.capability,
-      definition.candidates,
-      env,
-      'path-candidate',
-    );
-    if (resolution) tools.push(resolution);
+    const resolution = await resolveCandidate(definition.capability, definition.candidates, env, 'path-candidate')
+    if (resolution) tools.push(resolution)
   }
 
-  const cachedShell = await validCachedResolution('shell', cached);
-  if (cachedShell) tools.push(cachedShell);
+  const cachedShell = await validCachedResolution('shell', cached)
+  if (cachedShell) tools.push(cachedShell)
   else {
-    const shell = resolveShell(env);
-    if (shell && (await isExecutable(shell.executable))) tools.push(shell);
+    const shell = resolveShell(env)
+    if (shell && (await isExecutable(shell.executable))) tools.push(shell)
   }
 
-  return { desktop, applications, tools };
+  return { desktop, applications, tools }
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
   return fs.stat(filePath).then(
     () => true,
     () => false,
-  );
+  )
 }
 
 function commandDisplay(executable: string, args: string[]): string {
   return [executable, ...args]
     .map((value) => (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value) ? value : JSON.stringify(value)))
-    .join(' ');
+    .join(' ')
 }
 
-async function resolvePackageCommand(
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-): Promise<DevEnvironmentStatus | null> {
-  const packagePath = path.join(cwd, 'package.json');
-  if (!(await fileExists(packagePath))) return null;
+async function resolvePackageCommand(cwd: string, env: NodeJS.ProcessEnv): Promise<DevEnvironmentStatus | null> {
+  const packagePath = path.join(cwd, 'package.json')
+  if (!(await fileExists(packagePath))) return null
 
-  const content = await fs.readFile(packagePath, 'utf8').catch(() => '');
-  let packageData: { name?: unknown; scripts?: Record<string, unknown> } = {};
+  const content = await fs.readFile(packagePath, 'utf8').catch(() => '')
+  let packageData: { name?: unknown; scripts?: Record<string, unknown> } = {}
   try {
     packageData = JSON.parse(content) as {
-      name?: unknown;
-      scripts?: Record<string, unknown>;
-    };
+      name?: unknown
+      scripts?: Record<string, unknown>
+    }
   } catch {
     return {
       configured: true,
@@ -783,12 +753,10 @@ async function resolvePackageCommand(
       cwd,
       projectName: path.basename(cwd),
       reason: 'package.json could not be parsed.',
-    };
+    }
   }
 
-  const script = ['dev', 'start', 'serve'].find(
-    (name) => typeof packageData.scripts?.[name] === 'string',
-  );
+  const script = ['dev', 'start', 'serve'].find((name) => typeof packageData.scripts?.[name] === 'string')
   if (!script) {
     return {
       configured: true,
@@ -797,30 +765,30 @@ async function resolvePackageCommand(
       cwd,
       projectName: String(packageData.name || path.basename(cwd)),
       reason: 'No dev, start, or serve script was found in package.json.',
-    };
+    }
   }
 
   const managerCandidates: Array<{
-    lockfile?: string;
-    executable: string;
-    args: string[];
+    lockfile?: string
+    executable: string
+    args: string[]
   }> = [
     { lockfile: 'pnpm-lock.yaml', executable: 'pnpm', args: ['run', script] },
     { lockfile: 'yarn.lock', executable: 'yarn', args: [script] },
     { lockfile: 'bun.lock', executable: 'bun', args: ['run', script] },
     { lockfile: 'bun.lockb', executable: 'bun', args: ['run', script] },
     { lockfile: 'package-lock.json', executable: 'npm', args: ['run', script] },
-  ];
+  ]
 
-  let selected = managerCandidates[managerCandidates.length - 1];
+  let selected = managerCandidates[managerCandidates.length - 1]
   for (const candidate of managerCandidates) {
     if (candidate.lockfile && (await fileExists(path.join(cwd, candidate.lockfile)))) {
-      selected = candidate;
-      break;
+      selected = candidate
+      break
     }
   }
 
-  const executable = await resolveLauncherExecutable(selected.executable, env);
+  const executable = await resolveLauncherExecutable(selected.executable, env)
   if (!executable) {
     return {
       configured: true,
@@ -829,7 +797,7 @@ async function resolvePackageCommand(
       cwd,
       projectName: String(packageData.name || path.basename(cwd)),
       reason: `${selected.executable} is required by this project but was not found.`,
-    };
+    }
   }
 
   return {
@@ -841,17 +809,13 @@ async function resolvePackageCommand(
     executable,
     args: selected.args,
     command: commandDisplay(selected.executable, selected.args),
-  };
+  }
 }
 
-async function resolveFrameworkCommand(
-  cwd: string,
-  env: NodeJS.ProcessEnv,
-): Promise<DevEnvironmentStatus | null> {
+async function resolveFrameworkCommand(cwd: string, env: NodeJS.ProcessEnv): Promise<DevEnvironmentStatus | null> {
   if (await fileExists(path.join(cwd, 'manage.py'))) {
     const executable =
-      (await resolveLauncherExecutable('python3', env)) ||
-      (await resolveLauncherExecutable('python', env));
+      (await resolveLauncherExecutable('python3', env)) || (await resolveLauncherExecutable('python', env))
     if (!executable) {
       return {
         configured: true,
@@ -860,9 +824,9 @@ async function resolveFrameworkCommand(
         cwd,
         projectName: path.basename(cwd),
         reason: 'Python was not found for manage.py.',
-      };
+      }
     }
-    const args = ['manage.py', 'runserver'];
+    const args = ['manage.py', 'runserver']
     return {
       configured: true,
       available: true,
@@ -872,11 +836,11 @@ async function resolveFrameworkCommand(
       executable,
       args,
       command: commandDisplay(path.basename(executable), args),
-    };
+    }
   }
 
   if (await fileExists(path.join(cwd, 'Cargo.toml'))) {
-    const executable = await resolveLauncherExecutable('cargo', env);
+    const executable = await resolveLauncherExecutable('cargo', env)
     if (!executable) {
       return {
         configured: true,
@@ -885,9 +849,9 @@ async function resolveFrameworkCommand(
         cwd,
         projectName: path.basename(cwd),
         reason: 'Cargo was not found for Cargo.toml.',
-      };
+      }
     }
-    const args = ['run'];
+    const args = ['run']
     return {
       configured: true,
       available: true,
@@ -897,7 +861,7 @@ async function resolveFrameworkCommand(
       executable,
       args,
       command: 'cargo run',
-    };
+    }
   }
 
   if (await fileExists(path.join(cwd, 'pyproject.toml'))) {
@@ -908,15 +872,15 @@ async function resolveFrameworkCommand(
       cwd,
       projectName: path.basename(cwd),
       reason: 'A pyproject.toml was found, but no unambiguous development command is available.',
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
 function currentManagedStatus(): DevEnvironmentStatus | null {
-  const current = managedDevProcess;
-  if (!current) return null;
+  const current = managedDevProcess
+  if (!current) return null
   return {
     configured: true,
     available: true,
@@ -928,7 +892,7 @@ function currentManagedStatus(): DevEnvironmentStatus | null {
     args: current.args,
     command: current.command,
     startedAt: current.startedAt,
-  };
+  }
 }
 
 /** Detects the supported development command for one configured working directory. */
@@ -936,23 +900,23 @@ export async function getDevEnvironmentStatus(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<DevEnvironmentStatus> {
-  const current = currentManagedStatus();
-  if (current) return current;
+  const current = currentManagedStatus()
+  if (current) return current
 
-  const normalizedCwd = String(cwd || '').trim();
+  const normalizedCwd = String(cwd || '').trim()
   if (!normalizedCwd) {
     return {
       configured: false,
       available: false,
       running: false,
       reason: 'No working directory configured.',
-    };
+    }
   }
 
-  const packageCommand = await resolvePackageCommand(normalizedCwd, env);
-  if (packageCommand) return packageCommand;
-  const frameworkCommand = await resolveFrameworkCommand(normalizedCwd, env);
-  if (frameworkCommand) return frameworkCommand;
+  const packageCommand = await resolvePackageCommand(normalizedCwd, env)
+  if (packageCommand) return packageCommand
+  const frameworkCommand = await resolveFrameworkCommand(normalizedCwd, env)
+  if (frameworkCommand) return frameworkCommand
 
   return {
     configured: true,
@@ -961,26 +925,26 @@ export async function getDevEnvironmentStatus(
     cwd: normalizedCwd,
     projectName: path.basename(normalizedCwd),
     reason: 'No supported development command was found in this directory.',
-  };
+  }
 }
 
 function processGroupExists(pid: number): boolean {
   try {
-    process.kill(process.platform === 'win32' ? pid : -pid, 0);
-    return true;
+    process.kill(process.platform === 'win32' ? pid : -pid, 0)
+    return true
   } catch {
-    return false;
+    return false
   }
 }
 
 function clearManagedDevProcess(child: ChildProcess): void {
-  const current = managedDevProcess;
-  if (!current || current.child !== child) return;
+  const current = managedDevProcess
+  if (!current || current.child !== child) return
   setTimeout(() => {
     if (managedDevProcess?.child === child && !processGroupExists(current.pid)) {
-      managedDevProcess = null;
+      managedDevProcess = null
     }
-  }, 100);
+  }, 100)
 }
 
 /** Starts the detected development command and retains its exact process group in memory. */
@@ -988,11 +952,11 @@ export async function startManagedDevEnvironment(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<DevEnvironmentStatus> {
-  const current = currentManagedStatus();
-  if (current) return current;
+  const current = currentManagedStatus()
+  if (current) return current
 
-  const status = await getDevEnvironmentStatus(cwd, env);
-  if (!status.available || !status.executable || !status.cwd || !status.command) return status;
+  const status = await getDevEnvironmentStatus(cwd, env)
+  if (!status.available || !status.executable || !status.cwd || !status.command) return status
 
   const child = spawn(status.executable, status.args || [], {
     cwd: status.cwd,
@@ -1000,8 +964,8 @@ export async function startManagedDevEnvironment(
     stdio: 'ignore',
     shell: false,
     env,
-  });
-  if (!child.pid) throw new Error('The development process did not return a process ID.');
+  })
+  if (!child.pid) throw new Error('The development process did not return a process ID.')
 
   managedDevProcess = {
     child,
@@ -1012,50 +976,50 @@ export async function startManagedDevEnvironment(
     args: status.args || [],
     command: status.command,
     startedAt: Date.now(),
-  };
-  child.once('exit', () => clearManagedDevProcess(child));
-  child.once('error', () => clearManagedDevProcess(child));
-  child.unref();
-  return currentManagedStatus() as DevEnvironmentStatus;
+  }
+  child.once('exit', () => clearManagedDevProcess(child))
+  child.once('error', () => clearManagedDevProcess(child))
+  child.unref()
+  return currentManagedStatus() as DevEnvironmentStatus
 }
 
 function signalManagedProcess(pid: number, signal: NodeJS.Signals): boolean {
   try {
-    process.kill(process.platform === 'win32' ? pid : -pid, signal);
-    return true;
+    process.kill(process.platform === 'win32' ? pid : -pid, signal)
+    return true
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ESRCH') return false;
-    throw error;
+    if ((error as NodeJS.ErrnoException)?.code === 'ESRCH') return false
+    throw error
   }
 }
 
 async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (!processGroupExists(pid)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (!processGroupExists(pid)) return true
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  return !processGroupExists(pid);
+  return !processGroupExists(pid)
 }
 
 /** Stops only the process group previously started by IRIS. */
 export async function stopManagedDevEnvironment(): Promise<DevEnvironmentStatus> {
-  const current = managedDevProcess;
+  const current = managedDevProcess
   if (!current) {
     return {
       configured: true,
       available: false,
       running: false,
       reason: 'No development environment is running.',
-    };
+    }
   }
 
-  const signaled = signalManagedProcess(current.pid, 'SIGTERM');
-  const stopped = !signaled || (await waitForProcessExit(current.pid, 3000));
+  const signaled = signalManagedProcess(current.pid, 'SIGTERM')
+  const stopped = !signaled || (await waitForProcessExit(current.pid, 3000))
   if (!stopped && signalManagedProcess(current.pid, 'SIGKILL')) {
-    await waitForProcessExit(current.pid, 1000);
+    await waitForProcessExit(current.pid, 1000)
   }
-  managedDevProcess = null;
+  managedDevProcess = null
 
   return {
     configured: true,
@@ -1067,11 +1031,11 @@ export async function stopManagedDevEnvironment(): Promise<DevEnvironmentStatus>
     args: current.args,
     command: current.command,
     reason: 'Development environment stopped.',
-  };
+  }
 }
 
 /** Ensures bridge shutdown cannot leave a managed development process orphaned. */
 export async function closeManagedDevEnvironment(): Promise<void> {
-  if (!managedDevProcess) return;
-  await stopManagedDevEnvironment().catch(() => undefined);
+  if (!managedDevProcess) return
+  await stopManagedDevEnvironment().catch(() => undefined)
 }

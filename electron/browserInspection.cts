@@ -139,18 +139,15 @@ export async function inspect_local_browser_runtime(raw_url: string, options: Br
       source: String(source_id || '').slice(0, 1000),
     })
   })
-  web_contents.on(
-    'did-fail-load',
-    (_event, error_code, error_description, validated_url, is_main_frame) => {
-      if (is_main_frame && error_code !== -3) {
-        load_failure = {
-          code: Number(error_code),
-          description: String(error_description || ''),
-          url: String(validated_url || url),
-        }
+  web_contents.on('did-fail-load', (_event, error_code, error_description, validated_url, is_main_frame) => {
+    if (is_main_frame && error_code !== -3) {
+      load_failure = {
+        code: Number(error_code),
+        description: String(error_description || ''),
+        url: String(validated_url || url),
       }
-    },
-  )
+    }
+  })
 
   let timeout: NodeJS.Timeout | null = null
   try {
@@ -211,12 +208,11 @@ export async function inspect_local_browser_runtime(raw_url: string, options: Br
       requestedUrl: url,
       finalUrl: web_contents.isDestroyed() ? url : web_contents.getURL() || url,
       title: web_contents.isDestroyed() ? '' : web_contents.getTitle() || '',
-      loadFailure:
-        load_failure || {
-          code: 0,
-          description: error instanceof Error ? error.message : 'Browser inspection failed.',
-          url,
-        },
+      loadFailure: load_failure || {
+        code: 0,
+        description: error instanceof Error ? error.message : 'Browser inspection failed.',
+        url,
+      },
       blockedNavigation: blocked_navigation || null,
       console: console_messages,
       consoleErrors: console_messages.filter((entry) => entry.level.toLowerCase() === 'error'),

@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest'
 import {
   MAX_CHAT_ATTACHMENTS,
   modelImageCapability,
   normalizeChatAttachments,
   persistedChatAttachments,
-} from '@/features/chat/chatAttachments';
+} from '@/features/chat/chatAttachments'
 
 describe('chat image attachments', () => {
   it('normalizes bounded image attachments and removes transient previews for persistence', () => {
@@ -16,17 +16,17 @@ describe('chat image attachments', () => {
         content: `base64-${index}`,
         preview: `data:image/png;base64,base64-${index}`,
       })),
-    );
+    )
 
-    expect(attachments).toHaveLength(MAX_CHAT_ATTACHMENTS);
+    expect(attachments).toHaveLength(MAX_CHAT_ATTACHMENTS)
     expect(persistedChatAttachments(attachments)).toEqual(
       attachments.map(({ preview: _preview, ...attachment }) => attachment),
-    );
-  });
+    )
+  })
 
   it('uses provider metadata conservatively for image-input support', () => {
-    expect(modelImageCapability('gemini', 'gemini-3.5-flash').image).toBe(true);
-    expect(modelImageCapability('anthropic', 'claude-4-sonnet').image).toBe(true);
-    expect(modelImageCapability('local', 'plain-text-model').image).toBe(false);
-  });
-});
+    expect(modelImageCapability('gemini', 'gemini-3.5-flash').image).toBe(true)
+    expect(modelImageCapability('anthropic', 'claude-4-sonnet').image).toBe(true)
+    expect(modelImageCapability('local', 'plain-text-model').image).toBe(false)
+  })
+})

@@ -1,8 +1,8 @@
 /** Verifies the Files panel exposes semantic indexing, search, thumbnails, sorting, and save controls. */
 
-import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   setPathInput: vi.fn(),
@@ -36,38 +36,36 @@ const mocks = vi.hoisted(() => ({
   openLocations: vi.fn(),
   toggleIndexSource: vi.fn(),
   clearIndex: vi.fn(),
-}));
+}))
 
-let hookState: Record<string, unknown>;
+let hookState: Record<string, unknown>
 
 vi.mock('@/components/panels/PanelBase', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
+}))
 
 vi.mock('@/components/permissions/PermissionRequestCard', () => ({
   default: () => <div>permission request</div>,
-}));
+}))
 
 vi.mock('@/components/files/FileThumbnail', () => ({
   default: ({ name, isVideo }: { name: string; isVideo?: boolean }) => (
     <div data-testid={`thumbnail-${name}`} data-video={isVideo ? 'true' : 'false'} />
   ),
-}));
+}))
 
 vi.mock('@/components/ui/MarkdownView', () => ({
-  default: ({ content }: { content: string }) => (
-    <div data-testid="markdown-analysis">{content}</div>
-  ),
-}));
+  default: ({ content }: { content: string }) => <div data-testid="markdown-analysis">{content}</div>,
+}))
 
 vi.mock('@/platform-features/files/useFilePanel', () => ({
   useFilePanel: () => hookState,
-}));
+}))
 
-import FilePanel from '@/components/panels/FilePanel';
+import FilePanel from '@/components/panels/FilePanel'
 
 beforeEach(() => {
-  Object.values(mocks).forEach((mock) => mock.mockReset());
+  Object.values(mocks).forEach((mock) => mock.mockReset())
   hookState = {
     settings: { permissions_file_read: true, permissions_file_write: true },
     currentPath: '/home/user',
@@ -205,8 +203,8 @@ beforeEach(() => {
     openLocations: mocks.openLocations,
     toggleIndexSource: mocks.toggleIndexSource,
     clearIndex: mocks.clearIndex,
-  };
-});
+  }
+})
 
 describe('FilePanel', () => {
   it('keeps the directory tree on the left and file tiles in the main pane', () => {
@@ -222,58 +220,56 @@ describe('FilePanel', () => {
         isImage: false,
         isVideo: true,
       },
-    ];
-    render(<FilePanel />);
+    ]
+    render(<FilePanel />)
 
-    expect(screen.getByTestId('thumbnail-beach.png')).toBeInTheDocument();
-    expect(screen.getByTestId('thumbnail-clip.mp4')).toHaveAttribute('data-video', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Pictures' }));
-    expect(mocks.openDirectory).toHaveBeenCalledWith('/home/user/Pictures');
+    expect(screen.getByTestId('thumbnail-beach.png')).toBeInTheDocument()
+    expect(screen.getByTestId('thumbnail-clip.mp4')).toHaveAttribute('data-video', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Pictures' }))
+    expect(mocks.openDirectory).toHaveBeenCalledWith('/home/user/Pictures')
 
     fireEvent.change(screen.getByPlaceholderText('Search files by meaning...'), {
       target: { value: 'holiday near a beach' },
-    });
-    expect(mocks.setSearchQuery).toHaveBeenCalledWith('holiday near a beach');
+    })
+    expect(mocks.setSearchQuery).toHaveBeenCalledWith('holiday near a beach')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
-    expect(mocks.submitSearch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    expect(mocks.submitSearch).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filter semantic search' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Images' }));
-    expect(mocks.setSearchKind).toHaveBeenCalledWith('image');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter semantic search' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Images' }))
+    expect(mocks.setSearchKind).toHaveBeenCalledWith('image')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filter semantic search' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Videos' }));
-    expect(mocks.setSearchKind).toHaveBeenCalledWith('video');
+    fireEvent.click(screen.getByRole('button', { name: 'Filter semantic search' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Videos' }))
+    expect(mocks.setSearchKind).toHaveBeenCalledWith('video')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Size' }));
-    expect(mocks.setSortField).toHaveBeenCalledWith('size');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Size' }))
+    expect(mocks.setSortField).toHaveBeenCalledWith('size')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Modified date' }));
-    expect(mocks.setSortField).toHaveBeenCalledWith('modified');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Modified date' }))
+    expect(mocks.setSortField).toHaveBeenCalledWith('modified')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: 'File type' }));
-    expect(mocks.setSortField).toHaveBeenCalledWith('type');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort files' }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'File type' }))
+    expect(mocks.setSortField).toHaveBeenCalledWith('type')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Concepts' }));
-    expect(mocks.submitConceptSearch).toHaveBeenCalledTimes(1);
-  });
+    fireEvent.click(screen.getByRole('button', { name: 'Concepts' }))
+    expect(mocks.submitConceptSearch).toHaveBeenCalledTimes(1)
+  })
 
   it('opens file actions from a right-click context menu', () => {
-    render(<FilePanel />);
+    render(<FilePanel />)
 
-    const tile = screen.getByRole('button', { name: 'Select file beach.png' });
-    fireEvent.contextMenu(tile, { clientX: 180, clientY: 140 });
+    const tile = screen.getByRole('button', { name: 'Select file beach.png' })
+    fireEvent.contextMenu(tile, { clientX: 180, clientY: 140 })
 
-    expect(screen.getByRole('menu', { name: 'File actions for beach.png' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy location' }));
-    expect(mocks.copyFileLocation).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/home/user/beach.png' }),
-    );
-  });
+    expect(screen.getByRole('menu', { name: 'File actions for beach.png' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy location' }))
+    expect(mocks.copyFileLocation).toHaveBeenCalledWith(expect.objectContaining({ path: '/home/user/beach.png' }))
+  })
 
   it('shows the sliding-window indexing estimate beside progress', () => {
     hookState.semanticStatus = {
@@ -283,26 +279,26 @@ describe('FilePanel', () => {
       completed: 44032,
       total: 89266,
       estimatedRemainingMs: 300000,
-    };
+    }
 
-    render(<FilePanel />);
+    render(<FilePanel />)
 
-    expect(screen.getByText('44032 of 89266')).toBeInTheDocument();
-    expect(screen.getByText('EST: 5 min')).toBeInTheDocument();
-  });
+    expect(screen.getByText('44032 of 89266')).toBeInTheDocument()
+    expect(screen.getByText('EST: 5 min')).toBeInTheDocument()
+  })
 
   it('asks for confirmation before starting the expensive initial scan', () => {
-    hookState.scanConfirmationOpen = true;
-    render(<FilePanel />);
+    hookState.scanConfirmationOpen = true
+    render(<FilePanel />)
 
-    expect(screen.getByText('Scan your files?')).toBeInTheDocument();
-    expect(screen.getByText(/IRIS found 3 eligible files/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }));
-    expect(mocks.startInitialScan).toHaveBeenCalledTimes(1);
-  });
+    expect(screen.getByText('Scan your files?')).toBeInTheDocument()
+    expect(screen.getByText(/IRIS found 3 eligible files/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Start scan' }))
+    expect(mocks.startInitialScan).toHaveBeenCalledTimes(1)
+  })
 
   it('shows a stronger warning before an unusually large scan', () => {
-    hookState.scanConfirmationOpen = true;
+    hookState.scanConfirmationOpen = true
     hookState.scanPreflight = {
       rootPath: '/home/user',
       sources: [],
@@ -313,17 +309,17 @@ describe('FilePanel', () => {
       warningThreshold: 1_000_000,
       requiresConfirmation: true,
       scannedAt: 1,
-    };
-    render(<FilePanel />);
+    }
+    render(<FilePanel />)
 
-    expect(screen.getByText(/1,200,000 eligible files/i)).toBeInTheDocument();
-    expect(screen.getByText(/significant disk space/i)).toBeInTheDocument();
-  });
+    expect(screen.getByText(/1,200,000 eligible files/i)).toBeInTheDocument()
+    expect(screen.getByText(/significant disk space/i)).toBeInTheDocument()
+  })
 
   it('opens the index locations control and renders locked source details', () => {
-    hookState.locationsOpen = true;
-    hookState.locationsLocked = true;
-    hookState.selectedSourceIds = ['home', 'uuid:projects'];
+    hookState.locationsOpen = true
+    hookState.locationsLocked = true
+    hookState.selectedSourceIds = ['home', 'uuid:projects']
     hookState.indexSources = [
       {
         id: 'home',
@@ -355,19 +351,19 @@ describe('FilePanel', () => {
         alwaysSelected: false,
         selectedByDefault: true,
       },
-    ];
+    ]
 
-    render(<FilePanel />);
+    render(<FilePanel />)
 
-    expect(screen.getByText('Indexed locations')).toBeInTheDocument();
-    expect(screen.getByText('/mnt/projects')).toBeInTheDocument();
-    expect(screen.getByText(/locked to the current index/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Delete file index/i }));
-    expect(mocks.clearIndex).toHaveBeenCalledTimes(1);
-  });
+    expect(screen.getByText('Indexed locations')).toBeInTheDocument()
+    expect(screen.getByText('/mnt/projects')).toBeInTheDocument()
+    expect(screen.getByText(/locked to the current index/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Delete file index/i }))
+    expect(mocks.clearIndex).toHaveBeenCalledTimes(1)
+  })
 
   it('renders concept groups in the main pane', () => {
-    hookState.resultMode = 'concepts';
+    hookState.resultMode = 'concepts'
     hookState.conceptGroups = [
       {
         id: 'concept_1',
@@ -386,11 +382,11 @@ describe('FilePanel', () => {
           },
         ],
       },
-    ];
-    render(<FilePanel />);
+    ]
+    render(<FilePanel />)
 
-    expect(screen.getByText('Beach Holidays')).toBeInTheDocument();
-  });
+    expect(screen.getByText('Beach Holidays')).toBeInTheDocument()
+  })
 
   it('renders Markdown AI analysis for selected images', () => {
     hookState.selectedFile = {
@@ -403,21 +399,21 @@ describe('FilePanel', () => {
       isImage: true,
       isVideo: false,
       isBinary: true,
-    };
-    hookState.imagePreview = 'data:image/png;base64,aW1hZ2U=';
-    hookState.aiAnalysis = '## Image analysis\n\nA beach holiday.';
+    }
+    hookState.imagePreview = 'data:image/png;base64,aW1hZ2U='
+    hookState.aiAnalysis = '## Image analysis\n\nA beach holiday.'
     hookState.semanticStatus = {
       ...(hookState.semanticStatus as Record<string, unknown>),
       indexStatus: 'ready',
-    };
+    }
 
-    render(<FilePanel />);
+    render(<FilePanel />)
 
-    expect(screen.getByTestId('markdown-analysis')).toHaveTextContent('Image analysis');
-    expect(screen.getByRole('button', { name: /AI Analyze/i })).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Similar' }));
-    expect(mocks.showSimilarFiles).toHaveBeenCalledTimes(1);
-  });
+    expect(screen.getByTestId('markdown-analysis')).toHaveTextContent('Image analysis')
+    expect(screen.getByRole('button', { name: /AI Analyze/i })).toBeEnabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Similar' }))
+    expect(mocks.showSimilarFiles).toHaveBeenCalledTimes(1)
+  })
 
   it('previews videos and returns to the previous file grid', () => {
     hookState.selectedFile = {
@@ -432,21 +428,18 @@ describe('FilePanel', () => {
       isBinary: true,
       semanticType: 'video',
       timestampMs: 15_000,
-    };
-    hookState.videoPreview = 'http://127.0.0.1:3210/api/local/fs/media?path=clip.mp4';
+    }
+    hookState.videoPreview = 'http://127.0.0.1:3210/api/local/fs/media?path=clip.mp4'
 
-    render(<FilePanel />);
+    render(<FilePanel />)
 
-    expect(screen.getByText('clip.mp4')).toBeInTheDocument();
-    expect(document.querySelector('video')).toHaveAttribute(
-      'src',
-      expect.stringContaining('/api/local/fs/media'),
-    );
-    const video = document.querySelector('video')!;
-    Object.defineProperty(video, 'duration', { value: 30, configurable: true });
-    fireEvent.loadedMetadata(video);
-    expect(video.currentTime).toBe(15);
-    fireEvent.click(screen.getByRole('button', { name: 'Back to folder' }));
-    expect(mocks.closePreview).toHaveBeenCalledTimes(1);
-  });
-});
+    expect(screen.getByText('clip.mp4')).toBeInTheDocument()
+    expect(document.querySelector('video')).toHaveAttribute('src', expect.stringContaining('/api/local/fs/media'))
+    const video = document.querySelector('video')!
+    Object.defineProperty(video, 'duration', { value: 30, configurable: true })
+    fireEvent.loadedMetadata(video)
+    expect(video.currentTime).toBe(15)
+    fireEvent.click(screen.getByRole('button', { name: 'Back to folder' }))
+    expect(mocks.closePreview).toHaveBeenCalledTimes(1)
+  })
+})

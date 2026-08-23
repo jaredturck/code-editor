@@ -1,11 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import {
-  decryptJson,
-  encryptJson,
-  NONCE_BYTES,
-  TAG_BYTES,
-} from '../backend/desktopBridge/storage/encryption'
+import { decryptJson, encryptJson, NONCE_BYTES, TAG_BYTES } from '../backend/desktopBridge/storage/encryption'
 import {
   filterRendererBootstrapValues,
   isLazyRendererStateKey,
@@ -27,32 +22,20 @@ describe('encrypted conversation persistence', () => {
     expect(payload.tag).toHaveLength(TAG_BYTES)
     expect(payload.ciphertext.toString('utf8')).not.toContain(secret.content)
     expect(payload.ciphertext.toString('utf8')).not.toContain('sensitive attachment body')
-    expect(
-      decryptJson(master_key, 'chat-message', 'chat-1:0', 'message', payload),
-    ).toEqual(secret)
+    expect(decryptJson(master_key, 'chat-message', 'chat-1:0', 'message', payload)).toEqual(secret)
   })
 
   it('rejects tampering and record substitution through GCM authentication and AAD', () => {
     const master_key = randomBytes(32)
-    const payload = encryptJson(
-      master_key,
-      'chat-message',
-      'chat-1:0',
-      'message',
-      { content: 'authenticated content' },
-    )
+    const payload = encryptJson(master_key, 'chat-message', 'chat-1:0', 'message', { content: 'authenticated content' })
     const tampered = {
       ...payload,
       ciphertext: Buffer.from(payload.ciphertext),
     }
     tampered.ciphertext[0] ^= 1
 
-    expect(() =>
-      decryptJson(master_key, 'chat-message', 'chat-1:0', 'message', tampered),
-    ).toThrow()
-    expect(() =>
-      decryptJson(master_key, 'chat-message', 'chat-2:0', 'message', payload),
-    ).toThrow()
+    expect(() => decryptJson(master_key, 'chat-message', 'chat-1:0', 'message', tampered)).toThrow()
+    expect(() => decryptJson(master_key, 'chat-message', 'chat-2:0', 'message', payload)).toThrow()
   })
 })
 

@@ -5,64 +5,40 @@
  * refactors cannot silently weaken those guarantees.
  */
 
-import { describe, expect, it, vi } from 'vitest';
-import * as bridgeModule from '@/platform/desktopBridge';
+import { describe, expect, it, vi } from 'vitest'
+import * as bridgeModule from '@/platform/desktopBridge'
 
-type BridgeFunction = (...args: any[]) => any;
-type BridgeCase = [string, () => Promise<unknown>, string, string, unknown];
+type BridgeFunction = (...args: any[]) => any
+type BridgeCase = [string, () => Promise<unknown>, string, string, unknown]
 
-const bridge = bridgeModule as typeof bridgeModule & Record<string, BridgeFunction>;
-import { jsonResponse, parseFetchCall } from '../helpers/http';
+const bridge = bridgeModule as typeof bridgeModule & Record<string, BridgeFunction>
+import { jsonResponse, parseFetchCall } from '../helpers/http'
 
 // Installs a deterministic fetch mock and returns the captured bridge calls.
 function mockFetch(data: unknown = { ok: true }) {
-  const fetchMock = vi.fn().mockResolvedValue(jsonResponse(data));
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+  const fetchMock = vi.fn().mockResolvedValue(jsonResponse(data))
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
 }
 
 describe('desktopBridge', () => {
   it('builds authenticated media URLs for browser video elements', () => {
-    window.history.replaceState({}, '', '/?bridgePort=3210&bridgeToken=media-secret');
+    window.history.replaceState({}, '', '/?bridgePort=3210&bridgeToken=media-secret')
 
-    const url = new URL(bridge.getFileMediaUrl('/home/user/My Clip.mp4'));
+    const url = new URL(bridge.getFileMediaUrl('/home/user/My Clip.mp4'))
 
-    expect(url.origin).toBe('http://127.0.0.1:3210');
-    expect(url.pathname).toBe('/api/local/fs/media');
-    expect(url.searchParams.get('path')).toBe('/home/user/My Clip.mp4');
-    expect(url.searchParams.get('__token')).toBe('media-secret');
-    window.history.replaceState({}, '', '/');
-  });
+    expect(url.origin).toBe('http://127.0.0.1:3210')
+    expect(url.pathname).toBe('/api/local/fs/media')
+    expect(url.searchParams.get('path')).toBe('/home/user/My Clip.mp4')
+    expect(url.searchParams.get('__token')).toBe('media-secret')
+    window.history.replaceState({}, '', '/')
+  })
 
   const cases: BridgeCase[] = [
-    [
-      'getLocalBridgeHealth',
-      () => bridge.getLocalBridgeHealth(),
-      '/api/local/health',
-      'GET',
-      undefined,
-    ],
-    [
-      'getLocalSessionInfo',
-      () => bridge.getLocalSessionInfo(),
-      '/api/local/session',
-      'GET',
-      undefined,
-    ],
-    [
-      'listDirectory',
-      () => bridge.listDirectory('/tmp', 2),
-      '/api/local/fs/list',
-      'POST',
-      { path: '/tmp', depth: 2 },
-    ],
-    [
-      'browseDirectory',
-      () => bridge.browseDirectory('/tmp'),
-      '/api/local/fs/browse',
-      'POST',
-      { path: '/tmp' },
-    ],
+    ['getLocalBridgeHealth', () => bridge.getLocalBridgeHealth(), '/api/local/health', 'GET', undefined],
+    ['getLocalSessionInfo', () => bridge.getLocalSessionInfo(), '/api/local/session', 'GET', undefined],
+    ['listDirectory', () => bridge.listDirectory('/tmp', 2), '/api/local/fs/list', 'POST', { path: '/tmp', depth: 2 }],
+    ['browseDirectory', () => bridge.browseDirectory('/tmp'), '/api/local/fs/browse', 'POST', { path: '/tmp' }],
     [
       'getFileThumbnail',
       () => bridge.getFileThumbnail('/tmp/photo.png', 160, 120),
@@ -91,13 +67,7 @@ describe('desktopBridge', () => {
       'POST',
       { path: '.', query: 'config', depth: 4 },
     ],
-    [
-      'getFileIndexSources',
-      () => bridge.getFileIndexSources(),
-      '/api/local/fs/index/sources',
-      'POST',
-      {},
-    ],
+    ['getFileIndexSources', () => bridge.getFileIndexSources(), '/api/local/fs/index/sources', 'POST', {}],
     [
       'getFileSemanticStatus',
       () => bridge.getFileSemanticStatus(true),
@@ -105,13 +75,7 @@ describe('desktopBridge', () => {
       'POST',
       { buildIfMissing: true },
     ],
-    [
-      'installFileSemanticModels',
-      () => bridge.installFileSemanticModels(),
-      '/api/local/fs/index/install',
-      'POST',
-      {},
-    ],
+    ['installFileSemanticModels', () => bridge.installFileSemanticModels(), '/api/local/fs/index/install', 'POST', {}],
     [
       'rebuildFileSemanticIndex',
       () => bridge.rebuildFileSemanticIndex(),
@@ -126,27 +90,9 @@ describe('desktopBridge', () => {
       'POST',
       {},
     ],
-    [
-      'rescanFileSemanticIndex',
-      () => bridge.rescanFileSemanticIndex(),
-      '/api/local/fs/index/rescan',
-      'POST',
-      {},
-    ],
-    [
-      'cancelFileSemanticIndex',
-      () => bridge.cancelFileSemanticIndex(),
-      '/api/local/fs/index/cancel',
-      'POST',
-      {},
-    ],
-    [
-      'clearFileSemanticIndex',
-      () => bridge.clearFileSemanticIndex(),
-      '/api/local/fs/index/clear',
-      'POST',
-      {},
-    ],
+    ['rescanFileSemanticIndex', () => bridge.rescanFileSemanticIndex(), '/api/local/fs/index/rescan', 'POST', {}],
+    ['cancelFileSemanticIndex', () => bridge.cancelFileSemanticIndex(), '/api/local/fs/index/cancel', 'POST', {}],
+    ['clearFileSemanticIndex', () => bridge.clearFileSemanticIndex(), '/api/local/fs/index/clear', 'POST', {}],
     [
       'searchFileSemanticIndex',
       () => bridge.searchFileSemanticIndex('calculator app', 25),
@@ -212,8 +158,7 @@ describe('desktopBridge', () => {
     ],
     [
       'discoverLauncherCapabilities',
-      () =>
-        bridge.discoverLauncherCapabilities({ desktop: 'kde', applications: [], tools: [] }, true),
+      () => bridge.discoverLauncherCapabilities({ desktop: 'kde', applications: [], tools: [] }, true),
       '/api/local/launcher/discover',
       'POST',
       {
@@ -235,13 +180,7 @@ describe('desktopBridge', () => {
       'POST',
       { cwd: '/project' },
     ],
-    [
-      'stopDevEnvironment',
-      () => bridge.stopDevEnvironment(),
-      '/api/local/launcher/dev/stop',
-      'POST',
-      {},
-    ],
+    ['stopDevEnvironment', () => bridge.stopDevEnvironment(), '/api/local/launcher/dev/stop', 'POST', {}],
     [
       'clearIRISData',
       () => bridge.clearIRISData('approval-id'),
@@ -301,13 +240,7 @@ describe('desktopBridge', () => {
         permissions: { mouse: true },
       },
     ],
-    [
-      'discoverLocalAIServers',
-      () => bridge.discoverLocalAIServers(),
-      '/api/local/ai/discover',
-      'GET',
-      undefined,
-    ],
+    ['discoverLocalAIServers', () => bridge.discoverLocalAIServers(), '/api/local/ai/discover', 'GET', undefined],
     [
       'getNoteTranscriptionStatus',
       () => bridge.getNoteTranscriptionStatus(),
@@ -349,13 +282,7 @@ describe('desktopBridge', () => {
       'POST',
       { query: 'query', maxResults: 4 },
     ],
-    [
-      'listSkillProfiles',
-      () => bridge.listSkillProfiles(),
-      '/api/local/skills/profiles',
-      'GET',
-      undefined,
-    ],
+    ['listSkillProfiles', () => bridge.listSkillProfiles(), '/api/local/skills/profiles', 'GET', undefined],
     [
       'listSkillDefinitions',
       () => bridge.listSkillDefinitions('profile'),
@@ -384,13 +311,7 @@ describe('desktopBridge', () => {
       'POST',
       { agentId: 'executor', capabilities: ['files.read'] },
     ],
-    [
-      'getAgentRosterRemote',
-      () => bridge.getAgentRosterRemote(),
-      '/api/local/agent/roster',
-      'GET',
-      undefined,
-    ],
+    ['getAgentRosterRemote', () => bridge.getAgentRosterRemote(), '/api/local/agent/roster', 'GET', undefined],
     [
       'postAgentTask',
       () => bridge.postAgentTask({ taskId: 'task' }),
@@ -433,13 +354,7 @@ describe('desktopBridge', () => {
       'POST',
       { pattern: 'needle', path: '.' },
     ],
-    [
-      'powerStat',
-      () => bridge.powerStat('README.md'),
-      '/api/local/power/stat',
-      'POST',
-      { path: ['README.md'] },
-    ],
+    ['powerStat', () => bridge.powerStat('README.md'), '/api/local/power/stat', 'POST', { path: ['README.md'] }],
     [
       'powerFind',
       () => bridge.powerFind({ path: '.', name: '*.js' }),
@@ -447,20 +362,8 @@ describe('desktopBridge', () => {
       'POST',
       { path: '.', name: '*.js' },
     ],
-    [
-      'powerFd',
-      () => bridge.powerFd({ query: 'test' }),
-      '/api/local/power/fd',
-      'POST',
-      { query: 'test' },
-    ],
-    [
-      'powerLocate',
-      () => bridge.powerLocate({ query: 'file' }),
-      '/api/local/power/locate',
-      'POST',
-      { query: 'file' },
-    ],
+    ['powerFd', () => bridge.powerFd({ query: 'test' }), '/api/local/power/fd', 'POST', { query: 'test' }],
+    ['powerLocate', () => bridge.powerLocate({ query: 'file' }), '/api/local/power/locate', 'POST', { query: 'file' }],
     [
       'powerDiff',
       () => bridge.powerDiff('a.txt', 'new', 5),
@@ -489,13 +392,7 @@ describe('desktopBridge', () => {
       'POST',
       { include: ['tools'] },
     ],
-    [
-      'powerClipboardRead',
-      () => bridge.powerClipboardRead(),
-      '/api/local/power/clipboard/read',
-      'GET',
-      undefined,
-    ],
+    ['powerClipboardRead', () => bridge.powerClipboardRead(), '/api/local/power/clipboard/read', 'GET', undefined],
     [
       'powerClipboardWrite',
       () => bridge.powerClipboardWrite('text'),
@@ -517,121 +414,115 @@ describe('desktopBridge', () => {
       'POST',
       { multiple: true },
     ],
-  ];
+  ]
 
-  it.each(cases)(
-    '%s preserves its HTTP contract',
-    async (_name, call, expectedUrl, expectedMethod, expectedBody) => {
-      const responseData =
-        _name === 'getLocalSessionInfo' ? { session: { id: 'local' } } : { ok: true };
-      const fetchMock = mockFetch(responseData);
+  it.each(cases)('%s preserves its HTTP contract', async (_name, call, expectedUrl, expectedMethod, expectedBody) => {
+    const responseData = _name === 'getLocalSessionInfo' ? { session: { id: 'local' } } : { ok: true }
+    const fetchMock = mockFetch(responseData)
 
-      await call();
+    await call()
 
-      const { url, options, body } = parseFetchCall(fetchMock);
-      expect(url).toBe(expectedUrl);
-      expect(options.method).toBe(expectedMethod);
-      expect(body).toEqual(expectedBody);
-      if (expectedBody) {
-        expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
-      } else {
-        expect(options.headers).toBeUndefined();
-      }
-    },
-  );
+    const { url, options, body } = parseFetchCall(fetchMock)
+    expect(url).toBe(expectedUrl)
+    expect(options.method).toBe(expectedMethod)
+    expect(body).toEqual(expectedBody)
+    if (expectedBody) {
+      expect(options.headers).toEqual({ 'Content-Type': 'application/json' })
+    } else {
+      expect(options.headers).toBeUndefined()
+    }
+  })
 
   it('sends note audio as an in-memory WAV request', async () => {
-    const fetchMock = mockFetch({ text: 'dictated note' });
+    const fetchMock = mockFetch({ text: 'dictated note' })
     const audio = new Blob([new Uint8Array([82, 73, 70, 70])], {
       type: 'audio/wav',
-    });
+    })
 
-    await expect(bridge.transcribeNoteAudio(audio)).resolves.toBe('dictated note');
+    await expect(bridge.transcribeNoteAudio(audio)).resolves.toBe('dictated note')
 
-    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/api/local/audio/transcriptions');
-    expect(options.method).toBe('POST');
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/local/audio/transcriptions')
+    expect(options.method).toBe('POST')
     expect(options.headers).toMatchObject({
       'Content-Type': 'audio/wav',
       'x-iris-audio-provider': 'local',
       'x-iris-audio-local-fallback': '1',
-    });
-    expect(options.body).toBe(audio);
-  });
+    })
+    expect(options.body).toBe(audio)
+  })
 
   it('marks File Manager requests and selected index locations explicitly', async () => {
-    const fetchMock = mockFetch({ ok: true });
+    const fetchMock = mockFetch({ ok: true })
 
-    await bridge.browseDirectory('/mnt/projects', true);
-    await bridge.getFileThumbnail('/mnt/projects/photo.png', 160, 120, true);
-    await bridge.preflightFileSemanticIndex(['home', 'uuid:projects']);
-    await bridge.rebuildFileSemanticIndex(true, ['home', 'uuid:projects']);
+    await bridge.browseDirectory('/mnt/projects', true)
+    await bridge.getFileThumbnail('/mnt/projects/photo.png', 160, 120, true)
+    await bridge.preflightFileSemanticIndex(['home', 'uuid:projects'])
+    await bridge.rebuildFileSemanticIndex(true, ['home', 'uuid:projects'])
 
     expect(parseFetchCall(fetchMock, 0).body).toEqual({
       path: '/mnt/projects',
       fileManager: true,
-    });
+    })
     expect(parseFetchCall(fetchMock, 1).body).toEqual({
       path: '/mnt/projects/photo.png',
       width: 160,
       height: 120,
       fileManager: true,
-    });
+    })
     expect(parseFetchCall(fetchMock, 2).body).toEqual({
       selectedSourceIds: ['home', 'uuid:projects'],
-    });
+    })
     expect(parseFetchCall(fetchMock, 3).body).toEqual({
       confirmLargeScan: true,
       selectedSourceIds: ['home', 'uuid:projects'],
-    });
-  });
+    })
+  })
 
   it('obtains a single-use approval token before a non-dry-run automation execute', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ approvalToken: 'tok-123', expiresInMs: 60000 }))
-      .mockResolvedValueOnce(jsonResponse({ ok: true }));
-    vi.stubGlobal('fetch', fetchMock);
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
 
     await bridge.executeAutomationActions([{ type: 'click' }], {
       dryRun: false,
       cwd: '/project',
       permissions: { mouse: true },
-    });
+    })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const approval = parseFetchCall(fetchMock, 0);
-    expect(approval.url).toBe('/api/local/automation/approval');
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const approval = parseFetchCall(fetchMock, 0)
+    expect(approval.url).toBe('/api/local/automation/approval')
     expect(approval.body).toEqual({
       actions: [{ type: 'click' }],
       cwd: '/project',
-    });
+    })
 
-    const execute = parseFetchCall(fetchMock, 1);
-    expect(execute.url).toBe('/api/local/automation/execute');
+    const execute = parseFetchCall(fetchMock, 1)
+    expect(execute.url).toBe('/api/local/automation/execute')
     expect(execute.body).toEqual({
       actions: [{ type: 'click' }],
       dryRun: false,
       cwd: '/project',
       permissions: { mouse: true },
       approvalToken: 'tok-123',
-    });
-  });
+    })
+  })
 
   it('returns the session payload rather than the wrapper', async () => {
-    mockFetch({ session: { id: 'local-session' } });
+    mockFetch({ session: { id: 'local-session' } })
     await expect(bridge.getLocalSessionInfo()).resolves.toEqual({
       id: 'local-session',
-    });
-  });
+    })
+  })
 
   it('throws the server error message for non-success responses', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ error: 'denied' }, { ok: false, status: 403 }));
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(bridge.getLocalBridgeHealth()).rejects.toThrow('denied');
-  });
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ error: 'denied' }, { ok: false, status: 403 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(bridge.getLocalBridgeHealth()).rejects.toThrow('denied')
+  })
 
   it('falls back to the status code when an error body is unavailable', async () => {
     vi.stubGlobal(
@@ -640,37 +531,35 @@ describe('desktopBridge', () => {
         ok: false,
         status: 500,
         json: async () => {
-          throw new Error('invalid json');
+          throw new Error('invalid json')
         },
       }),
-    );
-    await expect(bridge.getLocalBridgeHealth()).rejects.toThrow('Local bridge error (500)');
-  });
+    )
+    await expect(bridge.getLocalBridgeHealth()).rejects.toThrow('Local bridge error (500)')
+  })
 
   it('returns null when the optional screen source endpoint is unavailable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('not available')));
-    await expect(bridge.getScreenSources()).resolves.toBeNull();
-  });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('not available')))
+    await expect(bridge.getScreenSources()).resolves.toBeNull()
+  })
 
   it('returns screen sources from a supported endpoint', async () => {
-    mockFetch({ sources: [{ id: 'screen:1', name: 'Screen 1' }] });
-    await expect(bridge.getScreenSources()).resolves.toEqual([
-      { id: 'screen:1', name: 'Screen 1' },
-    ]);
-  });
+    mockFetch({ sources: [{ id: 'screen:1', name: 'Screen 1' }] })
+    await expect(bridge.getScreenSources()).resolves.toEqual([{ id: 'screen:1', name: 'Screen 1' }])
+  })
 
   it('normalizes scalar and array paths for powerStat', async () => {
-    const fetchMock = mockFetch({ ok: true });
-    await bridge.powerStat(['one', 'two']);
-    expect(parseFetchCall(fetchMock).body).toEqual({ path: ['one', 'two'] });
-  });
+    const fetchMock = mockFetch({ ok: true })
+    await bridge.powerStat(['one', 'two'])
+    expect(parseFetchCall(fetchMock).body).toEqual({ path: ['one', 'two'] })
+  })
 
   it('opens the expected agent EventSource URL', () => {
     const EventSourceMock = vi.fn(function EventSource(this: { url: string }, url: string) {
-      this.url = url;
-    });
-    vi.stubGlobal('EventSource', EventSourceMock);
-    const source = bridge.openAgentStream('agent one') as { url: string };
-    expect(source.url).toBe('/api/local/agent/stream/agent%20one');
-  });
-});
+      this.url = url
+    })
+    vi.stubGlobal('EventSource', EventSourceMock)
+    const source = bridge.openAgentStream('agent one') as { url: string }
+    expect(source.url).toBe('/api/local/agent/stream/agent%20one')
+  })
+})

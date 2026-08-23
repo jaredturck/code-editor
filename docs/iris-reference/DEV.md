@@ -148,7 +148,6 @@ When adding a route:
 
 If the operating-system credential store is unavailable, saving or using a required credential fails clearly.
 
-
 ## 10. Integrated editor window
 
 The Editor pill opens one independent BrowserWindow with renderer role `editor`; it is not a workspace panel and clicking the pill again focuses the existing instance. Keep renderer work under `src/features/editor/`, native editor operations under `electron-src/editorIpc.cts` and `electron-src/editor/`, and use the existing Iris preload/credential/bridge/settings contracts rather than recreating a second Electron application.

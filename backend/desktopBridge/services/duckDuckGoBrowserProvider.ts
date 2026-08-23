@@ -4,57 +4,57 @@
  * normalized search-engine result cards.
  */
 
-export type DuckDuckGoSearchMode = 'browser' | 'legacy' | 'auto';
+export type DuckDuckGoSearchMode = 'browser' | 'legacy' | 'auto'
 
 export interface DuckDuckGoBrowserProgressEvent {
-  type: string;
-  message: string;
-  current?: number;
-  total?: number;
-  detail?: Record<string, unknown>;
+  type: string
+  message: string
+  current?: number
+  total?: number
+  detail?: Record<string, unknown>
 }
 
 export interface DuckDuckGoBrowserSearchRequest {
-  query: string;
-  maxResults: number;
-  safeSearch: string;
-  timeRange: string;
-  locale: string;
-  region: string;
-  signal?: AbortSignal;
-  onProgress?: (event: DuckDuckGoBrowserProgressEvent) => void;
+  query: string
+  maxResults: number
+  safeSearch: string
+  timeRange: string
+  locale: string
+  region: string
+  signal?: AbortSignal
+  onProgress?: (event: DuckDuckGoBrowserProgressEvent) => void
 }
 
 export interface DuckDuckGoBrowserSearchResult {
-  title: string;
-  url: string;
-  hostname?: string;
-  snippet?: string;
+  title: string
+  url: string
+  hostname?: string
+  snippet?: string
 }
 
 export interface DuckDuckGoBrowserSearchResponse {
-  results: DuckDuckGoBrowserSearchResult[];
-  relatedQueries?: string[];
-  pageUrl?: string;
-  elapsedMs?: number;
-  cacheHit?: boolean;
+  results: DuckDuckGoBrowserSearchResult[]
+  relatedQueries?: string[]
+  pageUrl?: string
+  elapsedMs?: number
+  cacheHit?: boolean
 }
 
 export type DuckDuckGoBrowserSearch = (
   request: DuckDuckGoBrowserSearchRequest,
-) => Promise<DuckDuckGoBrowserSearchResponse>;
+) => Promise<DuckDuckGoBrowserSearchResponse>
 
 interface DuckDuckGoBrowserRegistration {
-  id: symbol;
-  mode: DuckDuckGoSearchMode;
-  search: DuckDuckGoBrowserSearch | null;
+  id: symbol
+  mode: DuckDuckGoSearchMode
+  search: DuckDuckGoBrowserSearch | null
 }
 
 let activeRegistration: DuckDuckGoBrowserRegistration = {
   id: Symbol('duckduckgo-unconfigured'),
   mode: 'legacy',
   search: null,
-};
+}
 
 /** Converts a caller-supplied mode into the three supported transport choices. */
 export function normalizeDuckDuckGoSearchMode(
@@ -63,11 +63,11 @@ export function normalizeDuckDuckGoSearchMode(
 ): DuckDuckGoSearchMode {
   const normalized = String(value || '')
     .trim()
-    .toLowerCase();
+    .toLowerCase()
   if (normalized === 'browser' || normalized === 'legacy' || normalized === 'auto') {
-    return normalized;
+    return normalized
   }
-  return fallback;
+  return fallback
 }
 
 /**
@@ -75,49 +75,49 @@ export function normalizeDuckDuckGoSearchMode(
  * cleanup only clears the registration it created, which keeps overlapping test fixtures safe.
  */
 export function configureDuckDuckGoBrowserProvider(options: {
-  search?: DuckDuckGoBrowserSearch | null;
-  mode?: DuckDuckGoSearchMode | string;
+  search?: DuckDuckGoBrowserSearch | null
+  mode?: DuckDuckGoSearchMode | string
 }): () => void {
   const registration: DuckDuckGoBrowserRegistration = {
     id: Symbol('duckduckgo-browser-registration'),
     mode: normalizeDuckDuckGoSearchMode(options.mode, options.search ? 'browser' : 'legacy'),
     search: typeof options.search === 'function' ? options.search : null,
-  };
-  activeRegistration = registration;
+  }
+  activeRegistration = registration
 
   return () => {
-    if (activeRegistration.id !== registration.id) return;
+    if (activeRegistration.id !== registration.id) return
     activeRegistration = {
       id: Symbol('duckduckgo-unconfigured'),
       mode: 'legacy',
       search: null,
-    };
-  };
+    }
+  }
 }
 
 /** Returns transport availability without exposing the retained callback. */
 export function getDuckDuckGoBrowserProviderState(): {
-  available: boolean;
-  mode: DuckDuckGoSearchMode;
+  available: boolean
+  mode: DuckDuckGoSearchMode
 } {
   return {
     available: Boolean(activeRegistration.search),
     mode: activeRegistration.mode,
-  };
+  }
 }
 
 /** Executes the currently registered Electron browser search callback. */
 export async function searchDuckDuckGoWithBrowser(
   request: DuckDuckGoBrowserSearchRequest,
 ): Promise<DuckDuckGoBrowserSearchResponse> {
-  const search = activeRegistration.search;
+  const search = activeRegistration.search
   if (!search) {
     const error = new Error(
       'DuckDuckGo browser search is unavailable because the Electron browser provider was not registered.',
-    ) as Error & { statusCode?: number; code?: string };
-    error.statusCode = 503;
-    error.code = 'DDG_BROWSER_UNAVAILABLE';
-    throw error;
+    ) as Error & { statusCode?: number; code?: string }
+    error.statusCode = 503
+    error.code = 'DDG_BROWSER_UNAVAILABLE'
+    throw error
   }
 
   return search({
@@ -131,5 +131,5 @@ export async function searchDuckDuckGoWithBrowser(
     region: String(request.region || 'wt-wt').toLowerCase(),
     signal: request.signal,
     onProgress: request.onProgress,
-  });
+  })
 }

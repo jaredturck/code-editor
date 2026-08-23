@@ -41,7 +41,10 @@ function fake_authority(): EditorFileAuthority {
     async execute(tool_name, args = {}) {
       const path = String(args.path || '')
       if (tool_name === 'files.list') {
-        return { rootPath: '/workspace', tree: { name: 'workspace', path: '/workspace', type: 'directory', children: [] } }
+        return {
+          rootPath: '/workspace',
+          tree: { name: 'workspace', path: '/workspace', type: 'directory', children: [] },
+        }
       }
       const file = files.get(path)
       if (tool_name === 'files.read') {

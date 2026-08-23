@@ -2,9 +2,9 @@
  * Verifies custom agent model fields stay hidden until Other is selected.
  */
 
-import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   settings: {
@@ -38,42 +38,42 @@ const mocks = vi.hoisted(() => ({
     },
   },
   updateSettings: vi.fn(),
-}));
+}))
 
-const defaultSettings = structuredClone(mocks.settings);
+const defaultSettings = structuredClone(mocks.settings)
 
 vi.mock('@/platform-context/AgentSettingsContext', () => ({
   useOrbSettings: () => ({
     settings: mocks.settings,
     updateSettings: mocks.updateSettings,
   }),
-}));
+}))
 
 vi.mock('@/platform/aiService', () => ({
   discoverModelsForProvider: vi.fn(),
-}));
+}))
 
-import AgentsSettings from '@/components/settings/categories/AgentsSettings';
+import AgentsSettings from '@/components/settings/categories/AgentsSettings'
 
 describe('AgentsSettings', () => {
   beforeEach(() => {
-    mocks.settings = structuredClone(defaultSettings);
-    mocks.updateSettings.mockReset();
-  });
+    mocks.settings = structuredClone(defaultSettings)
+    mocks.updateSettings.mockReset()
+  })
 
   it('shows custom model inputs only after Other is selected for each role', () => {
-    render(<AgentsSettings activeSubTab="roles" onSubTabChange={vi.fn()} />);
+    render(<AgentsSettings activeSubTab="roles" onSubTabChange={vi.fn()} />)
 
     for (const role of ['Orchestrator', 'Executor', 'Scout']) {
-      expect(screen.queryByLabelText(`${role} custom model ID`)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(`${role} custom model ID`)).not.toBeInTheDocument()
 
       fireEvent.change(screen.getByLabelText(`${role} model`), {
         target: { value: '__custom_model__' },
-      });
+      })
 
-      expect(screen.getByLabelText(`${role} custom model ID`)).toBeInTheDocument();
+      expect(screen.getByLabelText(`${role} custom model ID`)).toBeInTheDocument()
     }
-  });
+  })
 
   it('keeps existing custom model IDs visible and editable', () => {
     mocks.settings = {
@@ -101,14 +101,12 @@ describe('AgentsSettings', () => {
           primary: true,
         },
       ],
-    };
+    }
 
-    render(<AgentsSettings activeSubTab="roles" onSubTabChange={vi.fn()} />);
+    render(<AgentsSettings activeSubTab="roles" onSubTabChange={vi.fn()} />)
 
-    expect(screen.getByLabelText('Orchestrator custom model ID')).toHaveValue(
-      'custom-orchestrator',
-    );
-    expect(screen.getByLabelText('Executor custom model ID')).toHaveValue('custom-executor');
-    expect(screen.getByLabelText('Scout custom model ID')).toHaveValue('custom-scout');
-  });
-});
+    expect(screen.getByLabelText('Orchestrator custom model ID')).toHaveValue('custom-orchestrator')
+    expect(screen.getByLabelText('Executor custom model ID')).toHaveValue('custom-executor')
+    expect(screen.getByLabelText('Scout custom model ID')).toHaveValue('custom-scout')
+  })
+})

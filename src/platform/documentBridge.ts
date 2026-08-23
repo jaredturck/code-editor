@@ -12,9 +12,8 @@ export interface BridgeDocumentInspection {
 }
 
 export async function inspectDocumentFile(path: string): Promise<BridgeDocumentInspection> {
-  const token = typeof window === 'undefined'
-    ? ''
-    : new URLSearchParams(window.location.search).get('bridgeToken') || ''
+  const token =
+    typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('bridgeToken') || ''
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['x-iris-bridge-token'] = token
 
@@ -23,7 +22,7 @@ export async function inspectDocumentFile(path: string): Promise<BridgeDocumentI
     headers,
     body: JSON.stringify({ path }),
   })
-  const data = await response.json().catch(() => ({})) as Record<string, unknown>
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>
 
   if (!response.ok) {
     throw new Error(String(data.error || `Document inspection failed (${response.status})`))

@@ -47,7 +47,11 @@ function editor_authority() {
   return {
     execute: async (tool_name: string, args: Record<string, unknown> = {}) => {
       if (tool_name === 'files.list') {
-        if (String(args.path || '') === '') return { rootPath: '/workspace', tree: { name: 'workspace', path: '/workspace', type: 'directory', children: [] } }
+        if (String(args.path || '') === '')
+          return {
+            rootPath: '/workspace',
+            tree: { name: 'workspace', path: '/workspace', type: 'directory', children: [] },
+          }
         return project_io().listDirectory(String(args.path || ''), Number(args.depth) || 3)
       }
       if (tool_name === 'files.read') {
@@ -156,9 +160,10 @@ describe('project skill loading', () => {
 
   it('lets project definitions override global definitions deterministically', async () => {
     const project_skills = await loadProjectSkillDefinitions('/workspace', project_io())
-    const merged = mergeProjectSkillDefinitions([
-      { id: 'secure-review', title: 'Global Security Review', enabled: true },
-    ], project_skills)
+    const merged = mergeProjectSkillDefinitions(
+      [{ id: 'secure-review', title: 'Global Security Review', enabled: true }],
+      project_skills,
+    )
     expect(merged).toHaveLength(1)
     expect(merged[0].title).toBe('Project Security Review')
   })

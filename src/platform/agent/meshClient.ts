@@ -18,47 +18,38 @@
  * Budget/depth/cycle enforcement is owned by the conductor (meshConductor.ts); the broker
  * gates each consult against it and drives any approval-based cap escalation.
  */
-import {
-  buildAgentRoster,
-  findPeers,
-  deriveModelTags,
-  type FindMatch,
-} from '@/platform/agent/modelTags';
-import { getRoutingProfile } from '@/platform/agent/modelRouting';
-import {
-  applyAgentIdentityToSettings,
-  normalizeAgentRole,
-  resolveAgentIdentity,
-} from '@/platform/agent/agentIdentity';
-import { buildSTP } from '@/platform/stpBuilder';
-import { executeSTP } from '@/platform/subAgentRuntime';
-import type { SubAgentSettings } from '@/platform/agent/subAgentTypes';
+import { buildAgentRoster, findPeers, deriveModelTags, type FindMatch } from '@/platform/agent/modelTags'
+import { getRoutingProfile } from '@/platform/agent/modelRouting'
+import { applyAgentIdentityToSettings, normalizeAgentRole, resolveAgentIdentity } from '@/platform/agent/agentIdentity'
+import { buildSTP } from '@/platform/stpBuilder'
+import { executeSTP } from '@/platform/subAgentRuntime'
+import type { SubAgentSettings } from '@/platform/agent/subAgentTypes'
 
 // Consult runs are deliberately tiny — one round, no tools, a short answer.
-const CONSULT_MAX_STEPS = 1;
-const CONSULT_MAX_OUTPUT_CHARS = 1800;
-const CONSULT_TIMEOUT_MS = 90000;
-const CONSULT_CONTEXT_CHARS = 1500;
+const CONSULT_MAX_STEPS = 1
+const CONSULT_MAX_OUTPUT_CHARS = 1800
+const CONSULT_TIMEOUT_MS = 90000
+const CONSULT_CONTEXT_CHARS = 1500
 
 export interface FindArgs extends Record<string, unknown> {
-  tags?: unknown;
-  topic?: unknown;
-  exclude?: unknown;
-  limit?: unknown;
+  tags?: unknown
+  topic?: unknown
+  exclude?: unknown
+  limit?: unknown
 }
 
 export interface FindResult {
   matches: Array<{
-    agentId: string;
-    role: string;
-    provider: string;
-    model: string;
-    tags: string[];
-    tier: number;
-    matchedTags: string[];
-    score: number;
-  }>;
-  roster: Array<{ id: string; role: string; provider: string; model: string; tags: string[] }>;
+    agentId: string
+    role: string
+    provider: string
+    model: string
+    tags: string[]
+    tier: number
+    matchedTags: string[]
+    score: number
+  }>
+  roster: Array<{ id: string; role: string; provider: string; model: string; tags: string[] }>
 }
 
 /**
@@ -75,7 +66,7 @@ function buildMatchSettings(match: FindMatch, settings: SubAgentSettings): SubAg
     // Bind THIS peer's assigned key slot so concurrent peers each use their own key.
     keyId: match.keyId || '1',
     explicitlyAssigned: true,
-  });
+  })
 }
 
 /**
@@ -86,12 +77,12 @@ function buildMatchSettings(match: FindMatch, settings: SubAgentSettings): SubAg
 async function runMatchTask(
   match: FindMatch,
   opts: {
-    type: string;
-    instructions: string;
-    outputSchema: Record<string, string>;
-    maxSteps: number;
-    maxOutputChars: number;
-    timeoutMs: number;
+    type: string
+    instructions: string
+    outputSchema: Record<string, string>
+    maxSteps: number
+    maxOutputChars: number
+    timeoutMs: number
   },
   settings: SubAgentSettings,
   emit?: (event: Record<string, unknown>) => void,
@@ -116,11 +107,11 @@ async function runMatchTask(
       keyId: match.keyId,
     },
     skills: { load: [], variant: 'simple' },
-  });
+  })
   // Forward the peer's events (notably its reasoning/thinking) to the caller so it can be
   // surfaced in the timeline and, for the Overwatcher, captured for the injected steer.
-  const outcome = await executeSTP(stp, buildMatchSettings(match, settings), emit, signal);
-  return { result: outcome?.result ?? null, status: String(outcome?.status || 'unknown') };
+  const outcome = await executeSTP(stp, buildMatchSettings(match, settings), emit, signal)
+  return { result: outcome?.result ?? null, status: String(outcome?.status || 'unknown') }
 }
 
 /** agent.find — pure tag/topic match over the configured roster. No model call. */
@@ -130,7 +121,7 @@ export function handleAgentFind(args: FindArgs, settings: SubAgentSettings): Fin
     topic: args?.topic,
     exclude: args?.exclude,
     limit: args?.limit,
-  });
+  })
   return {
     matches: matches.map((m) => ({
       agentId: m.id,
@@ -149,15 +140,15 @@ export function handleAgentFind(args: FindArgs, settings: SubAgentSettings): Fin
       model: m.model,
       tags: m.tags,
     })),
-  };
+  }
 }
 
 export interface ConsultArgs extends Record<string, unknown> {
-  toAgent?: unknown;
-  tags?: unknown;
-  topic?: unknown;
-  question?: unknown;
-  context?: unknown;
+  toAgent?: unknown
+  tags?: unknown
+  topic?: unknown
+  question?: unknown
+  context?: unknown
 }
 
 /**
@@ -170,28 +161,27 @@ export function resolveConsultTarget(
   settings: SubAgentSettings,
   exclude: string[] = [],
 ): FindMatch | null {
-  const roster = buildAgentRoster(settings as Record<string, unknown>);
+  const roster = buildAgentRoster(settings as Record<string, unknown>)
   const excludeSet = new Set(
     exclude.map((r) =>
       String(r || '')
         .trim()
         .toLowerCase(),
     ),
-  );
+  )
 
   if (args?.toAgent) {
     // Accept a specific member id (e.g. "executor#2"), then fall back to the role name —
     // so a caller can target an EXTRA model loaded into a role, not just the primary.
-    const requested = String(args.toAgent).trim().toLowerCase();
-    const role = normalizeAgentRole(args.toAgent);
-    if (excludeSet.has(requested) || excludeSet.has(role)) return null;
-    const member =
-      roster.find((m) => m.id.toLowerCase() === requested) || roster.find((m) => m.role === role);
+    const requested = String(args.toAgent).trim().toLowerCase()
+    const role = normalizeAgentRole(args.toAgent)
+    if (excludeSet.has(requested) || excludeSet.has(role)) return null
+    const member = roster.find((m) => m.id.toLowerCase() === requested) || roster.find((m) => m.role === role)
     if (member) {
-      return { ...member, score: member.tags.length, matchedTags: member.tags };
+      return { ...member, score: member.tags.length, matchedTags: member.tags }
     }
     // Role configured but not in the de-duped roster (same model as caller) → no distinct peer.
-    return null;
+    return null
   }
 
   const matches = findPeers(settings as Record<string, unknown>, {
@@ -199,48 +189,48 @@ export function resolveConsultTarget(
     topic: args?.topic ?? args?.question,
     exclude,
     limit: 1,
-  });
-  return matches[0] || null;
+  })
+  return matches[0] || null
 }
 
 export interface ConsultResult {
-  consulted: boolean;
-  agentId?: string;
-  role?: string;
-  provider?: string;
-  model?: string;
-  tags?: string[];
-  answer?: string;
+  consulted: boolean
+  agentId?: string
+  role?: string
+  provider?: string
+  model?: string
+  tags?: string[]
+  answer?: string
   /** Peer's self-assessment that it should act on this — owner decides whether to delegate. */
-  peerWantsToExecute?: boolean;
-  proposedAction?: string;
+  peerWantsToExecute?: boolean
+  proposedAction?: string
   /** Consulted answers are untrusted input; verify before acting. */
-  untrusted: true;
-  status?: string;
-  reason?: string;
-  message?: string;
+  untrusted: true
+  status?: string
+  reason?: string
+  message?: string
 }
 
 function clip(value: unknown, max: number): string {
-  const s = String(value ?? '').trim();
-  return s.length > max ? `${s.slice(0, max)}…` : s;
+  const s = String(value ?? '').trim()
+  return s.length > max ? `${s.slice(0, max)}…` : s
 }
 
 function parseConsultPayload(raw: unknown): {
-  answer: string;
-  wantsToExecute: boolean;
-  proposedAction: string;
+  answer: string
+  wantsToExecute: boolean
+  proposedAction: string
 } {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const r = raw as Record<string, unknown>;
-    const answer = String(r.answer ?? r.result ?? r.text ?? '').trim();
+    const r = raw as Record<string, unknown>
+    const answer = String(r.answer ?? r.result ?? r.text ?? '').trim()
     return {
       answer: answer || JSON.stringify(r).slice(0, CONSULT_MAX_OUTPUT_CHARS),
       wantsToExecute: r.wantsToExecute === true || r.want_to_execute === true,
       proposedAction: String(r.proposedAction ?? r.proposed_action ?? '').trim(),
-    };
+    }
   }
-  return { answer: String(raw ?? '').trim(), wantsToExecute: false, proposedAction: '' };
+  return { answer: String(raw ?? '').trim(), wantsToExecute: false, proposedAction: '' }
 }
 
 /**
@@ -254,20 +244,20 @@ export async function runPeerConsult(
   args: ConsultArgs,
   settings: SubAgentSettings,
 ): Promise<ConsultResult> {
-  const question = clip(args?.question ?? args?.topic, 2000);
+  const question = clip(args?.question ?? args?.topic, 2000)
   if (!question) {
     return {
       consulted: false,
       untrusted: true,
       reason: 'no_question',
       message: 'A question is required for agent.consult.',
-    };
+    }
   }
 
   const contextText =
     args?.context && typeof args.context === 'object'
       ? clip(JSON.stringify(args.context), CONSULT_CONTEXT_CHARS)
-      : clip(args?.context, CONSULT_CONTEXT_CHARS);
+      : clip(args?.context, CONSULT_CONTEXT_CHARS)
 
   const instructions =
     `You are being consulted as a peer expert (${match.role}). Answer this focused question ` +
@@ -275,7 +265,7 @@ export async function runPeerConsult(
     (contextText ? `\n\nCONTEXT: ${contextText}` : '') +
     `\n\nIf — and only if — you judge that you should directly perform an action to resolve ` +
     `this (rather than just answer), set wantsToExecute=true and describe it in proposedAction; ` +
-    `the owner decides whether to hand it to you.`;
+    `the owner decides whether to hand it to you.`
 
   const { result, status } = await runMatchTask(
     match,
@@ -292,8 +282,8 @@ export async function runPeerConsult(
       },
     },
     settings,
-  );
-  const payload = parseConsultPayload(result);
+  )
+  const payload = parseConsultPayload(result)
 
   return {
     consulted: true,
@@ -307,48 +297,48 @@ export async function runPeerConsult(
     proposedAction: payload.proposedAction,
     untrusted: true,
     status,
-  };
+  }
 }
 
 // ── Final multi-model peer review (Workstream D) ──────────────────────────────
 
-const REVIEW_MAX_STEPS = 1;
-const REVIEW_MAX_OUTPUT_CHARS = 2400;
-const REVIEW_TIMEOUT_MS = 120000;
-const REVIEW_DIFF_CHARS = 14000;
-const MIN_REVIEWERS = 2;
-const MAX_REVIEWERS = 3;
+const REVIEW_MAX_STEPS = 1
+const REVIEW_MAX_OUTPUT_CHARS = 2400
+const REVIEW_TIMEOUT_MS = 120000
+const REVIEW_DIFF_CHARS = 14000
+const MIN_REVIEWERS = 2
+const MAX_REVIEWERS = 3
 
 export interface ReviewArgs extends Record<string, unknown> {
-  diff?: unknown;
-  request?: unknown;
-  rubric?: unknown;
-  reviewers?: unknown;
+  diff?: unknown
+  request?: unknown
+  rubric?: unknown
+  reviewers?: unknown
 }
 
 export interface ReviewFinding {
-  reviewer: string;
-  severity: string;
-  note: string;
-  file?: string;
-  line?: number;
+  reviewer: string
+  severity: string
+  note: string
+  file?: string
+  line?: number
 }
 
 export interface ReviewResult {
-  reviewed: boolean;
-  overallVerdict?: 'approved' | 'changes_requested' | 'mixed';
+  reviewed: boolean
+  overallVerdict?: 'approved' | 'changes_requested' | 'mixed'
   reviews?: Array<{
-    reviewer: string;
-    provider: string;
-    model: string;
-    verdict: string;
-    summary: string;
-    findingCount: number;
-  }>;
-  findings?: ReviewFinding[];
-  untrusted: true;
-  reason?: string;
-  message?: string;
+    reviewer: string
+    provider: string
+    model: string
+    verdict: string
+    summary: string
+    findingCount: number
+  }>
+  findings?: ReviewFinding[]
+  untrusted: true
+  reason?: string
+  message?: string
 }
 
 /**
@@ -356,57 +346,54 @@ export interface ReviewResult {
  * families) — heterogeneous reviewers are the whole point. Excludes the owner role.
  */
 function pickReviewers(settings: SubAgentSettings, want: number): FindMatch[] {
-  const roster = buildAgentRoster(settings as Record<string, unknown>).filter(
-    (m) => m.role !== 'orchestrator',
-  );
-  const byTierDiversity: FindMatch[] = [];
-  const seenTiers = new Set<string>();
+  const roster = buildAgentRoster(settings as Record<string, unknown>).filter((m) => m.role !== 'orchestrator')
+  const byTierDiversity: FindMatch[] = []
+  const seenTiers = new Set<string>()
   // First pass: one per distinct cost tier for diversity.
   for (const m of roster) {
     if (!seenTiers.has(m.costTier)) {
-      seenTiers.add(m.costTier);
-      byTierDiversity.push({ ...m, score: m.tags.length, matchedTags: m.tags });
+      seenTiers.add(m.costTier)
+      byTierDiversity.push({ ...m, score: m.tags.length, matchedTags: m.tags })
     }
   }
   // Fill remaining slots with whatever distinct peers are left.
   for (const m of roster) {
-    if (byTierDiversity.length >= want) break;
+    if (byTierDiversity.length >= want) break
     if (!byTierDiversity.some((r) => r.role === m.role)) {
-      byTierDiversity.push({ ...m, score: m.tags.length, matchedTags: m.tags });
+      byTierDiversity.push({ ...m, score: m.tags.length, matchedTags: m.tags })
     }
   }
-  return byTierDiversity.slice(0, want);
+  return byTierDiversity.slice(0, want)
 }
 
 function parseReview(
   raw: unknown,
   reviewer: string,
 ): {
-  verdict: string;
-  summary: string;
-  findings: ReviewFinding[];
+  verdict: string
+  summary: string
+  findings: ReviewFinding[]
 } {
-  const obj =
-    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const verdictRaw = String(obj.verdict ?? obj.result ?? '').toLowerCase();
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const verdictRaw = String(obj.verdict ?? obj.result ?? '').toLowerCase()
   const verdict = /change|reject|fail|block/.test(verdictRaw)
     ? 'changes_requested'
     : /approve|pass|ok|lgtm/.test(verdictRaw)
       ? 'approved'
-      : 'commented';
-  const rawFindings = Array.isArray(obj.findings) ? obj.findings : [];
+      : 'commented'
+  const rawFindings = Array.isArray(obj.findings) ? obj.findings : []
   const findings: ReviewFinding[] = rawFindings.slice(0, 20).map((f) => {
-    const fo = f && typeof f === 'object' ? (f as Record<string, unknown>) : {};
-    const lineNum = Number(fo.line);
+    const fo = f && typeof f === 'object' ? (f as Record<string, unknown>) : {}
+    const lineNum = Number(fo.line)
     return {
       reviewer,
       severity: String(fo.severity ?? 'note').toLowerCase(),
       note: String(fo.note ?? fo.message ?? fo.text ?? f ?? '').slice(0, 400),
       file: fo.file ? String(fo.file) : undefined,
       line: Number.isFinite(lineNum) ? lineNum : undefined,
-    };
-  });
-  return { verdict, summary: String(obj.summary ?? '').slice(0, 400), findings };
+    }
+  })
+  return { verdict, summary: String(obj.summary ?? '').slice(0, 400), findings }
 }
 
 /**
@@ -415,48 +402,41 @@ function parseReview(
  * aggregated (any "changes_requested" → overall changes). Untrusted input — the owner decides
  * the bounded fix pass. Used for complex runs that wrote code; gated by agent_peer_review.
  */
-export async function runPeerReview(
-  args: ReviewArgs,
-  settings: SubAgentSettings,
-): Promise<ReviewResult> {
-  const diff = clip(args?.diff, REVIEW_DIFF_CHARS);
+export async function runPeerReview(args: ReviewArgs, settings: SubAgentSettings): Promise<ReviewResult> {
+  const diff = clip(args?.diff, REVIEW_DIFF_CHARS)
   if (!diff) {
     return {
       reviewed: false,
       untrusted: true,
       reason: 'no_diff',
       message: 'Pass the code diff to review (e.g. from files.diff or `git diff`).',
-    };
+    }
   }
-  const want = Math.max(
-    MIN_REVIEWERS,
-    Math.min(MAX_REVIEWERS, Number(args?.reviewers) || MAX_REVIEWERS),
-  );
-  const reviewers = pickReviewers(settings, want);
+  const want = Math.max(MIN_REVIEWERS, Math.min(MAX_REVIEWERS, Number(args?.reviewers) || MAX_REVIEWERS))
+  const reviewers = pickReviewers(settings, want)
   if (reviewers.length < MIN_REVIEWERS) {
     return {
       reviewed: false,
       untrusted: true,
       reason: 'insufficient_peers',
       message: `Peer review needs at least ${MIN_REVIEWERS} distinct peer models. Assign more models to the executor/scout roles in Settings → Agents.`,
-    };
+    }
   }
 
-  const request = clip(args?.request, 1200);
+  const request = clip(args?.request, 1200)
   const rubric =
     clip(args?.rubric, 600) ||
-    'Does the change meet the request, follow standards, and introduce no errors or regressions?';
+    'Does the change meet the request, follow standards, and introduce no errors or regressions?'
   const instructions =
     `You are a code reviewer. Review this diff against the request and rubric. Do NOT use tools. ` +
     `Be concrete; anchor each finding to a file and line where possible.\n\n` +
     (request ? `REQUEST: ${request}\n\n` : '') +
-    `RUBRIC: ${rubric}\n\nDIFF:\n${diff}`;
+    `RUBRIC: ${rubric}\n\nDIFF:\n${diff}`
   const outputSchema = {
     verdict: 'string — "approved" or "changes_requested"',
     summary: 'string — one-paragraph assessment',
-    findings:
-      'array of { severity: "blocker|major|minor|nit", note: string, file: string, line: number }',
-  };
+    findings: 'array of { severity: "blocker|major|minor|nit", note: string, file: string, line: number }',
+  }
 
   const settled = await Promise.all(
     reviewers.map(async (reviewer) => {
@@ -472,29 +452,29 @@ export async function runPeerReview(
             outputSchema,
           },
           settings,
-        );
-        const parsed = parseReview(result, reviewer.role);
-        return { reviewer, ...parsed };
+        )
+        const parsed = parseReview(result, reviewer.role)
+        return { reviewer, ...parsed }
       } catch (err) {
         return {
           reviewer,
           verdict: 'errored',
           summary: err instanceof Error ? err.message : 'review failed',
           findings: [] as ReviewFinding[],
-        };
+        }
       }
     }),
-  );
+  )
 
-  const findings = settled.flatMap((r) => r.findings);
-  const verdicts = settled.map((r) => r.verdict);
-  const anyChanges = verdicts.includes('changes_requested');
-  const anyApproved = verdicts.includes('approved');
+  const findings = settled.flatMap((r) => r.findings)
+  const verdicts = settled.map((r) => r.verdict)
+  const anyChanges = verdicts.includes('changes_requested')
+  const anyApproved = verdicts.includes('approved')
   const overallVerdict: ReviewResult['overallVerdict'] = anyChanges
     ? anyApproved
       ? 'mixed'
       : 'changes_requested'
-    : 'approved';
+    : 'approved'
 
   return {
     reviewed: true,
@@ -509,59 +489,56 @@ export async function runPeerReview(
     })),
     findings,
     untrusted: true,
-  };
+  }
 }
 
 // ── Overwatcher (supervisor / complexity guide) — Workstream D ────────────────
 
-const OVERWATCH_MAX_OUTPUT_CHARS = 1400;
-const OVERWATCH_TIMEOUT_MS = 90000;
-const OVERWATCH_CONTEXT_CHARS = 2000;
+const OVERWATCH_MAX_OUTPUT_CHARS = 1400
+const OVERWATCH_TIMEOUT_MS = 90000
+const OVERWATCH_CONTEXT_CHARS = 2000
 
 export interface OverwatchResult {
-  available: boolean;
-  provider?: string;
-  model?: string;
-  complexity?: 'trivial' | 'standard' | 'complex';
-  guidance?: string;
+  available: boolean
+  provider?: string
+  model?: string
+  complexity?: 'trivial' | 'standard' | 'complex'
+  guidance?: string
   /** The Overwatcher's captured chain-of-thought (shown in the timeline; backs thin guidance). */
-  reasoning?: string;
-  escalate?: boolean;
-  suggestedTags?: string[];
+  reasoning?: string
+  escalate?: boolean
+  suggestedTags?: string[]
   /** Overwatcher output is advisory input — verify before acting on it. */
-  untrusted: true;
-  reason?: string;
+  untrusted: true
+  reason?: string
 }
 
 /** Resolve the configured Overwatcher peer (the role bound to a model), or null if none. */
 export function resolveOverwatcher(settings: SubAgentSettings): FindMatch | null {
-  const member = buildAgentRoster(settings as Record<string, unknown>).find(
-    (m) => m.role === 'overwatcher',
-  );
-  if (!member) return null;
-  return { ...member, score: member.tags.length, matchedTags: member.tags };
+  const member = buildAgentRoster(settings as Record<string, unknown>).find((m) => m.role === 'overwatcher')
+  if (!member) return null
+  return { ...member, score: member.tags.length, matchedTags: member.tags }
 }
 
 /** True when a distinct Overwatcher model is configured (and reachable via the bridge). */
 export function hasOverwatcher(settings: SubAgentSettings): boolean {
-  return resolveOverwatcher(settings) !== null;
+  return resolveOverwatcher(settings) !== null
 }
 
 function parseOverwatch(raw: unknown): {
-  complexity: OverwatchResult['complexity'];
-  guidance: string;
-  escalate: boolean;
-  suggestedTags: string[];
+  complexity: OverwatchResult['complexity']
+  guidance: string
+  escalate: boolean
+  suggestedTags: string[]
 } {
-  const obj =
-    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const c = String(obj.complexity ?? '').toLowerCase();
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const c = String(obj.complexity ?? '').toLowerCase()
   const complexity = /complex|hard|high/.test(c)
     ? 'complex'
     : /trivial|simple|easy|low/.test(c)
       ? 'trivial'
-      : 'standard';
-  const tagsRaw = Array.isArray(obj.suggestedTags) ? obj.suggestedTags : [];
+      : 'standard'
+  const tagsRaw = Array.isArray(obj.suggestedTags) ? obj.suggestedTags : []
   return {
     complexity,
     guidance: String(obj.guidance ?? obj.advice ?? '').slice(0, OVERWATCH_MAX_OUTPUT_CHARS),
@@ -573,7 +550,7 @@ function parseOverwatch(raw: unknown): {
           .toLowerCase(),
       )
       .filter(Boolean),
-  };
+  }
 }
 
 /**
@@ -588,16 +565,16 @@ export async function runOverwatch(
   emit?: (event: Record<string, unknown>) => void,
   signal?: AbortSignal,
 ): Promise<OverwatchResult> {
-  const overwatcher = resolveOverwatcher(settings);
+  const overwatcher = resolveOverwatcher(settings)
   if (!overwatcher) {
-    return { available: false, untrusted: true, reason: 'no_overwatcher' };
+    return { available: false, untrusted: true, reason: 'no_overwatcher' }
   }
 
-  const task = clip(args?.task ?? args?.question, 2000);
+  const task = clip(args?.task ?? args?.question, 2000)
   const contextText =
     args?.context && typeof args.context === 'object'
       ? clip(JSON.stringify(args.context), OVERWATCH_CONTEXT_CHARS)
-      : clip(args?.context, OVERWATCH_CONTEXT_CHARS);
+      : clip(args?.context, OVERWATCH_CONTEXT_CHARS)
 
   const instructions =
     `You are the Overwatcher — a reasoning model supervising the active agent. Think through how ` +
@@ -605,17 +582,17 @@ export async function runOverwatch(
     `pull in a stronger or specialist PEER (escalate) and, if so, which ability tags to look for ` +
     `(reasoning, code, vision, long-context, fast, cheap, local, or a domain like "rust"). Do NOT ` +
     `attempt the task yourself.\n\nTASK: ${task || '(see context)'}` +
-    (contextText ? `\n\nCONTEXT / PROGRESS: ${contextText}` : '');
+    (contextText ? `\n\nCONTEXT / PROGRESS: ${contextText}` : '')
 
   // Capture the Overwatcher's reasoning so it can be both shown in the timeline and folded
   // into the guidance we inject — a reasoning model often puts the substance in its thinking.
-  let thinking = '';
+  let thinking = ''
   const collect = (event: Record<string, unknown>) => {
     if (event?.type === 'thinking' && typeof event.summary === 'string' && event.summary.trim()) {
-      thinking += (thinking ? '\n' : '') + event.summary.trim();
+      thinking += (thinking ? '\n' : '') + event.summary.trim()
     }
-    emit?.(event);
-  };
+    emit?.(event)
+  }
 
   const { result } = await runMatchTask(
     overwatcher,
@@ -635,12 +612,12 @@ export async function runOverwatch(
     settings,
     collect,
     signal,
-  );
-  const parsed = parseOverwatch(result);
+  )
+  const parsed = parseOverwatch(result)
   // If the structured guidance came back thin, fall back to the captured reasoning so the
   // injected steer is never empty (the original "not injected properly" symptom).
-  const reasoning = thinking.replace(/^Picked up task:.*$/gm, '').trim();
-  const guidance = parsed.guidance || reasoning.slice(0, OVERWATCH_MAX_OUTPUT_CHARS);
+  const reasoning = thinking.replace(/^Picked up task:.*$/gm, '').trim()
+  const guidance = parsed.guidance || reasoning.slice(0, OVERWATCH_MAX_OUTPUT_CHARS)
 
   return {
     available: true,
@@ -652,44 +629,43 @@ export async function runOverwatch(
     escalate: parsed.escalate,
     suggestedTags: parsed.suggestedTags,
     untrusted: true,
-  };
+  }
 }
 
 // ── Teamwork mode — collaborative planning (Workstream D / Stage 2) ───────────
 
-const TEAMWORK_MAX_OUTPUT_CHARS = 2200;
-const TEAMWORK_TIMEOUT_MS = 120000;
-const TEAMWORK_MAX_PARTS = 6;
+const TEAMWORK_MAX_OUTPUT_CHARS = 2200
+const TEAMWORK_TIMEOUT_MS = 120000
+const TEAMWORK_MAX_PARTS = 6
 
 export interface TeamworkPart {
-  summary: string;
-  role: string; // owner role (orchestrator | executor | scout | overwatcher)
+  summary: string
+  role: string // owner role (orchestrator | executor | scout | overwatcher)
 }
 
 export interface TeamworkPlan {
-  ok: boolean;
-  reason?: string;
-  planner?: string;
-  team?: Array<{ role: string; model: string }>;
-  parts?: TeamworkPart[];
+  ok: boolean
+  reason?: string
+  planner?: string
+  team?: Array<{ role: string; model: string }>
+  parts?: TeamworkPart[]
 }
 
 function parseTeamworkParts(raw: unknown, roleSet: Set<string>): TeamworkPart[] {
-  const obj =
-    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const rawParts = Array.isArray(obj.parts) ? obj.parts : Array.isArray(raw) ? raw : [];
-  const parts: TeamworkPart[] = [];
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const rawParts = Array.isArray(obj.parts) ? obj.parts : Array.isArray(raw) ? raw : []
+  const parts: TeamworkPart[] = []
   for (const p of rawParts.slice(0, TEAMWORK_MAX_PARTS)) {
-    const po = p && typeof p === 'object' ? (p as Record<string, unknown>) : {};
-    const summary = String(po.summary ?? po.task ?? po.text ?? p ?? '').trim();
-    if (!summary) continue;
+    const po = p && typeof p === 'object' ? (p as Record<string, unknown>) : {}
+    const summary = String(po.summary ?? po.task ?? po.text ?? p ?? '').trim()
+    if (!summary) continue
     const roleRaw = String(po.role ?? po.owner ?? po.agent ?? '')
       .trim()
-      .toLowerCase();
-    const role = roleSet.has(roleRaw) ? roleRaw : 'orchestrator';
-    parts.push({ summary: summary.slice(0, 300), role });
+      .toLowerCase()
+    const role = roleSet.has(roleRaw) ? roleRaw : 'orchestrator'
+    parts.push({ summary: summary.slice(0, 300), role })
   }
-  return parts;
+  return parts
 }
 
 /**
@@ -703,28 +679,24 @@ export async function planTeamwork(
   settings: SubAgentSettings,
   emit?: (event: Record<string, unknown>) => void,
 ): Promise<TeamworkPlan> {
-  const roster = buildAgentRoster(settings as Record<string, unknown>).filter(
-    (m) => m.provider && m.model,
-  );
-  if (roster.length < 2) return { ok: false, reason: 'insufficient_agents' };
+  const roster = buildAgentRoster(settings as Record<string, unknown>).filter((m) => m.provider && m.model)
+  if (roster.length < 2) return { ok: false, reason: 'insufficient_agents' }
 
   const plannerMember =
-    roster.find((m) => m.role === 'overwatcher') ||
-    roster.find((m) => m.role === 'orchestrator') ||
-    roster[0];
+    roster.find((m) => m.role === 'overwatcher') || roster.find((m) => m.role === 'orchestrator') || roster[0]
   const planner: FindMatch = {
     ...plannerMember,
     score: plannerMember.tags.length,
     matchedTags: plannerMember.tags,
-  };
-  const roleSet = new Set(roster.map((m) => m.role));
-  const rosterDesc = roster.map((m) => `${m.role} [${m.tags.join(', ') || 'general'}]`).join('; ');
+  }
+  const roleSet = new Set(roster.map((m) => m.role))
+  const rosterDesc = roster.map((m) => `${m.role} [${m.tags.join(', ') || 'general'}]`).join('; ')
 
   const instructions =
     `You are coordinating a TEAM of AI agents working together on ONE task. Split it into a small ` +
     `set of parts (no more than ${TEAMWORK_MAX_PARTS}), keeping parts independent where possible, ` +
     `and assign each part to the best-fit teammate by its ability tags. Every capable teammate ` +
-    `should get a part where it fits.\n\nTEAM (role [tags]): ${rosterDesc}\n\nTASK: ${clip(task, 2000)}`;
+    `should get a part where it fits.\n\nTEAM (role [tags]): ${rosterDesc}\n\nTASK: ${clip(task, 2000)}`
 
   const { result } = await runMatchTask(
     planner,
@@ -740,34 +712,28 @@ export async function planTeamwork(
     },
     settings,
     emit,
-  );
+  )
 
-  const parts = parseTeamworkParts(result, roleSet);
-  if (!parts.length) return { ok: false, reason: 'no_plan', planner: planner.role };
+  const parts = parseTeamworkParts(result, roleSet)
+  if (!parts.length) return { ok: false, reason: 'no_plan', planner: planner.role }
   return {
     ok: true,
     planner: planner.role,
     team: roster.map((m) => ({ role: m.role, model: m.model })),
     parts,
-  };
+  }
 }
 
 /** Tag list for an arbitrary role under the current settings (used for UI attribution). */
 export function tagsForRole(role: unknown, settings: SubAgentSettings): string[] {
-  const identity = resolveAgentIdentity(
-    role,
-    settings as Parameters<typeof resolveAgentIdentity>[1],
-  );
-  return deriveModelTags(identity.provider, identity.model);
+  const identity = resolveAgentIdentity(role, settings as Parameters<typeof resolveAgentIdentity>[1])
+  return deriveModelTags(identity.provider, identity.model)
 }
 
 /** Cost tier for a role — small helper kept here so UI/prompt share one derivation. */
 export function costTierForRole(role: unknown, settings: SubAgentSettings): string {
-  const identity = resolveAgentIdentity(
-    role,
-    settings as Parameters<typeof resolveAgentIdentity>[1],
-  );
-  return getRoutingProfile(identity.provider, identity.model).costTier;
+  const identity = resolveAgentIdentity(role, settings as Parameters<typeof resolveAgentIdentity>[1])
+  return getRoutingProfile(identity.provider, identity.model).costTier
 }
 
 // ── Teamwork V2 — collaborative planning with per-member ownership (Workstream D / §4) ──────────
@@ -775,63 +741,58 @@ export function costTierForRole(role: unknown, settings: SubAgentSettings): stri
 // around to every other loaded member for input, and the lead reconciles it into final parts —
 // each OWNED by a specific member id (so the todo list can be split per agent) with dependencies.
 
-const TEAMWORK_V2_PLAN_TIMEOUT_MS = 120000;
-const TEAMWORK_V2_COMMENT_TIMEOUT_MS = 90000;
-const TEAMWORK_V2_MAX_PARTS = 8;
-const TEAMWORK_V2_MAX_COMMENTERS = 5;
-const TEAMWORK_V2_COMMENT_CHARS = 600;
+const TEAMWORK_V2_PLAN_TIMEOUT_MS = 120000
+const TEAMWORK_V2_COMMENT_TIMEOUT_MS = 90000
+const TEAMWORK_V2_MAX_PARTS = 8
+const TEAMWORK_V2_MAX_COMMENTERS = 5
+const TEAMWORK_V2_COMMENT_CHARS = 600
 
 export interface TeamworkPlanPart {
-  id: string;
-  summary: string;
+  id: string
+  summary: string
   /** Roster member id that owns this part (executor, executor#2, scout, …). */
-  owner: string;
+  owner: string
   /** The owner's role — for color/tier attribution in the todo lanes. */
-  role: string;
+  role: string
   /** Part ids this one must follow (a small DAG the lead sequences during execution). */
-  dependsOn: string[];
+  dependsOn: string[]
 }
 
 export interface TeamworkPlanV2 {
-  ok: boolean;
-  reason?: string;
-  planner?: string;
-  team?: Array<{ id: string; role: string; model: string; tags: string[] }>;
-  parts?: TeamworkPlanPart[];
+  ok: boolean
+  reason?: string
+  planner?: string
+  team?: Array<{ id: string; role: string; model: string; tags: string[] }>
+  parts?: TeamworkPlanPart[]
   /** Human-readable markdown for the approval side panel (the "tmp file" the user reviews). */
-  planText?: string;
+  planText?: string
 }
 
 /** The members that take part in teamwork: every bound model except the advisory Overwatcher. */
 function teamworkMembers(settings: SubAgentSettings): FindMatch[] {
   return buildAgentRoster(settings as Record<string, unknown>)
     .filter((member) => member.provider && member.model && member.role !== 'overwatcher')
-    .map((member) => ({ ...member, score: member.tags.length, matchedTags: member.tags }));
+    .map((member) => ({ ...member, score: member.tags.length, matchedTags: member.tags }))
 }
 
 /** Parse a model's raw parts payload into validated parts with member owners + deps. Pure. */
 export function parseTeamworkPlanParts(raw: unknown, members: FindMatch[]): TeamworkPlanPart[] {
-  const validIds = members.map((m) => m.id);
-  const roleOf = (id: string): string => members.find((m) => m.id === id)?.role || 'orchestrator';
-  const defaultOwner = validIds[0] || 'orchestrator';
-  const obj =
-    raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const rawParts = Array.isArray(obj.parts) ? obj.parts : Array.isArray(raw) ? raw : [];
-  const parts: TeamworkPlanPart[] = [];
+  const validIds = members.map((m) => m.id)
+  const roleOf = (id: string): string => members.find((m) => m.id === id)?.role || 'orchestrator'
+  const defaultOwner = validIds[0] || 'orchestrator'
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const rawParts = Array.isArray(obj.parts) ? obj.parts : Array.isArray(raw) ? raw : []
+  const parts: TeamworkPlanPart[] = []
   for (const entry of rawParts.slice(0, TEAMWORK_V2_MAX_PARTS)) {
-    const po = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-    const summary = String(po.summary ?? po.task ?? po.text ?? entry ?? '').trim();
-    if (!summary) continue;
-    const ownerRaw = String(po.owner ?? po.agent ?? po.member ?? po.role ?? '').trim();
+    const po = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {}
+    const summary = String(po.summary ?? po.task ?? po.text ?? entry ?? '').trim()
+    if (!summary) continue
+    const ownerRaw = String(po.owner ?? po.agent ?? po.member ?? po.role ?? '').trim()
     // Accept an exact member id; else map a role name to its primary member; else the first member.
     const owner = validIds.includes(ownerRaw)
       ? ownerRaw
-      : members.find((m) => m.role === normalizeAgentRole(ownerRaw))?.id || defaultOwner;
-    const deps = Array.isArray(po.dependsOn)
-      ? po.dependsOn
-      : Array.isArray(po.depends_on)
-        ? po.depends_on
-        : [];
+      : members.find((m) => m.role === normalizeAgentRole(ownerRaw))?.id || defaultOwner
+    const deps = Array.isArray(po.dependsOn) ? po.dependsOn : Array.isArray(po.depends_on) ? po.depends_on : []
     parts.push({
       id: `p${parts.length + 1}`,
       summary: summary.slice(0, 300),
@@ -841,9 +802,9 @@ export function parseTeamworkPlanParts(raw: unknown, members: FindMatch[]): Team
         .map((d) => String(d || '').trim())
         .filter(Boolean)
         .slice(0, 4),
-    });
+    })
   }
-  return parts;
+  return parts
 }
 
 /** Render the plan as markdown for the approval side panel. Pure. */
@@ -851,14 +812,14 @@ export function renderTeamworkPlanMarkdown(
   parts: TeamworkPlanPart[],
   team: Array<{ id: string; role: string; model: string }>,
 ): string {
-  const teamLine = team.map((t) => `- **${t.id}** (${t.role}) — \`${t.model}\``).join('\n');
+  const teamLine = team.map((t) => `- **${t.id}** (${t.role}) — \`${t.model}\``).join('\n')
   const partLines = parts
     .map((p, i) => {
-      const dep = p.dependsOn.length ? ` _(after ${p.dependsOn.join(', ')})_` : '';
-      return `${i + 1}. **[${p.owner}]** ${p.summary}${dep}`;
+      const dep = p.dependsOn.length ? ` _(after ${p.dependsOn.join(', ')})_` : ''
+      return `${i + 1}. **[${p.owner}]** ${p.summary}${dep}`
     })
-    .join('\n');
-  return `# Team plan\n\n## Team\n${teamLine}\n\n## Parts (each owned by one teammate)\n${partLines}\n`;
+    .join('\n')
+  return `# Team plan\n\n## Team\n${teamLine}\n\n## Parts (each owned by one teammate)\n${partLines}\n`
 }
 
 /**
@@ -872,28 +833,25 @@ export async function runTeamworkPlanning(
   task: unknown,
   settings: SubAgentSettings,
   opts: {
-    steer?: string;
-    emit?: (event: Record<string, unknown>) => void;
-    signal?: AbortSignal;
+    steer?: string
+    emit?: (event: Record<string, unknown>) => void
+    signal?: AbortSignal
   } = {},
 ): Promise<TeamworkPlanV2> {
-  const members = teamworkMembers(settings);
-  if (members.length < 2) return { ok: false, reason: 'insufficient_agents' };
-  const { emit } = opts;
-  const steer = String(opts.steer || '').trim();
+  const members = teamworkMembers(settings)
+  if (members.length < 2) return { ok: false, reason: 'insufficient_agents' }
+  const { emit } = opts
+  const steer = String(opts.steer || '').trim()
 
   const lead =
     members.find((m) => m.role === 'orchestrator' && m.primary) ||
     members.find((m) => m.role === 'orchestrator') ||
-    members[0];
-  const teamDesc = members
-    .map((m) => `${m.id} (${m.role}) [${m.tags.join(', ') || 'general'}]`)
-    .join('; ');
-  const taskText = clip(task, 2000);
+    members[0]
+  const teamDesc = members.map((m) => `${m.id} (${m.role}) [${m.tags.join(', ') || 'general'}]`).join('; ')
+  const taskText = clip(task, 2000)
   const partsSchema = {
-    parts:
-      'array of { summary: string, owner: string — a member id from the team, dependsOn: string[] — part ids }',
-  };
+    parts: 'array of { summary: string, owner: string — a member id from the team, dependsOn: string[] — part ids }',
+  }
 
   // 1) DRAFT — the lead splits the task and assigns owners.
   const draftInstr =
@@ -901,7 +859,7 @@ export async function runTeamworkPlanning(
     `parts (no more than ${TEAMWORK_V2_MAX_PARTS}), keeping them independent where possible, and ` +
     `assign each to the best-fit teammate by its EXACT member id. Add dependsOn ids where a part ` +
     `must follow another.\n\nTEAM (id (role) [tags]): ${teamDesc}\n\nTASK: ${taskText}` +
-    (steer ? `\n\nUSER STEER (incorporate this): ${steer}` : '');
+    (steer ? `\n\nUSER STEER (incorporate this): ${steer}` : '')
   const draft = await runMatchTask(
     lead,
     {
@@ -915,13 +873,13 @@ export async function runTeamworkPlanning(
     settings,
     emit,
     opts.signal,
-  );
-  let parts = parseTeamworkPlanParts(draft.result, members);
-  if (!parts.length) return { ok: false, reason: 'no_plan', planner: lead.id };
+  )
+  let parts = parseTeamworkPlanParts(draft.result, members)
+  if (!parts.length) return { ok: false, reason: 'no_plan', planner: lead.id }
 
   // 2) PASS-AROUND — every other member gives terse input on the plan + its part (in parallel).
-  const draftText = renderTeamworkPlanMarkdown(parts, members);
-  const commenters = members.filter((m) => m.id !== lead.id).slice(0, TEAMWORK_V2_MAX_COMMENTERS);
+  const draftText = renderTeamworkPlanMarkdown(parts, members)
+  const commenters = members.filter((m) => m.id !== lead.id).slice(0, TEAMWORK_V2_MAX_COMMENTERS)
   const settled = await Promise.all(
     commenters.map(async (member) => {
       try {
@@ -940,30 +898,28 @@ export async function runTeamworkPlanning(
           settings,
           emit,
           opts.signal,
-        );
+        )
         const comment =
           result && typeof result === 'object'
             ? String((result as Record<string, unknown>).comment ?? '').trim()
-            : String(result ?? '').trim();
-        return comment
-          ? { id: member.id, comment: clip(comment, TEAMWORK_V2_COMMENT_CHARS) }
-          : null;
+            : String(result ?? '').trim()
+        return comment ? { id: member.id, comment: clip(comment, TEAMWORK_V2_COMMENT_CHARS) } : null
       } catch {
-        return null;
+        return null
       }
     }),
-  );
-  const feedback = settled.filter((f): f is { id: string; comment: string } => f !== null);
+  )
+  const feedback = settled.filter((f): f is { id: string; comment: string } => f !== null)
 
   // 3) RECONCILE — the lead merges the feedback into the final plan.
   if (feedback.length) {
-    const fbText = feedback.map((f) => `- ${f.id}: ${f.comment}`).join('\n');
+    const fbText = feedback.map((f) => `- ${f.id}: ${f.comment}`).join('\n')
     const reconcileInstr =
       `You are the team lead finalizing the plan. Below are the draft and each teammate's feedback. ` +
       `Produce the FINAL parts (no more than ${TEAMWORK_V2_MAX_PARTS}), each owned by a teammate id, ` +
       `incorporating the feedback and setting dependsOn where a part must follow another.\n\n` +
       `${draftText}\n\nTEAMMATE FEEDBACK:\n${fbText}` +
-      (steer ? `\n\nUSER STEER: ${steer}` : '');
+      (steer ? `\n\nUSER STEER: ${steer}` : '')
     const reconciled = await runMatchTask(
       lead,
       {
@@ -977,17 +933,17 @@ export async function runTeamworkPlanning(
       settings,
       emit,
       opts.signal,
-    );
-    const finalParts = parseTeamworkPlanParts(reconciled.result, members);
-    if (finalParts.length) parts = finalParts;
+    )
+    const finalParts = parseTeamworkPlanParts(reconciled.result, members)
+    if (finalParts.length) parts = finalParts
   }
 
-  const team = members.map((m) => ({ id: m.id, role: m.role, model: m.model, tags: m.tags }));
+  const team = members.map((m) => ({ id: m.id, role: m.role, model: m.model, tags: m.tags }))
   return {
     ok: true,
     planner: lead.id,
     team,
     parts,
     planText: renderTeamworkPlanMarkdown(parts, members),
-  };
+  }
 }

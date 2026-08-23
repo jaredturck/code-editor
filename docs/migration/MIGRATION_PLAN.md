@@ -79,6 +79,7 @@ IRIS source: `src/lib/agent/**`
 Destination: `src/platform/agent/**`
 
 Includes:
+
 - agent identities and JSON helpers
 - skill engine
 - role/task bounds
@@ -109,6 +110,7 @@ IRIS source: selected `src/lib/*.ts`
 Destination: `src/platform/*.ts`
 
 Includes:
+
 - `agentRuntime.ts`
 - `agentRunStore.ts`
 - `subAgentRuntime.ts`
@@ -133,6 +135,7 @@ Destination: `backend/**`
 The server tree is copied as a coherent unit because it is already internally modular and almost entirely uses relative imports. Its local import topology is intentionally preserved to reduce migration risk.
 
 This brings across:
+
 - encrypted SQLite persistence and schema
 - AES-GCM/HKDF encryption
 - semantic filesystem indexing/search
@@ -156,6 +159,7 @@ IRIS source: selected `electron-src/*.cts`
 Destination: `electron/platform/*.cts`
 
 Copied:
+
 - credential store
 - storage-key store
 - secure Linux password-store selection
@@ -166,6 +170,7 @@ Copied:
 - hidden DuckDuckGo Chromium search provider/parser
 
 Omitted from the live migration because they are presentation-shell-specific:
+
 - Orb window
 - Orb window IPC
 - launcher window shape
@@ -201,6 +206,7 @@ IRIS `credentialStore` is registered in the existing Electron main process. Rend
 ### 4. Renderer bridge surface
 
 The existing `editor_api` remains unchanged for editor features. Preload additionally exposes the subset of `orbitDesktop` required by migrated IRIS backend code:
+
 - security permission get/update
 - credential status/list/get/set/delete
 - screen source lookup where available
@@ -212,7 +218,6 @@ The old Orb/window-management APIs are not exposed.
 ### 5. Encrypted renderer storage
 
 Renderer startup hydrates IRIS's synchronous in-memory storage facade from the encrypted bridge before React mounts. Chat/agent settings and future migrated UI integrations can therefore use IRIS persistence without browser `localStorage`.
-
 
 ### 6. AI Settings and provider configuration
 
@@ -260,6 +265,7 @@ The current editor filesystem, workspace watcher, terminal, diagnostics, browser
 ## Validation plan
 
 ### Static migration checks
+
 1. Verify every mapped source exists in the destination.
 2. Verify copied backend/Electron platform files match IRIS source except intentional import/path edits.
 3. Resolve `@/lib/...` imports to `@/platform/...` and feature/context aliases to migrated locations.
@@ -267,17 +273,20 @@ The current editor filesystem, workspace watcher, terminal, diagnostics, browser
 5. Search for references to omitted Orb/window shell modules from active integration paths.
 
 ### Type/build checks
+
 - `npm run build:backend`
 - `npm run build:electron`
 - `npm run typecheck`
 - `npm run build`
 
 ### Test checks
+
 - Existing Code Editor tests must remain passing.
 - Migrated IRIS tests are preserved separately first; compatible backend/runtime suites are re-enabled incrementally after the initial merge.
 - Electron runtime smoke test remains part of the editor's verification pipeline.
 
 ### Runtime smoke checks
+
 - Editor launches with unchanged shell/layout.
 - Existing file open/save/workspace/terminal/browser behavior remains functional.
 - Local encrypted bridge starts before the renderer.

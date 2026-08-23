@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest'
 import {
   getCuratedModelsForKey,
   getProviderCatalog,
@@ -6,7 +6,7 @@ import {
   getValidProviderKeyIds,
   isProviderReady,
   providerCredentialId,
-} from '@/platform/providers/providerConfiguration';
+} from '@/platform/providers/providerConfiguration'
 
 describe('providerConfiguration', () => {
   const settings = {
@@ -28,22 +28,22 @@ describe('providerConfiguration', () => {
       openai: ['gpt-4.1', 'not-accessible'],
     },
     discovered_models: {},
-  };
+  }
 
   it('tracks validation separately for each credential slot', () => {
-    expect(providerCredentialId('openai', '1')).toBe('openai');
-    expect(providerCredentialId('openai', '2')).toBe('openai:2');
-    expect(getValidProviderKeyIds(settings, 'openai')).toEqual(['1']);
-  });
+    expect(providerCredentialId('openai', '1')).toBe('openai')
+    expect(providerCredentialId('openai', '2')).toBe('openai:2')
+    expect(getValidProviderKeyIds(settings, 'openai')).toEqual(['1'])
+  })
 
   it('uses tested model access to filter the curated assignment list', () => {
-    expect(getProviderCatalog(settings, 'openai')).toEqual(['gpt-4.1', 'gpt-4o']);
-    expect(getCuratedModelsForKey(settings, 'openai', '1')).toEqual(['gpt-4.1']);
-  });
+    expect(getProviderCatalog(settings, 'openai')).toEqual(['gpt-4.1', 'gpt-4o'])
+    expect(getCuratedModelsForKey(settings, 'openai', '1')).toEqual(['gpt-4.1'])
+  })
 
   it('only exposes providers that have a validated key and curated model', () => {
-    expect(isProviderReady(settings, 'openai')).toBe(true);
-    expect(getReadyProviderIds(settings)).toContain('openai');
-    expect(isProviderReady(settings, 'gemini')).toBe(false);
-  });
-});
+    expect(isProviderReady(settings, 'openai')).toBe(true)
+    expect(getReadyProviderIds(settings)).toContain('openai')
+    expect(isProviderReady(settings, 'gemini')).toBe(false)
+  })
+})

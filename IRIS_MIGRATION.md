@@ -20,17 +20,17 @@ The full migration plan is in [`docs/migration/MIGRATION_PLAN.md`](docs/migratio
 
 The source IRIS archive contained 695 files and about 204,764 lines of text. The migration intentionally does not copy generated IRIS build output or the old IRIS UI shell. The new repository contains the principal reusable implementation areas below:
 
-| Destination | Files | Approx. lines | Status |
-| --- | ---: | ---: | --- |
-| `src/platform/` | 81 | 33,966 | AVAILABLE / PARTIAL |
-| `src/platform-context/` | 4 | 406 | AVAILABLE |
-| `src/platform-features/` | 26 | 5,921 | AVAILABLE |
-| `backend/` | 71 | 27,295 | CONNECTED foundation / AVAILABLE capabilities |
-| `electron/platform/` | 9 | 2,007 | CONNECTED |
-| `migrated-tests/iris/` | 143 | 19,724 | ARCHIVED-TEST |
-| `benchmarks/iris/` | 20 | 4,501 | ARCHIVED-TEST |
-| `docs/iris-reference/` | IRIS docs/reference | — | Reference |
-| `scripts/iris/` | 8 | 157 | Reference / maintenance |
+| Destination              |               Files | Approx. lines | Status                                        |
+| ------------------------ | ------------------: | ------------: | --------------------------------------------- |
+| `src/platform/`          |                  81 |        33,966 | AVAILABLE / PARTIAL                           |
+| `src/platform-context/`  |                   4 |           406 | AVAILABLE                                     |
+| `src/platform-features/` |                  26 |         5,921 | AVAILABLE                                     |
+| `backend/`               |                  71 |        27,295 | CONNECTED foundation / AVAILABLE capabilities |
+| `electron/platform/`     |                   9 |         2,007 | CONNECTED                                     |
+| `migrated-tests/iris/`   |                 143 |        19,724 | ARCHIVED-TEST                                 |
+| `benchmarks/iris/`       |                  20 |         4,501 | ARCHIVED-TEST                                 |
+| `docs/iris-reference/`   | IRIS docs/reference |             — | Reference                                     |
+| `scripts/iris/`          |                   8 |           157 | Reference / maintenance                       |
 
 These figures deliberately distinguish the migrated reusable implementation from the old IRIS React shell, generated `server-dist/` / `electron/` output, and visual assets.
 
@@ -54,6 +54,7 @@ The persistence cipher contract is now explicitly enforced for conversation/run 
 Renderer exposure is also bounded: startup hydration no longer decrypts per-chat checkpoints or agent-run history into Chromium. Per-chat run state is fetched only when that chat is loaded, and run history uses exact-key encrypted-store reads. The legacy bulk store route is restricted to the same bootstrap-safe subset. Plaintext necessarily exists transiently in trusted process memory while a message is displayed, sent to a configured model, or actively processed; the persistence boundary guarantees authenticated encryption at rest and fails closed rather than creating plaintext fallbacks.
 
 Files:
+
 - `electron/platform/storageKeyStore.cts`
 - `electron/platform/linuxPasswordStore.cts`
 - `electron/platform/localBridge.cts`
@@ -70,6 +71,7 @@ The bridge contains the migrated encrypted database, filesystem/network/process 
 `src/main.tsx` now hydrates IRIS's encrypted durable-store facade before React mounts. Existing Code Editor React UI remains unchanged after hydration succeeds.
 
 Files:
+
 - `src/platform/localStorageStore.ts`
 - `src/main.tsx`
 
@@ -78,6 +80,7 @@ Files:
 IRIS provider credentials are registered in Electron using OS-backed `safeStorage`. A narrow `orbitDesktop.credentials` preload API exposes credential status/list/get/set/delete to migrated provider/settings code without exposing Node APIs to React.
 
 Files:
+
 - `electron/platform/credentialStore.cts`
 - `electron/preload.cts`
 
@@ -86,6 +89,7 @@ Files:
 Electron exposes narrow IPC for reading/updating bridge capability permissions. The renderer cannot grant itself authority by inserting permission flags into a normal bridge request.
 
 Files:
+
 - `electron/platform/localBridge.cts`
 - `electron/main.cts`
 - `electron/preload.cts`
@@ -93,6 +97,7 @@ Files:
 ### Emergency stop foundation
 
 A global `CommandOrControl+Shift+Backspace` emergency stop now:
+
 - terminates editor terminal PTYs;
 - aborts active legacy Ollama requests;
 - aborts the active Code Editor IRIS agent run;
@@ -146,6 +151,7 @@ The editor's human-facing filesystem, workspace, terminal, browser and diagnosti
 The following code is present even where the editor does not yet expose a UI:
 
 ### Agent runtime and tool system
+
 - canonical tool catalog and schemas;
 - capability tiers and role policies;
 - exact-operation approval machinery;
@@ -160,6 +166,7 @@ The following code is present even where the editor does not yet expose a UI:
 - usage metrics and execution metadata.
 
 ### Providers and model routing
+
 - OpenAI;
 - Anthropic;
 - Gemini;
@@ -174,6 +181,7 @@ The following code is present even where the editor does not yet expose a UI:
 - shared cloud-usage policy.
 
 ### Multi-agent system
+
 - sub-agent registry/runtime;
 - task bus;
 - delegation/status/result recall;
@@ -185,6 +193,7 @@ The following code is present even where the editor does not yet expose a UI:
 - encrypted sub-agent result persistence.
 
 ### Skills
+
 - built-in skills from `backend/builtinSkills.ts`;
 - renderer skill engine;
 - skill Markdown parsing;
@@ -193,6 +202,7 @@ The following code is present even where the editor does not yet expose a UI:
 - skills panel controller logic (without old IRIS panel UI).
 
 ### Semantic filesystem and RAG
+
 - index-source discovery;
 - semantic filesystem index;
 - incremental indexing;
@@ -209,6 +219,7 @@ The following code is present even where the editor does not yet expose a UI:
 - filesystem exclusions and workload limits.
 
 ### Web research
+
 - web research/search service;
 - DuckDuckGo browser-backed provider;
 - historical/direct provider support in IRIS backend;
@@ -219,6 +230,7 @@ The following code is present even where the editor does not yet expose a UI:
 - progress-event controller logic.
 
 ### Persistence, memory and artifacts
+
 - encrypted SQLite schema and migrations;
 - domain-separated AES-GCM/HKDF crypto;
 - chat/session store client;
@@ -232,12 +244,14 @@ The following code is present even where the editor does not yet expose a UI:
 - legacy cleanup helpers.
 
 ### Audio
+
 - transcription service;
 - renderer transcription controller/configuration;
 - WAV encoding helpers;
 - microphone permission foundation.
 
 ### Launcher / local-system services
+
 - launcher application/tool discovery;
 - launcher safety policy;
 - semantic launcher index;
@@ -247,6 +261,7 @@ The following code is present even where the editor does not yet expose a UI:
 - native file-dialog helper.
 
 ### Automation and vision foundations
+
 - automation AI service/routes;
 - automation approval helpers;
 - screen-capture strategy/types;

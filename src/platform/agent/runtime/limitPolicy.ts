@@ -6,13 +6,8 @@
  */
 
 // Behavior-preserving extraction from the legacy runtime; contracts will be tightened incrementally.
-import { callAIWithMeta } from '@/platform/aiService';
-import {
-  scoreSession,
-  recordReward,
-  recordToolHeatmap,
-  recordDelegationMetrics,
-} from '@/platform/skillRewards';
+import { callAIWithMeta } from '@/platform/aiService'
+import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
 import {
   listDirectory,
   findFiles,
@@ -39,7 +34,7 @@ import {
   chatsWriteMemory,
   chatsRecall,
   subagentReadOutput,
-} from '@/platform/desktopBridge';
+} from '@/platform/desktopBridge'
 import {
   addNote,
   deleteNote,
@@ -50,28 +45,20 @@ import {
   pruneNotesByCategory,
   recordUserPreferenceNote,
   clearSessionScopedNotes,
-} from '@/platform/notesStorage';
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles';
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles';
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema';
-import { createToolGuard } from '@/platform/agent/toolGuard';
-import {
-  buildControllerSystemPrompt,
-  buildControllerStateHeader,
-} from '@/platform/agent/controllerPrompt';
+} from '@/platform/notesStorage'
+import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
+import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
+import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
+import { createToolGuard } from '@/platform/agent/toolGuard'
+import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
 import {
   normalizeDecision,
   mapNativeMetaToDecision,
   looksLikeControllerSchemaText,
   recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision';
-import {
-  estimateTokens,
-  createUsageTracker,
-  trackUsageSample,
-  buildUsageSummary,
-} from '@/platform/agent/usageMetrics';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
+} from '@/platform/agent/controllerDecision'
+import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
 import {
   handleAgentDelegate,
   handleAgentRecall,
@@ -85,7 +72,7 @@ import {
   detectOrchestrationMode,
   resolveCurrentRole,
   subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient';
+} from '@/platform/orchestrationClient'
 import {
   extractJsonObject,
   toPreview,
@@ -93,7 +80,7 @@ import {
   sanitizeJsonTextForParsing,
   tryParseJsonCandidate,
   collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils';
+} from '@/platform/agent/agentJsonUtils'
 import {
   extractKeywords,
   normalizeSkill,
@@ -101,7 +88,7 @@ import {
   selectSkillsForPrompt,
   checkReflexSkills,
   loadSkillContext,
-} from '@/platform/agent/agentSkillEngine';
+} from '@/platform/agent/agentSkillEngine'
 import {
   DEFAULT_AGENT_READ_LINE_COUNT,
   DEFAULT_TOOL_TIMEOUT_MS,
@@ -115,13 +102,13 @@ import {
   isToolRisky,
   normalizeToolAliasKey,
   resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog';
+} from '@/platform/agent/toolCatalog'
 
-import * as config from '@/platform/agent/runtime/config';
-import * as continuity from '@/platform/agent/runtime/continuity';
-import * as todoTrace from '@/platform/agent/runtime/todoTrace';
-import * as capabilityPolicy from '@/platform/agent/runtime/capabilityPolicy';
-import * as webSearchPolicy from '@/platform/agent/runtime/webSearchPolicy';
+import * as config from '@/platform/agent/runtime/config'
+import * as continuity from '@/platform/agent/runtime/continuity'
+import * as todoTrace from '@/platform/agent/runtime/todoTrace'
+import * as capabilityPolicy from '@/platform/agent/runtime/capabilityPolicy'
+import * as webSearchPolicy from '@/platform/agent/runtime/webSearchPolicy'
 const {
   MAX_AGENT_STEPS,
   AGENT_STEP_HARD_CAP,
@@ -234,7 +221,7 @@ const {
   rememberWebSearchQuery,
   getWebSearchCache,
   setWebSearchCache,
-} = Object.assign({}, config, continuity, todoTrace, capabilityPolicy, webSearchPolicy);
+} = Object.assign({}, config, continuity, todoTrace, capabilityPolicy, webSearchPolicy)
 
 /**
  * Maps the different labels an approval UI or model may return onto the small set of limit
@@ -245,30 +232,17 @@ const {
 export function normalizeApprovalDecisionToken(value) {
   const token = String(value || '')
     .trim()
-    .toLowerCase();
-  if (!token) return '';
+    .toLowerCase()
+  if (!token) return ''
 
-  if (['approve', 'approved', 'allow', 'grant', 'yes', 'ok', 'proceed'].includes(token))
-    return 'approve';
-  if (['continue', 'continue_once', 'continue-once', 'once', 'retry'].includes(token))
-    return 'continue';
-  if (
-    ['extend', 'extend_budget', 'extend-budget', 'increase_budget', 'more_budget'].includes(token)
-  )
-    return 'extend';
-  if (
-    [
-      'unlimited',
-      'unlimited_session',
-      'unlimited-for-session',
-      'no_limits',
-      'disable_limits',
-    ].includes(token)
-  )
-    return 'unlimited';
-  if (['deny', 'denied', 'disapprove', 'reject', 'stop', 'no'].includes(token)) return 'deny';
+  if (['approve', 'approved', 'allow', 'grant', 'yes', 'ok', 'proceed'].includes(token)) return 'approve'
+  if (['continue', 'continue_once', 'continue-once', 'once', 'retry'].includes(token)) return 'continue'
+  if (['extend', 'extend_budget', 'extend-budget', 'increase_budget', 'more_budget'].includes(token)) return 'extend'
+  if (['unlimited', 'unlimited_session', 'unlimited-for-session', 'no_limits', 'disable_limits'].includes(token))
+    return 'unlimited'
+  if (['deny', 'denied', 'disapprove', 'reject', 'stop', 'no'].includes(token)) return 'deny'
 
-  return token;
+  return token
 }
 
 /**
@@ -281,43 +255,41 @@ export function normalizeApprovalResponse(rawResponse) {
   if (rawResponse && typeof rawResponse === 'object') {
     const decision = normalizeApprovalDecisionToken(
       rawResponse.decision || rawResponse.choice || rawResponse.selection || rawResponse.action,
-    );
+    )
 
-    const approved =
-      rawResponse.approved === true ||
-      ['approve', 'continue', 'extend', 'unlimited'].includes(decision);
+    const approved = rawResponse.approved === true || ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
 
     return {
       approved,
       decision: decision || (approved ? 'approve' : 'deny'),
-    };
+    }
   }
 
   if (typeof rawResponse === 'string') {
-    const decision = normalizeApprovalDecisionToken(rawResponse);
-    const approved = ['approve', 'continue', 'extend', 'unlimited'].includes(decision);
+    const decision = normalizeApprovalDecisionToken(rawResponse)
+    const approved = ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
     return {
       approved,
       decision: decision || (approved ? 'approve' : 'deny'),
-    };
+    }
   }
 
-  const approved = Boolean(rawResponse);
+  const approved = Boolean(rawResponse)
   return {
     approved,
     decision: approved ? 'approve' : 'deny',
-  };
+  }
 }
 
 // Determines whether the classify limit issue for the agent session runtime.
 export function classifyLimitIssue({ toolName, message }) {
-  const tool = String(toolName || '').trim();
-  const raw = String(message || '').trim();
-  const lower = raw.toLowerCase();
-  if (!lower) return null;
+  const tool = String(toolName || '').trim()
+  const raw = String(message || '').trim()
+  const lower = raw.toLowerCase()
+  if (!lower) return null
 
   if (tool === 'search.web' && lower.includes('budget reached')) {
-    const budgetMatch = raw.match(/\((\d+)\s*\/\s*(\d+)\)/);
+    const budgetMatch = raw.match(/\((\d+)\s*\/\s*(\d+)\)/)
     return {
       kind: 'search_budget',
       label: 'search budget',
@@ -325,7 +297,7 @@ export function classifyLimitIssue({ toolName, message }) {
         callsUsed: budgetMatch ? Number(budgetMatch[1]) : null,
         callBudget: budgetMatch ? Number(budgetMatch[2]) : null,
       },
-    };
+    }
   }
 
   if (lower.includes('timed out after') || lower.includes('timeout')) {
@@ -333,7 +305,7 @@ export function classifyLimitIssue({ toolName, message }) {
       kind: 'tool_timeout',
       label: 'tool timeout',
       context: {},
-    };
+    }
   }
 
   if (
@@ -343,8 +315,8 @@ export function classifyLimitIssue({ toolName, message }) {
     lower.includes('429') ||
     lower.includes('throttl')
   ) {
-    const waitSecondsMatch = lower.match(/retry in(?: about)?\s+(\d+)s/);
-    const retryAfterMs = waitSecondsMatch ? Math.max(0, Number(waitSecondsMatch[1]) * 1000) : 0;
+    const waitSecondsMatch = lower.match(/retry in(?: about)?\s+(\d+)s/)
+    const retryAfterMs = waitSecondsMatch ? Math.max(0, Number(waitSecondsMatch[1]) * 1000) : 0
 
     return {
       kind: 'rate_limit',
@@ -352,7 +324,7 @@ export function classifyLimitIssue({ toolName, message }) {
       context: {
         retryAfterMs,
       },
-    };
+    }
   }
 
   if (
@@ -365,30 +337,30 @@ export function classifyLimitIssue({ toolName, message }) {
       kind: 'generic_limit',
       label: 'runtime limit',
       context: {},
-    };
+    }
   }
 
-  return null;
+  return null
 }
 
 // Assembles limit decision options from lower-level state so callers receive one consistent
 // representation.
 export function buildLimitDecisionOptions(limitKind) {
-  const kind = String(limitKind || '').toLowerCase();
+  const kind = String(limitKind || '').toLowerCase()
 
-  const continueLabel = kind === 'step_budget' ? 'Continue task' : 'Continue once';
+  const continueLabel = kind === 'step_budget' ? 'Continue task' : 'Continue once'
   const continueDescription =
     kind === 'step_budget'
       ? 'Allow one more planning step and continue this task.'
-      : 'Retry now with the minimum extra budget needed.';
+      : 'Retry now with the minimum extra budget needed.'
 
-  const extendLabel = kind === 'tool_timeout' ? 'Extend timeout' : 'Extend budget';
+  const extendLabel = kind === 'tool_timeout' ? 'Extend timeout' : 'Extend budget'
   const extendDescription =
     kind === 'step_budget'
       ? `Add ${SESSION_STEP_BUDGET_EXTEND_INCREMENT} more steps for this run.`
-      : 'Increase the current limit and keep going.';
+      : 'Increase the current limit and keep going.'
 
-  const recommended = kind === 'step_budget' ? 'extend' : 'continue';
+  const recommended = kind === 'step_budget' ? 'extend' : 'continue'
 
   return [
     {
@@ -415,12 +387,12 @@ export function buildLimitDecisionOptions(limitKind) {
       description: 'Stop extending limits and continue with current constraints.',
       recommended: false,
     },
-  ];
+  ]
 }
 
 // Selects or derives tool timeout ms from the available settings, input, and runtime context.
 export function resolveToolTimeoutMs(toolName) {
-  return getCatalogToolTimeoutMs(toolName);
+  return getCatalogToolTimeoutMs(toolName)
 }
 
 /**
@@ -428,69 +400,69 @@ export function resolveToolTimeoutMs(toolName) {
  */
 
 export async function runWithTimeout(promise, timeoutMs, message) {
-  let timeoutId = null;
+  let timeoutId = null
 
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(
       () => {
-        reject(new Error(message));
+        reject(new Error(message))
       },
       Math.max(1000, Number(timeoutMs) || DEFAULT_TOOL_TIMEOUT_MS),
-    );
-  });
+    )
+  })
 
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([promise, timeoutPromise])
   } finally {
     if (timeoutId) {
-      clearTimeout(timeoutId);
+      clearTimeout(timeoutId)
     }
   }
 }
 
 // Waits for milliseconds without allowing the surrounding workflow to wait indefinitely.
 export async function waitMs(durationMs) {
-  const ms = Math.max(0, Number(durationMs) || 0);
-  if (!ms) return;
+  const ms = Math.max(0, Number(durationMs) || 0)
+  if (!ms) return
 
   await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+    setTimeout(resolve, ms)
+  })
 }
 
 // Assembles find fallback paths from lower-level state so callers receive one consistent
 // representation.
 export function buildFindFallbackPaths(pathInput, { includeGlobalFallback = false } = {}) {
-  const rawPath = String(pathInput || '').trim();
-  if (!rawPath) return [];
+  const rawPath = String(pathInput || '').trim()
+  if (!rawPath) return []
 
-  const fallbackPaths = [];
+  const fallbackPaths = []
 
   if ((rawPath === '.' || rawPath === './') && includeGlobalFallback) {
-    fallbackPaths.push('~/Documents');
-    fallbackPaths.push('~');
-    return dedupeStrings(fallbackPaths);
+    fallbackPaths.push('~/Documents')
+    fallbackPaths.push('~')
+    return dedupeStrings(fallbackPaths)
   }
 
-  if (rawPath === '.' || rawPath === './') return [];
+  if (rawPath === '.' || rawPath === './') return []
 
   const leaf =
     rawPath
       .split(/[\\/]+/g)
       .filter(Boolean)
-      .pop() || rawPath;
-  const leafToken = normalizePathToken(leaf);
+      .pop() || rawPath
+  const leafToken = normalizePathToken(leaf)
 
   if (DOCUMENTS_ALIAS_TOKENS.has(leafToken)) {
-    fallbackPaths.push('~/Documents');
+    fallbackPaths.push('~/Documents')
   }
 
   if (isLikelyRelativePath(rawPath)) {
-    fallbackPaths.push(`~/Documents/${rawPath}`);
-    fallbackPaths.push(`~/${rawPath}`);
+    fallbackPaths.push(`~/Documents/${rawPath}`)
+    fallbackPaths.push(`~/${rawPath}`)
   }
 
-  return dedupeStrings(fallbackPaths);
+  return dedupeStrings(fallbackPaths)
 }
 
 // The agent's filesystem root. Defaults to the user's home (~) so the assistant

@@ -51,14 +51,9 @@ function ProjectRunCard({
 }: ProjectRunCardProps) {
   const progress = project_run_progress(state.todos)
   const resumable = state.status === 'paused' || state.status === 'interrupted'
-  const active = [
-    'starting',
-    'planning',
-    'running',
-    'waiting_for_approval',
-    'waiting_for_user',
-    'finalizing',
-  ].includes(state.status)
+  const active = ['starting', 'planning', 'running', 'waiting_for_approval', 'waiting_for_user', 'finalizing'].includes(
+    state.status,
+  )
 
   return (
     <div className="border-b border-[var(--border)] bg-black/[0.04] px-3 py-2 text-[9px] text-[var(--muted)]">
@@ -138,11 +133,7 @@ function ApprovalCard({ request, onDecision, onAnswer }: ApprovalCardProps) {
   const approval_options = Array.isArray(request.options) ? request.options : []
   const description = question
     ? String(request.question || request.reason || 'The agent needs your input.')
-    : String(
-        request.requestedAction ||
-          request.reason ||
-          'The agent is requesting permission before continuing.',
-      )
+    : String(request.requestedAction || request.reason || 'The agent is requesting permission before continuing.')
 
   return (
     <div className="mb-2 rounded-lg border border-amber-500/35 bg-amber-500/8 p-2 text-[10px] text-[var(--text)]">
@@ -286,9 +277,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
         <div className="min-w-0 flex-1">
           <div className="text-[9px] font-medium uppercase tracking-wide text-[var(--muted)]">Orchestrator</div>
           <div
-            className={`truncate text-[10px] ${
-              chat.agent_descriptor.ready ? 'text-[var(--text)]' : 'text-amber-300'
-            }`}
+            className={`truncate text-[10px] ${chat.agent_descriptor.ready ? 'text-[var(--text)]' : 'text-amber-300'}`}
             title={chat.agent_descriptor.message}
           >
             {chat.agent_descriptor.ready
@@ -319,7 +308,8 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             <div className="mb-2 text-2xl opacity-50">✦</div>
             <p>Ask your configured agent about the current project.</p>
             <p className="mt-1 text-[10px]">
-              The agent can edit the workspace, run tools and tests, coordinate peers, inspect runtime health, and verify visible application state.
+              The agent can edit the workspace, run tools and tests, coordinate peers, inspect runtime health, and
+              verify visible application state.
             </p>
             <p className="mt-1 text-[10px]">Attach the active file to include unsaved changes.</p>
           </div>
@@ -461,9 +451,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
               aria-label="Agent run mode"
               className="rounded border border-[var(--input-border)] bg-[var(--surface-3)] px-2 py-1 text-[9px] text-[var(--text)] outline-none focus:border-sky-500"
               disabled={chat.generating || chat.restoring_chat || project_run_needs_resolution}
-              onChange={(event) =>
-                chat.set_run_mode(event.target.value === 'plan_first' ? 'plan_first' : 'automatic')
-              }
+              onChange={(event) => chat.set_run_mode(event.target.value === 'plan_first' ? 'plan_first' : 'automatic')}
               value={chat.run_mode}
             >
               <option value="automatic">Automatic</option>
@@ -514,8 +502,8 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                 className="ml-auto rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-400"
                 onClick={chat.stop_generation}
                 type="button"
-                >
-                  Stop
+              >
+                Stop
               </button>
             ) : (
               <button

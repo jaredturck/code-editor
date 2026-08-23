@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  get_core_agent_tool_allowlist,
-  normalize_agent_activity_event,
-} from '../src/chat/agentChat'
+import { get_core_agent_tool_allowlist, normalize_agent_activity_event } from '../src/chat/agentChat'
 
 function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), 'utf8')
@@ -48,7 +45,9 @@ describe('runtime visibility and local-system integration', () => {
     expect(monitor).toContain('settings.permissions_terminal === true')
     expect(launcher_routes).toContain("pathname === '/api/local/launcher/dev/start'")
     expect(launcher_routes).toContain("pathname === '/api/local/launcher/dev/stop'")
-    expect(launcher_routes.match(/requireBridgePermission\(securityContext, 'launcher'\)/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(
+      launcher_routes.match(/requireBridgePermission\(securityContext, 'launcher'\)/g)?.length,
+    ).toBeGreaterThanOrEqual(2)
   })
 
   it('does not surface raw reasoning events in Agent Chat activity', () => {

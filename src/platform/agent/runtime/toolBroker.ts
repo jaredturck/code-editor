@@ -53,12 +53,7 @@ function attachVerificationCandidate(
   result: unknown,
 ) {
   if (!state || !result || typeof result !== 'object' || Array.isArray(result)) return result
-  const candidate = addVerificationCandidate(
-    state,
-    toolName,
-    args,
-    result as Record<string, unknown>,
-  )
+  const candidate = addVerificationCandidate(state, toolName, args, result as Record<string, unknown>)
   if (!candidate) return result
   return {
     ...(result as Record<string, unknown>),
@@ -109,9 +104,8 @@ export function createModuleBroker(options: Record<string, any>) {
       const state = verificationState(options)
 
       if (!editorNativeTools.has(toolName)) {
-        const broker = toolName === 'terminal.exec' && isReadOnlyWorkspaceCommand(args.command)
-          ? readOnlyTerminalLegacy
-          : legacy
+        const broker =
+          toolName === 'terminal.exec' && isReadOnlyWorkspaceCommand(args.command) ? readOnlyTerminalLegacy : legacy
         const result = await broker.execute(toolName, args)
         updateMutationEpoch(state, toolName, args, result)
         return attachVerificationCandidate(state, toolName, args, result)
@@ -130,11 +124,7 @@ export function createModuleBroker(options: Record<string, any>) {
 
       if (toolName === 'verification.record') {
         if (!state) throw new Error('No verification state is active for this project run.')
-        return recordVerificationEvidence(
-          state,
-          args.kind || args.requirement,
-          args.candidateId || args.candidate_id,
-        )
+        return recordVerificationEvidence(state, args.kind || args.requirement, args.candidateId || args.candidate_id)
       }
 
       if (toolName === 'browser.inspect') {

@@ -20,9 +20,7 @@ const temporary_roots: string[] = []
 
 afterEach(async () => {
   await closeEncryptedDatabase().catch(() => undefined)
-  await Promise.all(
-    temporary_roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })),
-  )
+  await Promise.all(temporary_roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 })
 
 async function create_database() {
@@ -83,9 +81,10 @@ describe('chat and autonomous-run encryption at rest', () => {
     const restored_attachments = Array.isArray(first_message.attachments)
       ? (first_message.attachments as Array<Record<string, unknown>>)
       : []
-    const restored_meta = first_message.meta && typeof first_message.meta === 'object'
-      ? (first_message.meta as Record<string, unknown>)
-      : {}
+    const restored_meta =
+      first_message.meta && typeof first_message.meta === 'object'
+        ? (first_message.meta as Record<string, unknown>)
+        : {}
 
     expect(restored_chat?.title).toBe(`title ${sentinel}`)
     expect(first_message.content).toBe(`message ${sentinel}`)

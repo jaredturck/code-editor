@@ -1,27 +1,6 @@
-const simpleCommands = new Set([
-  'pwd',
-  'ls',
-  'cat',
-  'head',
-  'tail',
-  'stat',
-  'file',
-  'wc',
-  'tree',
-  'which',
-  'grep',
-])
+const simpleCommands = new Set(['pwd', 'ls', 'cat', 'head', 'tail', 'stat', 'file', 'wc', 'tree', 'which', 'grep'])
 
-const safeGitSubcommands = new Set([
-  'status',
-  'diff',
-  'log',
-  'show',
-  'rev-parse',
-  'ls-files',
-  'grep',
-  'blame',
-])
+const safeGitSubcommands = new Set(['status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'grep', 'blame'])
 
 const unsafeFindOptions = new Set([
   '-delete',
@@ -93,20 +72,20 @@ function hasAny(words: string[], blocked: Set<string>) {
 
 function pathValueEscapesWorkspace(value: string) {
   const normalized = value.replace(/\\/g, '/')
-  return normalized.startsWith('/')
-    || normalized.startsWith('~/')
-    || /^[A-Za-z]:\//.test(normalized)
-    || normalized === '..'
-    || normalized.startsWith('../')
-    || normalized.includes('/../')
+  return (
+    normalized.startsWith('/') ||
+    normalized.startsWith('~/') ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    normalized === '..' ||
+    normalized.startsWith('../') ||
+    normalized.includes('/../')
+  )
 }
 
 function escapesWorkspace(words: string[]) {
   return words.slice(1).some((word) => {
     if (!word) return false
-    const value = word.startsWith('-') && word.includes('=')
-      ? word.slice(word.indexOf('=') + 1)
-      : word
+    const value = word.startsWith('-') && word.includes('=') ? word.slice(word.indexOf('=') + 1) : word
     return pathValueEscapesWorkspace(value)
   })
 }

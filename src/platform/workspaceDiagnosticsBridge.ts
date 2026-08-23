@@ -44,19 +44,26 @@ const supported_diagnostic_languages = new Set([
 ])
 
 function file_extension(file_path: string) {
-  const name = String(file_path || '').split(/[\\/]/).pop() || ''
+  const name =
+    String(file_path || '')
+      .split(/[\\/]/)
+      .pop() || ''
   const dot = name.lastIndexOf('.')
   return dot >= 0 ? name.slice(dot).toLowerCase() : ''
 }
 
 export function diagnostic_language_for_file(file_path: string, requested_language = '') {
-  const requested = String(requested_language || '').trim().toLowerCase()
+  const requested = String(requested_language || '')
+    .trim()
+    .toLowerCase()
   if (requested) return requested
 
   const by_extension = diagnostic_language_by_extension[file_extension(file_path)]
   if (by_extension) return by_extension
 
-  return String(get_language_for_file(file_path) || 'plain text').trim().toLowerCase()
+  return String(get_language_for_file(file_path) || 'plain text')
+    .trim()
+    .toLowerCase()
 }
 
 export async function analyzeWorkspaceFile(

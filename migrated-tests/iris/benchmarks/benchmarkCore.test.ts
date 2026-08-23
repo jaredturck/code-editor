@@ -1,14 +1,14 @@
 /** Verifies benchmark statistics, lifecycle isolation, network safety, and latest-report exports. */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
-import { installBenchmarkNetworkGuard } from '../../benchmarks/core/networkGuard';
-import { writeBenchmarkReport } from '../../benchmarks/core/report';
-import { runBenchmark } from '../../benchmarks/core/runner';
-import { percentile, summarizeSamples } from '../../benchmarks/core/statistics';
-import type { BenchmarkEnvironment, BenchmarkReport } from '../../benchmarks/core/types';
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
+import { installBenchmarkNetworkGuard } from '../../benchmarks/core/networkGuard'
+import { writeBenchmarkReport } from '../../benchmarks/core/report'
+import { runBenchmark } from '../../benchmarks/core/runner'
+import { percentile, summarizeSamples } from '../../benchmarks/core/statistics'
+import type { BenchmarkEnvironment, BenchmarkReport } from '../../benchmarks/core/types'
 
 /** Creates one deterministic runner environment without opening the benchmark database. */
 function environment(): BenchmarkEnvironment {
@@ -19,7 +19,7 @@ function environment(): BenchmarkEnvironment {
     databasePath: '/tmp/iris-benchmark.sqlite3',
     databaseKey: Buffer.alloc(32, 1),
     fixtureRoot: '/tmp/iris-benchmark-fixtures',
-  };
+  }
 }
 
 /** Creates one complete report fixture for Markdown and CSV export tests. */
@@ -77,12 +77,12 @@ function reportFixture(): BenchmarkReport {
         elapsedMs: 1,
       },
     ],
-  };
+  }
 }
 
 describe('benchmark core', () => {
   it('calculates interpolated percentiles and dispersion summaries', () => {
-    expect(percentile([1, 2, 3, 4], 0.5)).toBe(2.5);
+    expect(percentile([1, 2, 3, 4], 0.5)).toBe(2.5)
     expect(summarizeSamples([4, 1, 3, 2])).toMatchObject({
       count: 4,
       totalMs: 10,
@@ -91,11 +91,11 @@ describe('benchmark core', () => {
       minMs: 1,
       maxMs: 4,
       p90Ms: 3.7,
-    });
-  });
+    })
+  })
 
   it('keeps warmups outside measured samples and records external memory peaks', async () => {
-    const run = vi.fn((_: { value: number }, iteration: number) => iteration);
+    const run = vi.fn((_: { value: number }, iteration: number) => iteration)
     const result = await runBenchmark(
       {
         id: 'test.lifecycle',
@@ -108,17 +108,17 @@ describe('benchmark core', () => {
         run,
       },
       environment(),
-    );
+    )
 
-    expect(result.status).toBe('passed');
-    expect(result.samplesMs).toHaveLength(3);
-    expect(result.peakExternalBytes).toBeGreaterThanOrEqual(0);
-    expect(result.peakArrayBuffersBytes).toBeGreaterThanOrEqual(0);
-    expect(run.mock.calls.map((call) => call[1])).toEqual([-1, 0, 1, 2]);
-  });
+    expect(result.status).toBe('passed')
+    expect(result.samplesMs).toHaveLength(3)
+    expect(result.peakExternalBytes).toBeGreaterThanOrEqual(0)
+    expect(result.peakArrayBuffersBytes).toBeGreaterThanOrEqual(0)
+    expect(run.mock.calls.map((call) => call[1])).toEqual([-1, 0, 1, 2])
+  })
 
   it('overwrites one Markdown report and one normalized CSV export', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-benchmark-report-'));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-benchmark-report-'))
     try {
       const files = await writeBenchmarkReport({
         report: reportFixture(),
@@ -133,25 +133,25 @@ describe('benchmark core', () => {
           },
         ],
         outputRoot: root,
-      });
+      })
       const [markdown, csv, entries] = await Promise.all([
         fs.readFile(files.markdownPath, 'utf8'),
         fs.readFile(files.csvPath, 'utf8'),
         fs.readdir(root),
-      ]);
+      ])
 
-      expect(markdown).toContain('# IRIS Benchmark Report');
-      expect(markdown).toContain('Historical results');
-      expect(csv).toContain('case_id');
-      expect(csv).toContain('test.case');
-      expect(entries.sort()).toEqual(['report.md', 'results.csv']);
+      expect(markdown).toContain('# IRIS Benchmark Report')
+      expect(markdown).toContain('Historical results')
+      expect(csv).toContain('case_id')
+      expect(csv).toContain('test.case')
+      expect(entries.sort()).toEqual(['report.md', 'results.csv'])
     } finally {
-      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(root, { recursive: true, force: true })
     }
-  });
+  })
 
   it('does not run teardown when setup intentionally skips a missing local resource', async () => {
-    const teardown = vi.fn();
+    const teardown = vi.fn()
     const result = await runBenchmark(
       {
         id: 'test.skip',
@@ -163,28 +163,26 @@ describe('benchmark core', () => {
         teardown,
       },
       environment(),
-    );
+    )
 
     expect(result).toMatchObject({
       status: 'skipped',
       skipReason: 'Resource unavailable',
-    });
-    expect(teardown).not.toHaveBeenCalled();
-  });
+    })
+    expect(teardown).not.toHaveBeenCalled()
+  })
 
   it('blocks non-loopback fetches before a remote provider can be contacted', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => new Response('{}')) as typeof fetch;
-    const guard = installBenchmarkNetworkGuard();
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => new Response('{}')) as typeof fetch
+    const guard = installBenchmarkNetworkGuard()
     try {
-      await expect(fetch('https://api.openai.com/v1/models')).rejects.toThrow(
-        'blocked non-loopback request',
-      );
-      await expect(fetch('http://127.0.0.1:11434/api/tags')).resolves.toBeInstanceOf(Response);
-      expect(guard.blockedAttempts).toBe(1);
+      await expect(fetch('https://api.openai.com/v1/models')).rejects.toThrow('blocked non-loopback request')
+      await expect(fetch('http://127.0.0.1:11434/api/tags')).resolves.toBeInstanceOf(Response)
+      expect(guard.blockedAttempts).toBe(1)
     } finally {
-      guard.restore();
-      globalThis.fetch = originalFetch;
+      guard.restore()
+      globalThis.fetch = originalFetch
     }
-  });
-});
+  })
+})

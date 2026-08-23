@@ -41,15 +41,8 @@ vi.mock('@/platform/subAgentRuntime', () => ({
   getAgentRoster: () => [],
 }))
 
-import {
-  project_run_elapsed_ms,
-  projectRunController,
-} from '../src/chat/projectRunController'
-import {
-  runAgentSession,
-  type AgentSessionInput,
-  type AgentSessionResult,
-} from '../src/platform/agentRuntime'
+import { project_run_elapsed_ms, projectRunController } from '../src/chat/projectRunController'
+import { runAgentSession, type AgentSessionInput, type AgentSessionResult } from '../src/platform/agentRuntime'
 
 const HOUR = 60 * 60 * 1000
 
@@ -231,7 +224,9 @@ describe('long-running project recovery', () => {
 
     const third = await runAgentSession(runtime_input())
     const third_input = durable_state.run.mock.calls[2][0] as AgentSessionInput
-    expect(String(third_input.conversation?.[0]?.content || '')).toContain('Segment two implemented the runtime change.')
+    expect(String(third_input.conversation?.[0]?.content || '')).toContain(
+      'Segment two implemented the runtime change.',
+    )
     expect(third.contextCompaction).toContain('Segment three verified the migration.')
     expect(String(third.contextCompaction || '').length).toBeLessThanOrEqual(12000)
     expect(durable_state.save_compacted).toHaveBeenCalledTimes(3)
@@ -239,16 +234,20 @@ describe('long-running project recovery', () => {
 
   it('continues automatically through an unfinished acceptance gate before returning', async () => {
     durable_state.run
-      .mockResolvedValueOnce(runtime_result({
-        reply: 'Implementation finished, but verification is still open.',
-        todo_status: 'in_progress',
-        step: 1,
-      }))
-      .mockResolvedValueOnce(runtime_result({
-        reply: 'Verification finished successfully.',
-        todo_status: 'done',
-        step: 2,
-      }))
+      .mockResolvedValueOnce(
+        runtime_result({
+          reply: 'Implementation finished, but verification is still open.',
+          todo_status: 'in_progress',
+          step: 1,
+        }),
+      )
+      .mockResolvedValueOnce(
+        runtime_result({
+          reply: 'Verification finished successfully.',
+          todo_status: 'done',
+          step: 2,
+        }),
+      )
 
     const input = runtime_input()
     input.settings.agent_multi_enabled = true

@@ -5,26 +5,20 @@
  */
 
 export type BridgePermission =
-  | 'fileRead'
-  | 'fileWrite'
-  | 'terminal'
-  | 'launcher'
-  | 'automation'
-  | 'screenCapture'
-  | 'microphone';
+  'fileRead' | 'fileWrite' | 'terminal' | 'launcher' | 'automation' | 'screenCapture' | 'microphone'
 
 export interface BridgePermissionState {
-  fileRead: boolean;
-  fileWrite: boolean;
-  terminal: boolean;
-  launcher: boolean;
-  automation: boolean;
-  screenCapture: boolean;
-  microphone: boolean;
+  fileRead: boolean
+  fileWrite: boolean
+  terminal: boolean
+  launcher: boolean
+  automation: boolean
+  screenCapture: boolean
+  microphone: boolean
 }
 
 export interface BridgeSecurityContext {
-  permissions: BridgePermissionState;
+  permissions: BridgePermissionState
 }
 
 export const DEFAULT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = Object.freeze({
@@ -35,7 +29,7 @@ export const DEFAULT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = Objec
   automation: false,
   screenCapture: false,
   microphone: false,
-});
+})
 
 export const DEVELOPMENT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = Object.freeze({
   fileRead: true,
@@ -45,7 +39,7 @@ export const DEVELOPMENT_BRIDGE_PERMISSIONS: Readonly<BridgePermissionState> = O
   automation: true,
   screenCapture: true,
   microphone: true,
-});
+})
 
 // Normalizes bridge-owned permission state and fills missing values with restrictive defaults.
 export function normalizeBridgePermissions(
@@ -58,20 +52,19 @@ export function normalizeBridgePermissions(
     terminal: value?.terminal === undefined ? fallback.terminal : value.terminal === true,
     launcher: value?.launcher === undefined ? fallback.launcher : value.launcher === true,
     automation: value?.automation === undefined ? fallback.automation : value.automation === true,
-    screenCapture:
-      value?.screenCapture === undefined ? fallback.screenCapture : value.screenCapture === true,
+    screenCapture: value?.screenCapture === undefined ? fallback.screenCapture : value.screenCapture === true,
     microphone: value?.microphone === undefined ? fallback.microphone : value.microphone === true,
-  };
+  }
 }
 
 export class BridgePermissionError extends Error {
-  statusCode = 403;
-  code = 'bridge_permission_denied';
+  statusCode = 403
+  code = 'bridge_permission_denied'
 
   // Creates a permission error carrying the denied capability for stable route responses.
   constructor(permission: BridgePermission) {
-    super(`Bridge permission is disabled: ${permission}`);
-    this.name = 'BridgePermissionError';
+    super(`Bridge permission is disabled: ${permission}`)
+    this.name = 'BridgePermissionError'
   }
 }
 
@@ -80,6 +73,6 @@ export function requireBridgePermission(
   context: BridgeSecurityContext | undefined,
   permission: BridgePermission,
 ): void {
-  if (context?.permissions?.[permission] === true) return;
-  throw new BridgePermissionError(permission);
+  if (context?.permissions?.[permission] === true) return
+  throw new BridgePermissionError(permission)
 }

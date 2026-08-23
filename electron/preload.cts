@@ -49,10 +49,8 @@ contextBridge.exposeInMainWorld('editor_api', {
     go_back: (id: number) => ipcRenderer.send('browser:go-back', id),
     go_forward: (id: number) => ipcRenderer.send('browser:go-forward', id),
     reload: (id: number) => ipcRenderer.send('browser:reload', id),
-    inspect_runtime: (
-      url: string,
-      options?: { settle_ms?: number; timeout_ms?: number; max_text_chars?: number },
-    ) => ipcRenderer.invoke('browser:inspect-runtime', url, options),
+    inspect_runtime: (url: string, options?: { settle_ms?: number; timeout_ms?: number; max_text_chars?: number }) =>
+      ipcRenderer.invoke('browser:inspect-runtime', url, options),
     on_state_change: (
       callback: (state: {
         id: number

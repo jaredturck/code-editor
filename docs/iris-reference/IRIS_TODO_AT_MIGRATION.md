@@ -8,7 +8,7 @@ standard (blank template + the `orbit-skill-authoring` built-in guide skill) wit
 relies on.
 
 **Deferred — the schema-level version (owner wants to revisit):** add real structured frontmatter
-fields so a skill formally *declares* its linked capabilities instead of describing them in prose:
+fields so a skill formally _declares_ its linked capabilities instead of describing them in prose:
 
 - `tools: string[]` — canonical tool names this skill depends on.
 - `scripts: string[]` — built-in `terminal.script` helpers (or bundled runnable snippets) the skill ships with.

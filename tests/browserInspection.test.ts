@@ -13,12 +13,16 @@ vi.mock('electron', () => {
     async loadURL(url: string) {
       this.current_url = url
       if (runtime_error_state.enabled) {
-        this.emit('console-message', {}, {
-          level: 'error',
-          message: 'Uncaught TypeError: ReactDOM.render is not a function',
-          lineNumber: 7,
-          sourceId: 'http://localhost:3000/static/js/main.js',
-        })
+        this.emit(
+          'console-message',
+          {},
+          {
+            level: 'error',
+            message: 'Uncaught TypeError: ReactDOM.render is not a function',
+            lineNumber: 7,
+            sourceId: 'http://localhost:3000/static/js/main.js',
+          },
+        )
       }
     }
 

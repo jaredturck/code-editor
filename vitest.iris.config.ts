@@ -39,10 +39,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./migrated-tests/iris/setup.ts'],
-    include: [
-      'migrated-tests/iris/lib/**/*.test.ts',
-      'migrated-tests/iris/server/**/*.test.ts',
-    ],
+    include: ['migrated-tests/iris/lib/**/*.test.ts', 'migrated-tests/iris/server/**/*.test.ts'],
     exclude: [
       'migrated-tests/iris/lib/localProfileClient.test.ts',
       'migrated-tests/iris/lib/orbTextures.test.ts',

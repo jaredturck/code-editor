@@ -30,20 +30,20 @@
  * Defaults were raised across every provider, and `agent_max_output_tokens` lets the
  * user push the cap up to each model's real ceiling (Opus/Fable 128K, Sonnet 64K).
  */
-import { inferModelFamily } from '@/platform/skillProfiles';
-import type { ModelCapabilities } from '@/platform/agent/types';
+import { inferModelFamily } from '@/platform/skillProfiles'
+import type { ModelCapabilities } from '@/platform/agent/types'
 
 export interface ModelProfileSettings {
-  ai_provider?: unknown;
-  ai_model?: unknown;
-  agent_max_output_tokens?: unknown;
+  ai_provider?: unknown
+  ai_model?: unknown
+  agent_max_output_tokens?: unknown
 }
 
-type CapabilityDefaults = Omit<ModelCapabilities, 'family' | 'provider' | 'caching'>;
-type FamilyCapabilityOverrides = Partial<CapabilityDefaults>;
+type CapabilityDefaults = Omit<ModelCapabilities, 'family' | 'provider' | 'caching'>
+type FamilyCapabilityOverrides = Partial<CapabilityDefaults>
 
-const DEFAULT_CONTEXT_WINDOW = 65536;
-const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+const DEFAULT_CONTEXT_WINDOW = 65536
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192
 
 const DEFAULT_CAPABILITIES: CapabilityDefaults = {
   toolProtocol: 'json',
@@ -53,7 +53,7 @@ const DEFAULT_CAPABILITIES: CapabilityDefaults = {
   maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
   maxOutputCeiling: DEFAULT_MAX_OUTPUT_TOKENS,
   contextWindow: DEFAULT_CONTEXT_WINDOW,
-};
+}
 
 // Keyed by inferModelFamily() output. Anything not listed falls back to DEFAULT.
 // maxOutputTokens = the DEFAULT cap; maxOutputCeiling = the most the user may raise
@@ -300,25 +300,25 @@ const FAMILY_CAPABILITIES: Record<string, FamilyCapabilityOverrides> = {
     maxOutputCeiling: 8192,
     contextWindow: 128000,
   },
-};
+}
 
 // Provider → prompt-caching strategy.
 function _cachingForProvider(provider: unknown): ModelCapabilities['caching'] {
   switch (String(provider || '').toLowerCase()) {
     case 'anthropic':
-      return 'explicit'; // cache_control breakpoints, 5m / 1h TTL
+      return 'explicit' // cache_control breakpoints, 5m / 1h TTL
     case 'openai':
     case 'deepseek':
     case 'opencode':
-      return 'auto'; // automatic — just order static-first
+      return 'auto' // automatic — just order static-first
     case 'gemini':
-      return 'implicit'; // implicit context cache (large prefixes)
+      return 'implicit' // implicit context cache (large prefixes)
     case 'openrouter':
-      return 'passthrough'; // depends on the upstream model
+      return 'passthrough' // depends on the upstream model
     case 'local':
-      return 'none';
+      return 'none'
     default:
-      return 'none';
+      return 'none'
   }
 }
 
@@ -328,15 +328,15 @@ function _cachingForProvider(provider: unknown): ModelCapabilities['caching'] {
  * @returns {import('./agent/types').ModelCapabilities}
  */
 export function getModelCapabilities(provider: unknown, model: unknown): ModelCapabilities {
-  const family = inferModelFamily(model || '');
-  const base = FAMILY_CAPABILITIES[family] || {};
+  const family = inferModelFamily(model || '')
+  const base = FAMILY_CAPABILITIES[family] || {}
   return {
     ...DEFAULT_CAPABILITIES,
     ...base,
     family,
     provider: String(provider || '').toLowerCase(),
     caching: _cachingForProvider(provider),
-  };
+  }
 }
 
 /**
@@ -346,16 +346,16 @@ export function getModelCapabilities(provider: unknown, model: unknown): ModelCa
  * 128K output, Sonnet/Haiku 64K). Other families use the registry's maxOutputCeiling.
  */
 export function resolveOutputCeiling(model: unknown, provider: unknown): number {
-  const caps = getModelCapabilities(provider, model);
-  const m = String(model || '').toLowerCase();
+  const caps = getModelCapabilities(provider, model)
+  const m = String(model || '').toLowerCase()
 
   if (caps.family === 'claude') {
-    if (/opus|fable|mythos/.test(m)) return 128000;
-    if (/sonnet|haiku/.test(m)) return 64000;
-    return 64000;
+    if (/opus|fable|mythos/.test(m)) return 128000
+    if (/sonnet|haiku/.test(m)) return 64000
+    return 64000
   }
 
-  return caps.maxOutputCeiling || caps.maxOutputTokens;
+  return caps.maxOutputCeiling || caps.maxOutputTokens
 }
 
 /**
@@ -364,23 +364,19 @@ export function resolveOutputCeiling(model: unknown, provider: unknown): number 
  * honored but CLAMPED to the model's real ceiling so we never 400 on a too-large
  * max_tokens. Pass `settings` to enable the override; omit it for the bare default.
  */
-export function resolveMaxOutputTokens(
-  model: unknown,
-  provider: unknown,
-  settings?: ModelProfileSettings,
-): number {
-  const caps = getModelCapabilities(provider, model);
-  const ceiling = resolveOutputCeiling(model, provider);
+export function resolveMaxOutputTokens(model: unknown, provider: unknown, settings?: ModelProfileSettings): number {
+  const caps = getModelCapabilities(provider, model)
+  const ceiling = resolveOutputCeiling(model, provider)
 
-  const override = Number(settings && settings.agent_max_output_tokens);
+  const override = Number(settings && settings.agent_max_output_tokens)
   if (Number.isFinite(override) && override > 0) {
-    return Math.max(1024, Math.min(ceiling, Math.round(override)));
+    return Math.max(1024, Math.min(ceiling, Math.round(override)))
   }
 
   // Default already sits below the ceiling, but clamp defensively in case a
   // family default was set above its model-specific ceiling (e.g. a Sonnet run
   // under the generic 'claude' family whose default is the Opus-safe value).
-  return Math.min(ceiling, caps.maxOutputTokens);
+  return Math.min(ceiling, caps.maxOutputTokens)
 }
 
 /**
@@ -389,27 +385,27 @@ export function resolveMaxOutputTokens(
  * explicit capability families for local models that have their own profile.
  */
 export function resolveContextWindow(settings: ModelProfileSettings = {}): number {
-  const provider = String(settings?.ai_provider || '').toLowerCase();
-  const model = String(settings?.ai_model || '');
+  const provider = String(settings?.ai_provider || '').toLowerCase()
+  const model = String(settings?.ai_model || '')
 
   if (provider === 'local') {
-    const capabilities = getModelCapabilities(provider, model);
-    if (capabilities.family === 'qwen35') return capabilities.contextWindow;
-    const m = model.toLowerCase();
-    if (/\b(70b|405b|mixtral|qwen2?\.5|deepseek)\b/i.test(m)) return 65536;
-    if (/\b(13b|14b|32b|34b)\b/i.test(m)) return 32768;
-    return 16384;
+    const capabilities = getModelCapabilities(provider, model)
+    if (capabilities.family === 'qwen35') return capabilities.contextWindow
+    const m = model.toLowerCase()
+    if (/\b(70b|405b|mixtral|qwen2?\.5|deepseek)\b/i.test(m)) return 65536
+    if (/\b(13b|14b|32b|34b)\b/i.test(m)) return 32768
+    return 16384
   }
 
-  return getModelCapabilities(provider, model).contextWindow;
+  return getModelCapabilities(provider, model).contextWindow
 }
 
 /** True when the model family supports native provider function-calling. */
 export function supportsNativeTools(provider: unknown, model: unknown): boolean {
-  return getModelCapabilities(provider, model).toolProtocol === 'native';
+  return getModelCapabilities(provider, model).toolProtocol === 'native'
 }
 
 /** True for reasoning models (o-series, R1) that deliberate internally. */
 export function isReasoningModel(provider: unknown, model: unknown): boolean {
-  return getModelCapabilities(provider, model).reasoning === true;
+  return getModelCapabilities(provider, model).reasoning === true
 }

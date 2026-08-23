@@ -4,38 +4,38 @@
  * and reusable.
  */
 
-import { useEffect, useState } from 'react';
-import { systemStats, systemProcesses } from '@/platform/desktopBridge';
+import { useEffect, useState } from 'react'
+import { systemStats, systemProcesses } from '@/platform/desktopBridge'
 
 export interface SystemStats {
-  platform: string;
-  arch: string;
-  hostname: string;
-  cpuModel: string;
-  cpuCount: number;
-  cpuPercent: number;
-  loadavg: number[];
-  memTotal: number;
-  memFree: number;
-  memUsed: number;
-  memPercent: number;
-  uptime: number;
-  generatedAt: number;
-  gpuDevices?: Array<{ name: string; memoryTotalMb: number }>;
-  gpuMemoryTotalMb?: number;
+  platform: string
+  arch: string
+  hostname: string
+  cpuModel: string
+  cpuCount: number
+  cpuPercent: number
+  loadavg: number[]
+  memTotal: number
+  memFree: number
+  memUsed: number
+  memPercent: number
+  uptime: number
+  generatedAt: number
+  gpuDevices?: Array<{ name: string; memoryTotalMb: number }>
+  gpuMemoryTotalMb?: number
 }
 
 export interface SystemProcess {
-  pid: number;
-  cpu: number;
-  mem: number;
-  command: string;
+  pid: number
+  cpu: number
+  mem: number
+  command: string
 }
 
 export interface SystemMonitorState {
-  stats: SystemStats | null;
-  procs: SystemProcess[];
-  err: string;
+  stats: SystemStats | null
+  procs: SystemProcess[]
+  err: string
 }
 
 /**
@@ -45,37 +45,37 @@ export interface SystemMonitorState {
  */
 
 export function useSystemMonitor(): SystemMonitorState {
-  const [stats, setStats] = useState<SystemStats | null>(null);
-  const [procs, setProcs] = useState<SystemProcess[]>([]);
-  const [err, setErr] = useState('');
+  const [stats, setStats] = useState<SystemStats | null>(null)
+  const [procs, setProcs] = useState<SystemProcess[]>([])
+  const [err, setErr] = useState('')
 
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     // Refreshes local system and process statistics for the monitor panel.
     const poll = async () => {
       try {
-        const [nextStats, nextProcesses] = await Promise.all([systemStats(), systemProcesses(15)]);
-        if (cancelled) return;
+        const [nextStats, nextProcesses] = await Promise.all([systemStats(), systemProcesses(15)])
+        if (cancelled) return
         if (nextStats) {
-          setStats(nextStats);
-          setErr('');
+          setStats(nextStats)
+          setErr('')
         } else {
-          setErr('System monitor needs the desktop app (local bridge).');
+          setErr('System monitor needs the desktop app (local bridge).')
         }
-        setProcs(Array.isArray(nextProcesses) ? nextProcesses : []);
+        setProcs(Array.isArray(nextProcesses) ? nextProcesses : [])
       } catch {
-        if (!cancelled) setErr('Could not read system stats.');
+        if (!cancelled) setErr('Could not read system stats.')
       }
-    };
+    }
 
-    poll();
-    const timer = setInterval(poll, 3000);
+    poll()
+    const timer = setInterval(poll, 3000)
     return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [])
 
-  return { stats, procs, err };
+  return { stats, procs, err }
 }

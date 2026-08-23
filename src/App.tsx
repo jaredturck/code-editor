@@ -47,8 +47,7 @@ function App() {
     onPathDeleted: editor.mark_document_paths_deleted,
     onNotice: editor.show_notice,
   })
-  const terminal_workspace_root =
-    workspace.root_path || readStorageText(last_workspace_storage_key).trim() || null
+  const terminal_workspace_root = workspace.root_path || readStorageText(last_workspace_storage_key).trim() || null
   const agent_follow_suspended_ref = useRef(false)
   const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path, {
     diagnostics: editor.diagnostics,
@@ -59,8 +58,8 @@ function App() {
           return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
         }
         const target = normalize_path(file_path)
-        const document = editor.documents.find((item) =>
-          item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
+        const document = editor.documents.find(
+          (item) => item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
         )
         if (!document || document.kind !== 'text' || !document.file_path) return null
         return { file_path: document.file_path, content: document.content, dirty: document.dirty }
@@ -71,8 +70,8 @@ function App() {
           return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
         }
         const target = normalize_path(file_path)
-        const document = editor.documents.find((item) =>
-          item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
+        const document = editor.documents.find(
+          (item) => item.kind === 'text' && item.file_path && normalize_path(item.file_path) === target,
         )
 
         if (saved) void workspace.refresh()

@@ -4,7 +4,7 @@
  * they appear, without project detection or ancestor inspection.
  */
 
-import path from 'node:path';
+import path from 'node:path'
 
 const EXCLUDED_DIRECTORY_NAMES = new Set(
   [
@@ -64,23 +64,23 @@ const EXCLUDED_DIRECTORY_NAMES = new Set(
     'caches',
     'tmp',
   ].map((name) => name.toLowerCase()),
-);
+)
 
-const EXCLUDED_DIRECTORY_PREFIXES = ['bazel-', 'cmake-build-'];
-const EXCLUDED_DIRECTORY_SUFFIXES = ['.egg-info', '.dist-info'];
+const EXCLUDED_DIRECTORY_PREFIXES = ['bazel-', 'cmake-build-']
+const EXCLUDED_DIRECTORY_SUFFIXES = ['.egg-info', '.dist-info']
 
 /** Returns true when one directory name must never be browsed or semantically indexed. */
 export function isExcludedDirectoryName(name: string): boolean {
   const normalized = String(name || '')
     .trim()
-    .toLowerCase();
-  if (!normalized) return false;
-  if (normalized.startsWith('.')) return true;
-  if (EXCLUDED_DIRECTORY_NAMES.has(normalized)) return true;
+    .toLowerCase()
+  if (!normalized) return false
+  if (normalized.startsWith('.')) return true
+  if (EXCLUDED_DIRECTORY_NAMES.has(normalized)) return true
   if (EXCLUDED_DIRECTORY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return true;
+    return true
   }
-  return EXCLUDED_DIRECTORY_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+  return EXCLUDED_DIRECTORY_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
 }
 
 /** Returns true when a descendant path contains any excluded directory segment. */
@@ -89,12 +89,12 @@ export function pathContainsExcludedDirectory(
   targetPath: string,
   targetIsDirectory = false,
 ): boolean {
-  const relativePath = path.relative(rootPath, targetPath);
-  if (!relativePath || relativePath === '.') return false;
+  const relativePath = path.relative(rootPath, targetPath)
+  if (!relativePath || relativePath === '.') return false
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    return false;
+    return false
   }
-  const segments = relativePath.split(path.sep).filter(Boolean);
-  const directorySegments = targetIsDirectory ? segments : segments.slice(0, -1);
-  return directorySegments.some(isExcludedDirectoryName);
+  const segments = relativePath.split(path.sep).filter(Boolean)
+  const directorySegments = targetIsDirectory ? segments : segments.slice(0, -1)
+  return directorySegments.some(isExcludedDirectoryName)
 }

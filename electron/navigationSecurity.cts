@@ -9,9 +9,7 @@ export function is_trusted_renderer_navigation(value: string, trusted_url: strin
     const trusted = new URL(trusted_url)
 
     if (trusted.protocol === 'file:') {
-      return target.protocol === 'file:'
-        && target.host === trusted.host
-        && target.pathname === trusted.pathname
+      return target.protocol === 'file:' && target.host === trusted.host && target.pathname === trusted.pathname
     }
 
     return target.origin === trusted.origin

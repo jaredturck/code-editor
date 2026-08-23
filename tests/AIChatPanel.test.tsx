@@ -132,7 +132,6 @@ describe('AIChatPanel agent integration', () => {
     expect(resolve_approval).toHaveBeenCalledWith('approval-1', 'approve')
   })
 
-
   it('shows a durable project plan with pause controls while a run is active', () => {
     const pause_project_run = vi.fn()
     render_panel(

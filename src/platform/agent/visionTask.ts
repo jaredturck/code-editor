@@ -3,32 +3,32 @@
  * this module only asks a configured vision-capable role model to return a structured plan.
  */
 
-import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask';
+import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask'
 
 export interface VisionAction extends Record<string, unknown> {
-  type: string;
+  type: string
 }
 
 export interface VisionTaskResult {
-  summary: string;
-  warnings: string[];
-  actions: VisionAction[];
-  model: string;
-  role: string;
-  provider: string;
+  summary: string
+  warnings: string[]
+  actions: VisionAction[]
+  model: string
+  role: string
+  provider: string
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {
-  const clean = String(text || '').trim();
-  const fenced = clean.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || clean;
-  const start = fenced.indexOf('{');
-  const end = fenced.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
+  const clean = String(text || '').trim()
+  const fenced = clean.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || clean
+  const start = fenced.indexOf('{')
+  const end = fenced.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
   try {
-    const value = JSON.parse(fenced.slice(start, end + 1));
-    return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+    const value = JSON.parse(fenced.slice(start, end + 1))
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : null
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -39,7 +39,7 @@ export async function runVisionTask(
   signal?: AbortSignal,
 ): Promise<VisionTaskResult> {
   if (!frameDataUrl.startsWith('data:image/')) {
-    throw new Error('Capture a screen frame before running Vision.');
+    throw new Error('Capture a screen frame before running Vision.')
   }
 
   const prompt = [
@@ -58,7 +58,7 @@ export async function runVisionTask(
     '- {"type":"wait","ms":number}',
     '',
     'Return an empty actions array when the target is ambiguous, hidden, risky, or cannot be identified confidently. Never claim an action was executed.',
-  ].join('\n');
+  ].join('\n')
 
   const result = await runBoundedRoleTask({
     settings,
@@ -84,9 +84,9 @@ export async function runVisionTask(
         ],
       },
     ],
-  });
+  })
 
-  const parsed = parseJsonObject(result.text);
+  const parsed = parseJsonObject(result.text)
   if (!parsed) {
     return {
       summary: result.text || 'The local vision model returned no readable analysis.',
@@ -95,7 +95,7 @@ export async function runVisionTask(
       model: result.model,
       role: result.role,
       provider: result.provider,
-    };
+    }
   }
 
   return {
@@ -108,12 +108,11 @@ export async function runVisionTask(
       : [],
     actions: Array.isArray(parsed.actions)
       ? parsed.actions.filter(
-          (item): item is VisionAction =>
-            Boolean(item) && typeof item === 'object' && !Array.isArray(item),
+          (item): item is VisionAction => Boolean(item) && typeof item === 'object' && !Array.isArray(item),
         )
       : [],
     model: result.model,
     role: result.role,
     provider: result.provider,
-  };
+  }
 }

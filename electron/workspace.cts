@@ -72,7 +72,6 @@ function ensure_workspace_path(root_path: string, target_path: string) {
   }
 }
 
-
 function resolve_workspace_target(root_path: string, target_path: string) {
   return isAbsolute(target_path) ? resolve(target_path) : resolve(root_path, target_path)
 }
@@ -544,7 +543,6 @@ export function stop_workspace_watch(owner_id: number) {
   entry.watcher.close()
 }
 
-
 // Agent file authority is exposed through dedicated IPC channels so renderer-side autonomous
 // tools retain the same canonical workspace/symlink boundary as direct workspace operations.
 if (ipcMain?.handle) {
@@ -571,14 +569,10 @@ if (ipcMain?.handle) {
     return stat_agent_workspace_path(root_path, target_path)
   })
 
-  ipcMain.handle(
-    'workspace:agent-list',
-    async (_event, root_path: string, target_path: string, depth: number) => {
-      return list_agent_workspace(root_path, target_path, depth)
-    },
-  )
+  ipcMain.handle('workspace:agent-list', async (_event, root_path: string, target_path: string, depth: number) => {
+    return list_agent_workspace(root_path, target_path, depth)
+  })
 }
-
 
 // Git is rooted to the open workspace and exposed as structured IPC so neither the renderer
 // nor an agent needs to construct arbitrary Git shell commands for source-control operations.
@@ -587,11 +581,23 @@ if (ipcMain?.handle) {
   ipcMain.handle('git:status', async (_event, root_path: string) => get_git_status(root_path))
   ipcMain.handle('git:history', async (_event, root_path: string, limit: number) => get_git_history(root_path, limit))
   ipcMain.handle('git:diff', async (_event, root_path: string, file_path: string) => get_git_diff(root_path, file_path))
-  ipcMain.handle('git:stage', async (_event, root_path: string, file_paths: string[]) => stage_git_paths(root_path, file_paths))
-  ipcMain.handle('git:unstage', async (_event, root_path: string, file_paths: string[]) => unstage_git_paths(root_path, file_paths))
-  ipcMain.handle('git:commit', async (_event, root_path: string, message: string) => commit_staged_changes(root_path, message))
-  ipcMain.handle('git:remove-nested-repository', async (_event, root_path: string, git_path: string) => remove_nested_repository(root_path, git_path))
-  ipcMain.handle('git:prepare-agent-run', async (_event, root_path: string, run_id: string) => prepare_agent_git_run(root_path, run_id))
-  ipcMain.handle('git:commit-agent-changes', async (_event, root_path: string, run_id: string, goal: string) => commit_agent_changes(root_path, run_id, goal))
+  ipcMain.handle('git:stage', async (_event, root_path: string, file_paths: string[]) =>
+    stage_git_paths(root_path, file_paths),
+  )
+  ipcMain.handle('git:unstage', async (_event, root_path: string, file_paths: string[]) =>
+    unstage_git_paths(root_path, file_paths),
+  )
+  ipcMain.handle('git:commit', async (_event, root_path: string, message: string) =>
+    commit_staged_changes(root_path, message),
+  )
+  ipcMain.handle('git:remove-nested-repository', async (_event, root_path: string, git_path: string) =>
+    remove_nested_repository(root_path, git_path),
+  )
+  ipcMain.handle('git:prepare-agent-run', async (_event, root_path: string, run_id: string) =>
+    prepare_agent_git_run(root_path, run_id),
+  )
+  ipcMain.handle('git:commit-agent-changes', async (_event, root_path: string, run_id: string, goal: string) =>
+    commit_agent_changes(root_path, run_id, goal),
+  )
   ipcMain.handle('git:abandon-agent-run', async (_event, run_id: string) => abandon_agent_git_run(run_id))
 }

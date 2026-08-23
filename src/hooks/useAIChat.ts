@@ -35,10 +35,7 @@ import {
   saveChatSessionState,
   setActiveChatId,
 } from '../platform/chatSessionStore'
-import {
-  APPROVAL_REQUEST_TIMEOUT_MS,
-  QUESTION_REQUEST_TIMEOUT_MS,
-} from '../platform-features/chat-ui/constants'
+import { APPROVAL_REQUEST_TIMEOUT_MS, QUESTION_REQUEST_TIMEOUT_MS } from '../platform-features/chat-ui/constants'
 import { useApprovalController } from '../platform-features/chat-ui/controllers/useApprovalController'
 import type { ApprovalRequest, ApprovalResolution } from '../platform-features/chat-ui/types'
 import {
@@ -91,7 +88,9 @@ function build_diagnostic_context(diagnostics: EditorDiagnostic[] | undefined, w
   const normalized_root = workspace_root.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase()
   const relevant = diagnostics
     .filter((item) => {
-      const file_path = String(item.file_path || '').replace(/\\/g, '/').toLowerCase()
+      const file_path = String(item.file_path || '')
+        .replace(/\\/g, '/')
+        .toLowerCase()
       return file_path === normalized_root || file_path.startsWith(`${normalized_root}/`)
     })
     .slice(0, 60)
@@ -145,10 +144,7 @@ function useAIChat(
   settings_ref.current = settings
   platform_settings_ref.current = platform_settings
 
-  const agent_descriptor = useMemo(
-    () => resolve_agent_chat_descriptor(platform_settings),
-    [platform_settings],
-  )
+  const agent_descriptor = useMemo(() => resolve_agent_chat_descriptor(platform_settings), [platform_settings])
   const connection_status = restoring_chat
     ? ('checking' as const)
     : agent_descriptor.ready
@@ -202,7 +198,9 @@ function useAIChat(
         }
       } catch (restore_error) {
         if (!cancelled) {
-          set_error(restore_error instanceof Error ? restore_error.message : 'Encrypted chat history could not be restored.')
+          set_error(
+            restore_error instanceof Error ? restore_error.message : 'Encrypted chat history could not be restored.',
+          )
         }
       } finally {
         if (!cancelled) set_restoring_chat(false)
@@ -210,7 +208,9 @@ function useAIChat(
     }
 
     void restore_chat()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -287,7 +287,9 @@ function useAIChat(
     const fallback = modelImageCapability(current_descriptor.provider, current_descriptor.model)
     if (fallback.image) return true
     if (current_descriptor.provider !== 'local') {
-      set_error(`${current_descriptor.provider_label} · ${current_descriptor.model} is not known to support image input.`)
+      set_error(
+        `${current_descriptor.provider_label} · ${current_descriptor.model} is not known to support image input.`,
+      )
       return false
     }
     try {
@@ -299,7 +301,9 @@ function useAIChat(
       }
       return true
     } catch (capability_error) {
-      set_error(capability_error instanceof Error ? capability_error.message : 'Unable to inspect the configured local model.')
+      set_error(
+        capability_error instanceof Error ? capability_error.message : 'Unable to inspect the configured local model.',
+      )
       return false
     }
   }
@@ -311,7 +315,9 @@ function useAIChat(
     const request_type = String(request?.requestType || 'permission').toLowerCase()
     const permission_keys = normalizePersistentPermissionKeys(request?.permissionKeys)
     if (approved && should_block_core_agent_permission_grant(request_type, permission_keys)) {
-      set_error('Agent Chat cannot grant persistent machine permissions. Configure workspace and terminal authority explicitly in Settings.')
+      set_error(
+        'Agent Chat cannot grant persistent machine permissions. Configure workspace and terminal authority explicitly in Settings.',
+      )
       approval_controller.resolveApprovalRequest(request_id, 'deny')
       const state = projectRunController.get_state()
       if (state && is_active_project_run_status(state.status)) {
@@ -361,7 +367,9 @@ function useAIChat(
     const execution_settings = build_core_agent_settings(platform_settings_ref.current, workspaceRoot, mode)
     set_error('')
     set_generating(true)
-    set_run_status(resume ? 'Resuming project run…' : mode === 'plan_first' ? 'Planning project run…' : 'Starting agent…')
+    set_run_status(
+      resume ? 'Resuming project run…' : mode === 'plan_first' ? 'Planning project run…' : 'Starting agent…',
+    )
     approval_controller.clearApprovalRequests()
     active_activity_ref.current = []
     stream_step_ref.current = null
@@ -388,7 +396,9 @@ function useAIChat(
         projectRunController.set_status('running', { last_activity: 'Agent session started' })
       }
 
-      const file_authority = editorContext.file_host ? create_editor_file_authority(workspaceRoot, editorContext.file_host) : null
+      const file_authority = editorContext.file_host
+        ? create_editor_file_authority(workspaceRoot, editorContext.file_host)
+        : null
       setEditorFileAuthority(file_authority)
       const diagnostic_context = build_diagnostic_context(editorContext.diagnostics, workspaceRoot)
 
@@ -406,7 +416,10 @@ function useAIChat(
           if (checkpoint?.type === 'todos') {
             projectRunController.checkpoint({ todos: checkpoint.todos, last_activity: 'Project plan updated' })
             const checkpoint_todos = Array.isArray(checkpoint.todos) ? checkpoint.todos : []
-            const planning_complete = mode !== 'plan_first' || checkpoint_todos.length > 1 || !String(checkpoint_todos[0]?.text || '').startsWith('Create a concrete execution plan for:')
+            const planning_complete =
+              mode !== 'plan_first' ||
+              checkpoint_todos.length > 1 ||
+              !String(checkpoint_todos[0]?.text || '').startsWith('Create a concrete execution plan for:')
             if (planning_complete && projectRunController.get_state()?.status === 'planning') {
               projectRunController.set_status('running', { last_activity: 'Project plan ready' })
             }
@@ -418,9 +431,17 @@ function useAIChat(
             const delta = String(event.delta || '')
             if (stream_step_ref.current !== step) {
               stream_step_ref.current = step
-              set_messages((current) => current.map((message) => message.id === assistant_message_id ? { ...message, content: delta } : message))
+              set_messages((current) =>
+                current.map((message) =>
+                  message.id === assistant_message_id ? { ...message, content: delta } : message,
+                ),
+              )
             } else if (delta) {
-              set_messages((current) => current.map((message) => message.id === assistant_message_id ? { ...message, content: message.content + delta } : message))
+              set_messages((current) =>
+                current.map((message) =>
+                  message.id === assistant_message_id ? { ...message, content: message.content + delta } : message,
+                ),
+              )
             }
             return
           }
@@ -432,46 +453,65 @@ function useAIChat(
           if (['phase', 'tool_result', 'notice', 'cloud_response'].includes(String(event.type))) {
             projectRunController.checkpoint({ last_activity: activity.label, steps: event.step })
           }
-          set_messages((current) => current.map((message) => message.id === assistant_message_id ? { ...message, activity: active_activity_ref.current } : message))
+          set_messages((current) =>
+            current.map((message) =>
+              message.id === assistant_message_id ? { ...message, activity: active_activity_ref.current } : message,
+            ),
+          )
         },
-        onApprovalRequest: (request) => new Promise<ApprovalResolution>((resolve) => {
-          const request_id = create_id('approval')
-          const request_type = String(request.requestType || 'permission').toLowerCase()
-          const is_question = request_type === 'question'
-          const timeout_ms = is_question ? QUESTION_REQUEST_TIMEOUT_MS : APPROVAL_REQUEST_TIMEOUT_MS
-          const expires_at = Date.now() + timeout_ms
-          projectRunController.set_status(is_question ? 'waiting_for_user' : 'waiting_for_approval', {
-            last_activity: is_question ? 'Waiting for user input' : 'Waiting for approval',
-          })
-          approval_controller.approvalResolversRef.current.set(request_id, resolve)
-          const timeout_id = setTimeout(() => {
-            if (is_question) approval_controller.resolveQuestionRequest(request_id, '', { timedOut: true })
-            else approval_controller.resolveApprovalRequest(request_id, 'deny', { timedOut: true })
-            const state = projectRunController.get_state()
-            if (state && is_active_project_run_status(state.status)) {
-              projectRunController.set_status('running', { last_activity: 'Approval request timed out' })
-            }
-          }, timeout_ms)
-          approval_controller.approvalTimeoutsRef.current.set(request_id, timeout_id)
-          approval_controller.setApprovalRequests((current) => [...current, {
-            ...request,
-            id: request_id,
-            requestType: request_type,
-            createdAt: Date.now(),
-            expiresAt: expires_at,
-            reason: String(request.reason || ''),
-            question: is_question ? String(request.question || request.requestedAction || '') : '',
-            questionOptions: is_question && Array.isArray(request.options)
-              ? request.options.map((option) => option && typeof option === 'object' ? String((option as Record<string, unknown>).value ?? (option as Record<string, unknown>).label ?? '') : String(option || '')).filter(Boolean)
-              : [],
-            allowOther: is_question ? request.allowOther !== false : false,
-            options: is_question ? [] : normalizeApprovalOptions(request as Partial<ApprovalRequest>),
-            permissionKeys: normalizePersistentPermissionKeys(request.permissionKeys),
-            persistentPermission: request.persistentPermission === true,
-            recommendedDecision: normalizeApprovalDecision(request.recommendedDecision || ''),
-          }])
-          set_run_status(is_question ? 'Waiting for your answer…' : 'Waiting for approval…')
-        }),
+        onApprovalRequest: (request) =>
+          new Promise<ApprovalResolution>((resolve) => {
+            const request_id = create_id('approval')
+            const request_type = String(request.requestType || 'permission').toLowerCase()
+            const is_question = request_type === 'question'
+            const timeout_ms = is_question ? QUESTION_REQUEST_TIMEOUT_MS : APPROVAL_REQUEST_TIMEOUT_MS
+            const expires_at = Date.now() + timeout_ms
+            projectRunController.set_status(is_question ? 'waiting_for_user' : 'waiting_for_approval', {
+              last_activity: is_question ? 'Waiting for user input' : 'Waiting for approval',
+            })
+            approval_controller.approvalResolversRef.current.set(request_id, resolve)
+            const timeout_id = setTimeout(() => {
+              if (is_question) approval_controller.resolveQuestionRequest(request_id, '', { timedOut: true })
+              else approval_controller.resolveApprovalRequest(request_id, 'deny', { timedOut: true })
+              const state = projectRunController.get_state()
+              if (state && is_active_project_run_status(state.status)) {
+                projectRunController.set_status('running', { last_activity: 'Approval request timed out' })
+              }
+            }, timeout_ms)
+            approval_controller.approvalTimeoutsRef.current.set(request_id, timeout_id)
+            approval_controller.setApprovalRequests((current) => [
+              ...current,
+              {
+                ...request,
+                id: request_id,
+                requestType: request_type,
+                createdAt: Date.now(),
+                expiresAt: expires_at,
+                reason: String(request.reason || ''),
+                question: is_question ? String(request.question || request.requestedAction || '') : '',
+                questionOptions:
+                  is_question && Array.isArray(request.options)
+                    ? request.options
+                        .map((option) =>
+                          option && typeof option === 'object'
+                            ? String(
+                                (option as Record<string, unknown>).value ??
+                                  (option as Record<string, unknown>).label ??
+                                  '',
+                              )
+                            : String(option || ''),
+                        )
+                        .filter(Boolean)
+                    : [],
+                allowOther: is_question ? request.allowOther !== false : false,
+                options: is_question ? [] : normalizeApprovalOptions(request as Partial<ApprovalRequest>),
+                permissionKeys: normalizePersistentPermissionKeys(request.permissionKeys),
+                persistentPermission: request.persistentPermission === true,
+                recommendedDecision: normalizeApprovalDecision(request.recommendedDecision || ''),
+              },
+            ])
+            set_run_status(is_question ? 'Waiting for your answer…' : 'Waiting for approval…')
+          }),
       })
 
       projectRunController.set_status('finalizing', { last_activity: 'Finalizing project run' })
@@ -527,32 +567,47 @@ function useAIChat(
         })
       }
       if (platform_settings_ref.current.agent_replay_enabled !== false) {
-        await appendAgentRunDurable({
-          id: run_id,
-          createdAt: created_at,
-          userInput: goal,
-          reply: assistant_reply,
-          steps: result.steps || 0,
-          timeline: persisted_timeline,
-          todos: result_todos,
-          summary: result.summary || null,
-          skills: result.skills || { profile: '', active: [] },
-          safety: result.safety || null,
-        }, Number(platform_settings_ref.current.agent_replay_max_runs) || 40)
+        await appendAgentRunDurable(
+          {
+            id: run_id,
+            createdAt: created_at,
+            userInput: goal,
+            reply: assistant_reply,
+            steps: result.steps || 0,
+            timeline: persisted_timeline,
+            todos: result_todos,
+            summary: result.summary || null,
+            skills: result.skills || { profile: '', active: [] },
+            safety: result.safety || null,
+          },
+          Number(platform_settings_ref.current.agent_replay_max_runs) || 40,
+        )
       }
-      set_messages((current) => current.map((message) => message.id === assistant_message_id ? {
-        ...message,
-        content: assistant_reply,
-        streaming: false,
-        activity,
-        provider: descriptor.provider,
-        model: descriptor.model,
-        run_id,
-      } : message))
+      set_messages((current) =>
+        current.map((message) =>
+          message.id === assistant_message_id
+            ? {
+                ...message,
+                content: assistant_reply,
+                streaming: false,
+                activity,
+                provider: descriptor.provider,
+                model: descriptor.model,
+                run_id,
+              }
+            : message,
+        ),
+      )
 
-      const budget_pause = unresolved.length > 0 && /paused here|halted|time budget|stopped after/i.test(assistant_reply)
+      const budget_pause =
+        unresolved.length > 0 && /paused here|halted|time budget|stopped after/i.test(assistant_reply)
       if (budget_pause) {
-        projectRunController.set_status('paused', { todos: result_todos, steps: result.steps, summary: result.summary, last_activity: 'Paused at runtime budget boundary' })
+        projectRunController.set_status('paused', {
+          todos: result_todos,
+          steps: result.steps,
+          summary: result.summary,
+          last_activity: 'Paused at runtime budget boundary',
+        })
         set_run_status('Project run paused')
       } else if (unresolved.length > 0) {
         projectRunController.set_status('paused', {
@@ -564,13 +619,24 @@ function useAIChat(
         })
         set_run_status('Project run paused for unresolved tasks')
       } else {
-        projectRunController.complete({ todos: result_todos, steps: result.steps, summary: result.summary, last_activity: 'Project run completed' })
+        projectRunController.complete({
+          todos: result_todos,
+          steps: result.steps,
+          summary: result.summary,
+          last_activity: 'Project run completed',
+        })
         set_run_status('Project run completed')
       }
     } catch (runtime_error) {
       const paused = projectRunController.is_pause_requested()
       const stopped = signal.aborted
-      const message = paused ? 'Paused. Resume when ready.' : stopped ? 'Stopped.' : runtime_error instanceof Error ? runtime_error.message : 'The agent run failed.'
+      const message = paused
+        ? 'Paused. Resume when ready.'
+        : stopped
+          ? 'Stopped.'
+          : runtime_error instanceof Error
+            ? runtime_error.message
+            : 'The agent run failed.'
       if (!paused) {
         window.editor_api.git.abandon_agent_run(run_id)
       }
@@ -584,24 +650,37 @@ function useAIChat(
           timeline: active_activity_ref.current,
         })
       } catch (storage_error) {
-        set_error(storage_error instanceof Error ? storage_error.message : 'The interrupted agent result could not be stored securely.')
+        set_error(
+          storage_error instanceof Error
+            ? storage_error.message
+            : 'The interrupted agent result could not be stored securely.',
+        )
         set_messages((current) => current.filter((item) => item.id !== assistant_message_id))
         return
       }
-      set_messages((current) => current.map((item) => item.id === assistant_message_id ? {
-        ...item,
-        content: message,
-        streaming: false,
-        error: !stopped,
-        activity: active_activity_ref.current,
-        provider: descriptor.provider,
-        model: descriptor.model,
-        run_id,
-      } : item))
+      set_messages((current) =>
+        current.map((item) =>
+          item.id === assistant_message_id
+            ? {
+                ...item,
+                content: message,
+                streaming: false,
+                error: !stopped,
+                activity: active_activity_ref.current,
+                provider: descriptor.provider,
+                model: descriptor.model,
+                run_id,
+              }
+            : item,
+        ),
+      )
       if (paused) set_run_status('Project run paused')
       else if (stopped) set_run_status('Project run cancelled')
       else {
-        projectRunController.fail(message, { last_activity: 'Project run failed', todos: projectRunController.get_state()?.todos || todos })
+        projectRunController.fail(message, {
+          last_activity: 'Project run failed',
+          todos: projectRunController.get_state()?.todos || todos,
+        })
         set_run_status('Project run failed')
         set_error(message)
       }
@@ -620,7 +699,10 @@ function useAIChat(
     const turn_attachments = [...attachments]
     if ((!next_prompt && turn_attachments.length === 0) || generating || restoring_chat) return
     const existing_run = projectRunController.get_state()
-    if (existing_run && (is_active_project_run_status(existing_run.status) || is_resumable_project_run_status(existing_run.status))) {
+    if (
+      existing_run &&
+      (is_active_project_run_status(existing_run.status) || is_resumable_project_run_status(existing_run.status))
+    ) {
       set_error('Resume, cancel, or clear the existing project run before starting another one.')
       return
     }
@@ -641,15 +723,27 @@ function useAIChat(
     let chat_id = active_chat_id_ref.current
     try {
       if (!chat_id) {
-        const created_chat = await createChat({ provider: descriptor.provider, model: descriptor.model, title: provisional_chat_title(user_message.content) })
+        const created_chat = await createChat({
+          provider: descriptor.provider,
+          model: descriptor.model,
+          title: provisional_chat_title(user_message.content),
+        })
         chat_id = String(created_chat?.id || '')
         if (!chat_id) throw new Error('Encrypted chat creation failed.')
         active_chat_id_ref.current = chat_id
         setActiveChatId(chat_id)
       }
-      await appendChatMessage(chat_id, 'user', user_message.content, null, persistedChatAttachments(to_agent_attachments(turn_attachments)))
+      await appendChatMessage(
+        chat_id,
+        'user',
+        user_message.content,
+        null,
+        persistedChatAttachments(to_agent_attachments(turn_attachments)),
+      )
     } catch (storage_error) {
-      set_error(storage_error instanceof Error ? storage_error.message : 'The user message could not be stored securely.')
+      set_error(
+        storage_error instanceof Error ? storage_error.message : 'The user message could not be stored securely.',
+      )
       return
     }
 
@@ -665,17 +759,20 @@ function useAIChat(
       model: descriptor.model,
       todos: seed_todos,
     })
-    set_messages([...next_messages, {
-      id: assistant_message_id,
-      role: 'assistant',
-      content: '',
-      attachments: [],
-      streaming: true,
-      activity: [],
-      provider: descriptor.provider,
-      model: descriptor.model,
-      run_id,
-    }])
+    set_messages([
+      ...next_messages,
+      {
+        id: assistant_message_id,
+        role: 'assistant',
+        content: '',
+        attachments: [],
+        streaming: true,
+        activity: [],
+        provider: descriptor.provider,
+        model: descriptor.model,
+        run_id,
+      },
+    ])
     set_prompt('')
     set_attachments([])
     await execute_project_segment({
@@ -704,17 +801,20 @@ function useAIChat(
     const segment = projectRunController.resume(descriptor.provider, descriptor.model)
     if (!segment) return
     const assistant_message_id = create_id('assistant')
-    set_messages((current) => [...current, {
-      id: assistant_message_id,
-      role: 'assistant',
-      content: '',
-      attachments: [],
-      streaming: true,
-      activity: [],
-      provider: descriptor.provider,
-      model: descriptor.model,
-      run_id: state.id,
-    }])
+    set_messages((current) => [
+      ...current,
+      {
+        id: assistant_message_id,
+        role: 'assistant',
+        content: '',
+        attachments: [],
+        streaming: true,
+        activity: [],
+        provider: descriptor.provider,
+        model: descriptor.model,
+        run_id: state.id,
+      },
+    ])
     await execute_project_segment({
       chat_id,
       run_id: state.id,
@@ -771,7 +871,11 @@ function useAIChat(
     try {
       const wav = await convert_recording_to_wav(recording_blob)
       const bytes = new Uint8Array(await wav.arrayBuffer())
-      const transcript = await window.editor_api.ai.transcribe(settings_ref.current.ai.ollama_url, settings_ref.current.ai.speech_model, bytes)
+      const transcript = await window.editor_api.ai.transcribe(
+        settings_ref.current.ai.ollama_url,
+        settings_ref.current.ai.speech_model,
+        bytes,
+      )
       set_prompt((current) => `${current}${current ? ' ' : ''}${transcript}`)
     } catch (transcription_error) {
       set_error(transcription_error instanceof Error ? transcription_error.message : 'Audio transcription failed.')
@@ -786,7 +890,10 @@ function useAIChat(
       return
     }
     try {
-      const status = await window.editor_api.ai.speech_status(settings_ref.current.ai.ollama_url, settings_ref.current.ai.speech_model)
+      const status = await window.editor_api.ai.speech_status(
+        settings_ref.current.ai.ollama_url,
+        settings_ref.current.ai.speech_model,
+      )
       if (!status.ollama_available) {
         set_error('Ollama is not running.')
         return
@@ -795,13 +902,17 @@ function useAIChat(
         set_speech_model_prompt(true)
         return
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
       const mime_type = get_recorder_mime_type()
       const recorder = mime_type ? new MediaRecorder(stream, { mimeType: mime_type }) : new MediaRecorder(stream)
       chunks_ref.current = []
       stream_ref.current = stream
       recorder_ref.current = recorder
-      recorder.addEventListener('dataavailable', (event) => { if (event.data.size) chunks_ref.current.push(event.data) })
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size) chunks_ref.current.push(event.data)
+      })
       recorder.addEventListener('stop', () => {
         const recording = new Blob(chunks_ref.current, { type: recorder.mimeType || 'audio/webm' })
         chunks_ref.current = []
@@ -833,7 +944,10 @@ function useAIChat(
     set_speech_model_prompt(false)
     set_transcribing(true)
     try {
-      await window.editor_api.ai.install_speech_model(settings_ref.current.ai.ollama_url, settings_ref.current.ai.speech_model)
+      await window.editor_api.ai.install_speech_model(
+        settings_ref.current.ai.ollama_url,
+        settings_ref.current.ai.speech_model,
+      )
       await begin_recording()
     } catch (install_error) {
       set_error(install_error instanceof Error ? install_error.message : 'Unable to install the speech model.')

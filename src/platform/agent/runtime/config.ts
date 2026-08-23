@@ -6,14 +6,9 @@
  */
 
 // Behavior-preserving extraction from the legacy runtime; contracts will be tightened incrementally.
-import { markUntrustedExternalContent } from '@/platform/security';
-import { callAIWithMeta } from '@/platform/aiService';
-import {
-  scoreSession,
-  recordReward,
-  recordToolHeatmap,
-  recordDelegationMetrics,
-} from '@/platform/skillRewards';
+import { markUntrustedExternalContent } from '@/platform/security'
+import { callAIWithMeta } from '@/platform/aiService'
+import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
 import {
   listDirectory,
   findFiles,
@@ -40,7 +35,7 @@ import {
   chatsWriteMemory,
   chatsRecall,
   subagentReadOutput,
-} from '@/platform/desktopBridge';
+} from '@/platform/desktopBridge'
 import {
   addNote,
   deleteNote,
@@ -51,28 +46,20 @@ import {
   pruneNotesByCategory,
   recordUserPreferenceNote,
   clearSessionScopedNotes,
-} from '@/platform/notesStorage';
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles';
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles';
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema';
-import { createToolGuard } from '@/platform/agent/toolGuard';
-import {
-  buildControllerSystemPrompt,
-  buildControllerStateHeader,
-} from '@/platform/agent/controllerPrompt';
+} from '@/platform/notesStorage'
+import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
+import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
+import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
+import { createToolGuard } from '@/platform/agent/toolGuard'
+import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
 import {
   normalizeDecision,
   mapNativeMetaToDecision,
   looksLikeControllerSchemaText,
   recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision';
-import {
-  estimateTokens,
-  createUsageTracker,
-  trackUsageSample,
-  buildUsageSummary,
-} from '@/platform/agent/usageMetrics';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
+} from '@/platform/agent/controllerDecision'
+import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
 import {
   handleAgentDelegate,
   handleAgentRecall,
@@ -86,7 +73,7 @@ import {
   detectOrchestrationMode,
   resolveCurrentRole,
   subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient';
+} from '@/platform/orchestrationClient'
 import {
   extractJsonObject,
   toPreview,
@@ -94,7 +81,7 @@ import {
   sanitizeJsonTextForParsing,
   tryParseJsonCandidate,
   collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils';
+} from '@/platform/agent/agentJsonUtils'
 import {
   extractKeywords,
   normalizeSkill,
@@ -102,7 +89,7 @@ import {
   selectSkillsForPrompt,
   checkReflexSkills,
   loadSkillContext,
-} from '@/platform/agent/agentSkillEngine';
+} from '@/platform/agent/agentSkillEngine'
 import {
   DEFAULT_AGENT_READ_LINE_COUNT,
   DEFAULT_TOOL_TIMEOUT_MS,
@@ -116,72 +103,59 @@ import {
   isToolRisky,
   normalizeToolAliasKey,
   resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog';
+} from '@/platform/agent/toolCatalog'
 
-export const MAX_AGENT_STEPS = 12;
-export const AGENT_STEP_HARD_CAP = 60;
+export const MAX_AGENT_STEPS = 12
+export const AGENT_STEP_HARD_CAP = 60
 // Duration-based session budget (replaces the steps system as the user-facing limit): the run
 // works for this many minutes before a chat popup asks whether to continue. Steps are no longer
 // surfaced or used as the budget — they only bound the loop as an infinite-loop safety net.
-export const AGENT_SESSION_MINUTES_DEFAULT = 15;
+export const AGENT_SESSION_MINUTES_DEFAULT = 15
 // Absolute loop-iteration safety ceiling for duration mode. The duration budget is the real
 // limiter; this only guards against a runaway loop if the duration gate somehow never fires.
-export const SESSION_STEP_ABSOLUTE_CEILING = 1000;
-export const MAX_PROMPT_MESSAGE_CHARS = 20000;
-export const MAX_TOOL_RESULT_CHARS = 24000;
+export const SESSION_STEP_ABSOLUTE_CEILING = 1000
+export const MAX_PROMPT_MESSAGE_CHARS = 20000
+export const MAX_TOOL_RESULT_CHARS = 24000
 // Stateful loop: how much of a tool result the model sees in its tool_result turn
 // before truncation (with an explicit "more available" marker). Far larger than
 // the legacy 300-char stepHistory preview so the model can actually reason about
 // real output; capped to protect the context window (compaction handles growth).
 // Raised so the model can ingest large file reads / command output in one step.
-export const STATEFUL_TOOL_RESULT_CHAR_CAP = 80000;
-export const DEFAULT_SKILLS_TOKEN_BUDGET = 2200;
-export const DEFAULT_SKILLS_MAX_ACTIVE = 4;
-export const DEFAULT_SKILLS_MIN_RELEVANCE_SCORE = 3;
-export const MAX_TERMINAL_COMMAND_LENGTH = 7500;
-export const MAX_FILE_WRITE_LENGTH = 800000;
-export const ARTIFACT_PREVIEW_CHARS = 120000;
-export const MAX_NOTE_CONTENT_LENGTH = 24000;
-export const MAX_SKILL_CARD_COUNT = 24;
-export const MAX_AGENT_READ_LINE_COUNT = 6000;
-export const CONTINUITY_NOTE_CHAR_LIMIT = 11000;
+export const STATEFUL_TOOL_RESULT_CHAR_CAP = 80000
+export const DEFAULT_SKILLS_TOKEN_BUDGET = 2200
+export const DEFAULT_SKILLS_MAX_ACTIVE = 4
+export const DEFAULT_SKILLS_MIN_RELEVANCE_SCORE = 3
+export const MAX_TERMINAL_COMMAND_LENGTH = 7500
+export const MAX_FILE_WRITE_LENGTH = 800000
+export const ARTIFACT_PREVIEW_CHARS = 120000
+export const MAX_NOTE_CONTENT_LENGTH = 24000
+export const MAX_SKILL_CARD_COUNT = 24
+export const MAX_AGENT_READ_LINE_COUNT = 6000
+export const CONTINUITY_NOTE_CHAR_LIMIT = 11000
 // Per-task continuity notes are bounded so they never crowd out durable user
 // notes; recall then surfaces only the ones relevant to the current request.
-export const MAX_CONTINUITY_NOTES = 40;
-export const SEARCH_WEB_DEFAULT_RESULTS = 6;
-export const SEARCH_WEB_MAX_RESULTS = 16;
-export const SEARCH_WEB_DEFAULT_SOURCES = 4;
-export const SEARCH_WEB_MAX_SOURCES = 10;
-export const SEARCH_WEB_DEFAULT_CALL_BUDGET = 2;
-export const SEARCH_WEB_MAX_CALL_BUDGET = 4;
-export const SEARCH_WEB_UNLIMITED_CALL_BUDGET = 9999;
-export const WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER = 'duckduckgo';
-export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = [
-  'google_cse',
-  'tavily',
-  'exa',
-  'serper',
-  'brave',
-  'serpapi',
-];
-export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set([
-  'tavily',
-  'exa',
-  'serper',
-  'brave',
-  'serpapi',
-]);
-export const SESSION_STEP_BUDGET_HARD_CAP = AGENT_STEP_HARD_CAP;
-export const SESSION_STEP_BUDGET_CONTINUE_INCREMENT = 1;
-export const SESSION_STEP_BUDGET_EXTEND_INCREMENT = 3;
-export const SEARCH_BUDGET_CONTINUE_INCREMENT = 1;
-export const SEARCH_BUDGET_EXTEND_INCREMENT = 2;
-export const TOOL_TIMEOUT_CONTINUE_BOOST_MS = 30000;
-export const TOOL_TIMEOUT_EXTEND_BOOST_MS = 90000;
-export const TOOL_TIMEOUT_UNLIMITED_MS = 300000;
+export const MAX_CONTINUITY_NOTES = 40
+export const SEARCH_WEB_DEFAULT_RESULTS = 6
+export const SEARCH_WEB_MAX_RESULTS = 16
+export const SEARCH_WEB_DEFAULT_SOURCES = 4
+export const SEARCH_WEB_MAX_SOURCES = 10
+export const SEARCH_WEB_DEFAULT_CALL_BUDGET = 2
+export const SEARCH_WEB_MAX_CALL_BUDGET = 4
+export const SEARCH_WEB_UNLIMITED_CALL_BUDGET = 9999
+export const WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER = 'duckduckgo'
+export const WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS = ['google_cse', 'tavily', 'exa', 'serper', 'brave', 'serpapi']
+export const WEB_SEARCH_PAID_PROVIDER_IDS = new Set(['tavily', 'exa', 'serper', 'brave', 'serpapi'])
+export const SESSION_STEP_BUDGET_HARD_CAP = AGENT_STEP_HARD_CAP
+export const SESSION_STEP_BUDGET_CONTINUE_INCREMENT = 1
+export const SESSION_STEP_BUDGET_EXTEND_INCREMENT = 3
+export const SEARCH_BUDGET_CONTINUE_INCREMENT = 1
+export const SEARCH_BUDGET_EXTEND_INCREMENT = 2
+export const TOOL_TIMEOUT_CONTINUE_BOOST_MS = 30000
+export const TOOL_TIMEOUT_EXTEND_BOOST_MS = 90000
+export const TOOL_TIMEOUT_UNLIMITED_MS = 300000
 
 export const INSUFFICIENT_ACCESS_REPLY =
-  "I don't have the permissions or tools to effectively complete your request right now.";
+  "I don't have the permissions or tools to effectively complete your request right now."
 
 // ── Agent State Machine ──────────────────────────────────────────────────────
 export const AGENT_STATES = {
@@ -192,24 +166,24 @@ export const AGENT_STATES = {
   COMPLETE: 'complete',
   FAILED: 'failed',
   STOPPED: 'stopped',
-};
+}
 
 // ── Context Budget ───────────────────────────────────────────────────────────
-export const CONTEXT_BUDGET_WARN_RATIO = 0.15; // auto-summarize at 15% remaining
+export const CONTEXT_BUDGET_WARN_RATIO = 0.15 // auto-summarize at 15% remaining
 
 // ── Per-agent search budget ───────────────────────────────────────────────────
 export const WEB_SEARCH_BUDGET_BY_ROLE = {
   orchestrator: 4,
   executor: 3,
   scout: 1,
-};
+}
 
 // ── User Correction Detection ────────────────────────────────────────────────
 export const USER_CORRECTION_PATTERNS = [
   /\b(no[,.]?\s|don't|dont|instead|actually|wrong|not like that|that's not)\b/i,
   /\bi (want|prefer|need) it to\b/i,
   /\b(stop doing|please don't|please dont)\b/i,
-];
+]
 
 // ── Permission Tiers ─────────────────────────────────────────────────────────
 export const TIER_2_BLOCKED_PATTERNS = [
@@ -220,23 +194,16 @@ export const TIER_2_BLOCKED_PATTERNS = [
   /(^|\s)(useradd|usermod|userdel|groupadd|passwd)\b/i,
   /chmod\s+[0-9]*7[0-9]*/i,
   /chown\s+root/i,
-];
+]
 
 export const TIER_3_APPROVAL_PATTERNS = [
   /(^|\s)sudo\b/i,
   /(curl|wget)[^|]*\|[^|]*(sh|bash|zsh)/i,
   /\brm\s+-rf?\s+\/[a-z]/i,
   /(^|\s)(dd|mkfs|fdisk)\b/i,
-];
+]
 
-export const ALLOWED_MODULES = new Set([
-  'files',
-  'terminal',
-  'notes',
-  'screen',
-  'search',
-  'launch',
-]);
+export const ALLOWED_MODULES = new Set(['files', 'terminal', 'notes', 'screen', 'search', 'launch'])
 
 export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)rm\s+-rf\s+\/$/i,
@@ -246,25 +213,16 @@ export const DANGEROUS_COMMAND_PATTERNS = [
   /(^|\s)reboot(\s|$)/i,
   /(^|\s)poweroff(\s|$)/i,
   /(^|\s)dd\s+if=/i,
-];
+]
 
-export const NETWORK_COMMAND_PATTERNS = [
-  /(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i,
-];
+export const NETWORK_COMMAND_PATTERNS = [/(^|\s)(curl|wget|nc|ncat|netcat|ssh|scp|sftp|ftp|telnet)\b/i]
 
-export const PIPE_TO_SHELL_PATTERNS = [/(curl|wget)[^\n]{0,500}\|\s*(sh|bash|zsh|fish)\b/i];
+export const PIPE_TO_SHELL_PATTERNS = [/(curl|wget)[^\n]{0,500}\|\s*(sh|bash|zsh|fish)\b/i]
 
-export const SUDO_COMMAND_PATTERN = /(^|\s)sudo(\s|$)/i;
-export const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*;\s*\}\s*;\s*:/;
-export const PATH_TRAVERSAL_PATTERN = /(^|\/)\.\.(\/|$)/;
-export const DOCUMENTS_ALIAS_TOKENS = new Set([
-  'doc',
-  'docs',
-  'document',
-  'documents',
-  'mydocument',
-  'mydocuments',
-]);
+export const SUDO_COMMAND_PATTERN = /(^|\s)sudo(\s|$)/i
+export const FORK_BOMB_PATTERN = /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*;\s*\}\s*;\s*:/
+export const PATH_TRAVERSAL_PATTERN = /(^|\/)\.\.(\/|$)/
+export const DOCUMENTS_ALIAS_TOKENS = new Set(['doc', 'docs', 'document', 'documents', 'mydocument', 'mydocuments'])
 
 export const BLOCKED_READ_PATH_PATTERNS = [
   /^\/etc\/shadow(\/|$)/i,
@@ -278,7 +236,7 @@ export const BLOCKED_READ_PATH_PATTERNS = [
   // Private SSH keys + cert/key bundles.
   /(^|\/)(id_rsa|id_ed25519|id_ecdsa|id_dsa)$/i,
   /\.(pem|p12|pfx|key)$/i,
-];
+]
 
 // Critical write targets — blocked at EVERY safety profile (system dirs + key
 // stores). Classic privilege-escalation / backdoor vectors; never legitimately
@@ -289,14 +247,14 @@ export const BLOCKED_WRITE_PATH_PATTERNS = [
   /^\/(etc|bin|sbin|usr|boot|proc|sys|dev|root)(\/|$)/i,
   /(^|\/)\.ssh(\/|$)/i,
   /(^|\/)\.gnupg(\/|$)/i,
-];
+]
 
 // Sensitive-but-sometimes-legitimate write targets (e.g. "add an alias to my
 // .bashrc") — blocked only under the strict profile.
 export const STRICT_WRITE_PATH_PATTERNS = [
   /(^|\/)\.(bashrc|bash_profile|zshrc|profile)(\/|$)/i,
   /(^|\/)\.config\/autostart(\/|$)/i,
-];
+]
 
 // Controller prompts now live in agent/controllerPrompt.js (W1) — one
 // tier-aware builder replaces the old CONTROLLER_SYSTEM_PROMPT (JSON) +
@@ -310,24 +268,24 @@ export const STRICT_WRITE_PATH_PATTERNS = [
 // at runtime — skill improvement moves to an offline eval pass, not online drift.
 
 export function detectUserCorrection(userInput) {
-  const text = String(userInput || '');
-  return USER_CORRECTION_PATTERNS.some((p) => p.test(text));
+  const text = String(userInput || '')
+  return USER_CORRECTION_PATTERNS.some((p) => p.test(text))
 }
 
 // Estimates context tokens used for policy or budgeting decisions in the agent session runtime.
 export function estimateContextTokensUsed(systemPrompt, messages) {
-  const systemTokens = estimateTokens(systemPrompt);
+  const systemTokens = estimateTokens(systemPrompt)
   const msgTokens = messages.reduce((sum, m) => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    return sum + estimateTokens(content);
-  }, 0);
-  return systemTokens + msgTokens;
+    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    return sum + estimateTokens(content)
+  }, 0)
+  return systemTokens + msgTokens
 }
 
 // Selects or derives model context window from the available settings, input, and runtime context.
 export function resolveModelContextWindow(settings) {
   // Unified onto modelProfiles.resolveContextWindow — single source of truth.
-  return resolveContextWindow(settings);
+  return resolveContextWindow(settings)
 }
 
 // Tool definitions and metadata are centralized in @/platform/agent/toolCatalog.
@@ -348,12 +306,11 @@ export function resolveModelContextWindow(settings) {
  * @returns {'lean'|'structured'}
  */
 export function resolveAgentToolset(settings) {
-  const mode = String(settings?.agent_toolset || 'auto').toLowerCase();
-  if (mode === 'lean' || mode === 'structured') return mode;
+  const mode = String(settings?.agent_toolset || 'auto').toLowerCase()
+  if (mode === 'lean' || mode === 'structured') return mode
   const capable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
-    settings?.native_tools_enabled !== false;
-  return capable ? 'lean' : 'structured';
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
+  return capable ? 'lean' : 'structured'
 }
 
 // ── Stateful-loop gate ───────────────────────────────────────────────────────
@@ -367,12 +324,11 @@ export function resolveAgentToolset(settings) {
 // Falls back to the legacy loop whenever native tools aren't available, so weak/
 // local models are unaffected.
 export function useStatefulLoop(settings) {
-  const mode = String(settings?.agent_stateful_loop || 'auto').toLowerCase();
-  if (mode === 'off') return false;
+  const mode = String(settings?.agent_stateful_loop || 'auto').toLowerCase()
+  if (mode === 'off') return false
   const nativeCapable =
-    supportsNativeTools(settings?.ai_provider, settings?.ai_model) &&
-    settings?.native_tools_enabled !== false;
-  return nativeCapable && (mode === 'on' || mode === 'auto');
+    supportsNativeTools(settings?.ai_provider, settings?.ai_model) && settings?.native_tools_enabled !== false
+  return nativeCapable && (mode === 'on' || mode === 'auto')
 }
 
 // Render a tool result into the content string the model sees in its tool_result
@@ -381,30 +337,26 @@ export function useStatefulLoop(settings) {
 // telling the model how much was cut and how to page the rest — so it can recover
 // from truncation instead of reasoning blind (the core "doesn't bounce back from
 // truncations" fix). Honors a tool result's own pagination hints when present.
-export function toToolResultContent(
-  result,
-  { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {},
-) {
-  const rawText = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-  const text = markUntrustedExternalContent(toolName, rawText);
-  if (!text) return '(no output)';
-  if (text.length <= cap) return text;
+export function toToolResultContent(result, { cap = STATEFUL_TOOL_RESULT_CHAR_CAP, toolName = '' } = {}) {
+  const rawText = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+  const text = markUntrustedExternalContent(toolName, rawText)
+  if (!text) return '(no output)'
+  if (text.length <= cap) return text
 
-  const shown = text.slice(0, cap);
-  const remaining = text.length - cap;
+  const shown = text.slice(0, cap)
+  const remaining = text.length - cap
   // Surface a concrete next-offset so a follow-up read can continue cleanly. For
   // file/command results that already carry offset/hasMore, prefer those signals.
   const nextOffset = Number.isFinite(Number(result?.nextOffset))
     ? Number(result.nextOffset)
     : Number.isFinite(Number(result?.offset))
       ? Number(result.offset) + 1
-      : cap;
-  const hasMoreHint =
-    result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true;
+      : cap
+  const hasMoreHint = result && typeof result === 'object' && 'hasMore' in result ? Boolean(result.hasMore) : true
   const guidance = hasMoreHint
     ? `\n\n…[truncated ${remaining} more chars — there is more output. Continue from offset ${nextOffset} (re-read with a higher offset / next page) if you need the rest.]`
-    : `\n\n…[truncated ${remaining} more chars.]`;
-  return shown + guidance;
+    : `\n\n…[truncated ${remaining} more chars.]`
+  return shown + guidance
 }
 
 // toPreview — moved to @/platform/agent/ (imported above)

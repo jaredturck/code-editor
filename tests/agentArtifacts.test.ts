@@ -20,11 +20,7 @@ function session_input(): AgentSessionInput {
 describe('autonomous artifact capability', () => {
   it('adds durable artifact creation without removing the existing autonomous tool scope', () => {
     const prepared = withAutonomousArtifactCapability(session_input())
-    expect(prepared.settings.agent_tool_allowlist).toEqual([
-      'files.read',
-      'rag.retrieve',
-      'artifact.create',
-    ])
+    expect(prepared.settings.agent_tool_allowlist).toEqual(['files.read', 'rag.retrieve', 'artifact.create'])
     expect(prepared.userInput).toContain('research reports')
     expect(prepared.userInput).toContain('append additional chunks')
   })

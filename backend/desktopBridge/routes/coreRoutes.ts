@@ -4,14 +4,8 @@
  * the request.
  */
 
-import type { BridgeRequest, BridgeResponse } from '../types.js';
-import {
-  getSessionInfo,
-  getSystemStats,
-  getTopProcesses,
-  readJsonBody,
-  sendJson,
-} from '../services/coreService.js';
+import type { BridgeRequest, BridgeResponse } from '../types.js'
+import { getSessionInfo, getSystemStats, getTopProcesses, readJsonBody, sendJson } from '../services/coreService.js'
 
 /**
  * Processes core routes within the bridge route dispatch, including the side effects and
@@ -26,8 +20,8 @@ export async function handleCoreRoutes(
   pathname: string,
 ): Promise<boolean> {
   if (pathname === '/api/local/health' && req.method === 'GET') {
-    sendJson(res, 200, { ok: true, mode: 'desktop-local' });
-    return true;
+    sendJson(res, 200, { ok: true, mode: 'desktop-local' })
+    return true
   }
 
   // system/stats and system/processes are intentionally ungated low-sensitivity telemetry
@@ -36,23 +30,23 @@ export async function handleCoreRoutes(
   // the security context. Sensitive host reads (clipboard, environment) live in powerRoutes
   // and are gated there.
   if (pathname === '/api/local/system/stats' && (req.method === 'GET' || req.method === 'POST')) {
-    const stats = await getSystemStats();
-    sendJson(res, 200, { stats });
-    return true;
+    const stats = await getSystemStats()
+    sendJson(res, 200, { stats })
+    return true
   }
 
   if (pathname === '/api/local/system/processes' && req.method === 'POST') {
-    const body = await readJsonBody(req).catch(() => ({}));
-    const processes = await getTopProcesses(body?.limit);
-    sendJson(res, 200, { processes });
-    return true;
+    const body = await readJsonBody(req).catch(() => ({}))
+    const processes = await getTopProcesses(body?.limit)
+    sendJson(res, 200, { processes })
+    return true
   }
 
   if (pathname === '/api/local/session' && req.method === 'GET') {
-    const session = await getSessionInfo(baseDir);
-    sendJson(res, 200, { session });
-    return true;
+    const session = await getSessionInfo(baseDir)
+    sendJson(res, 200, { session })
+    return true
   }
 
-  return false;
+  return false
 }

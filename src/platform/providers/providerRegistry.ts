@@ -5,32 +5,32 @@
  * remains in the individual adapter files.
  */
 
-import { callAnthropic, listAnthropicModels } from '@/platform/providers/anthropicProvider';
+import { callAnthropic, listAnthropicModels } from '@/platform/providers/anthropicProvider'
 import {
   callOpenAI,
   callOpenCode,
   getOpenCodeBaseUrl,
   listOpenAICompatibleModels,
   OPENAI_API_BASE_URL,
-} from '@/platform/providers/openaiProvider';
-import { callGemini, listGeminiModels } from '@/platform/providers/geminiProvider';
-import { callDeepSeek, listDeepSeekModels } from '@/platform/providers/deepseekProvider';
-import { callOpenRouter, OPENROUTER_API_BASE_URL } from '@/platform/providers/openrouterProvider';
-import { callLocalLLM, listLocalModels } from '@/platform/providers/localProvider';
+} from '@/platform/providers/openaiProvider'
+import { callGemini, listGeminiModels } from '@/platform/providers/geminiProvider'
+import { callDeepSeek, listDeepSeekModels } from '@/platform/providers/deepseekProvider'
+import { callOpenRouter, OPENROUTER_API_BASE_URL } from '@/platform/providers/openrouterProvider'
+import { callLocalLLM, listLocalModels } from '@/platform/providers/localProvider'
 import type {
   AIProvider,
   AIProviderDefinition,
   AIProviderId,
   ProviderDiscoveryContext,
   ProviderInvokeContext,
-} from '@/platform/providers/types';
+} from '@/platform/providers/types'
 
-export type { AIProvider, AIProviderDefinition, AIProviderId } from '@/platform/providers/types';
+export type { AIProvider, AIProviderDefinition, AIProviderId } from '@/platform/providers/types'
 
 const OPENROUTER_HEADERS = Object.freeze({
   'HTTP-Referer': 'iris-agentics',
   'X-Title': 'IRIS',
-});
+})
 
 const _providers: readonly AIProvider[] = Object.freeze([
   Object.freeze({
@@ -49,8 +49,7 @@ const _providers: readonly AIProvider[] = Object.freeze([
     ]),
     invoke: ({ messages, apiKey, model, settings, fetchFn, options }: ProviderInvokeContext) =>
       callAnthropic(messages, apiKey, model, settings, fetchFn, options),
-    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) =>
-      listAnthropicModels(apiKey, fetchFn),
+    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) => listAnthropicModels(apiKey, fetchFn),
   }),
   Object.freeze({
     id: 'openai',
@@ -84,8 +83,7 @@ const _providers: readonly AIProvider[] = Object.freeze([
     models: Object.freeze(['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']),
     invoke: ({ messages, apiKey, model, fetchFn, options }: ProviderInvokeContext) =>
       callGemini(messages, apiKey, model, fetchFn, options),
-    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) =>
-      listGeminiModels(apiKey, fetchFn),
+    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) => listGeminiModels(apiKey, fetchFn),
   }),
   Object.freeze({
     id: 'deepseek',
@@ -98,8 +96,7 @@ const _providers: readonly AIProvider[] = Object.freeze([
     models: Object.freeze(['deepseek-v4-pro', 'deepseek-v4-flash']),
     invoke: ({ messages, apiKey, model, fetchFn, options }: ProviderInvokeContext) =>
       callDeepSeek(messages, apiKey, model, fetchFn, options),
-    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) =>
-      listDeepSeekModels(apiKey, fetchFn),
+    discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) => listDeepSeekModels(apiKey, fetchFn),
   }),
   Object.freeze({
     id: 'opencode',
@@ -157,28 +154,20 @@ const _providers: readonly AIProvider[] = Object.freeze([
     keyHelpUrl: null,
     requiresApiKey: false,
     defaultModel: 'llama3',
-    models: Object.freeze([
-      'llama3',
-      'llama3.2',
-      'mistral',
-      'codellama',
-      'phi3',
-      'gemma2',
-      'deepseek-coder',
-    ]),
+    models: Object.freeze(['llama3', 'llama3.2', 'mistral', 'codellama', 'phi3', 'gemma2', 'deepseek-coder']),
     invoke: ({ messages, model, settings, fetchFn, options }: ProviderInvokeContext) =>
       callLocalLLM(messages, String(settings?.ai_local_url || ''), model, fetchFn, options),
     discoverModels: ({ settings, fetchFn }: ProviderDiscoveryContext) =>
       listLocalModels(String(settings?.ai_local_url || ''), fetchFn),
   }),
-] satisfies readonly AIProvider[]);
+] satisfies readonly AIProvider[])
 
-const _providerMap = new Map<AIProviderId, AIProvider>();
+const _providerMap = new Map<AIProviderId, AIProvider>()
 for (const provider of _providers) {
   if (_providerMap.has(provider.id)) {
-    throw new Error(`Duplicate AI provider registration: ${provider.id}`);
+    throw new Error(`Duplicate AI provider registration: ${provider.id}`)
   }
-  _providerMap.set(provider.id, provider);
+  _providerMap.set(provider.id, provider)
 }
 
 export const AI_PROVIDER_DEFINITIONS: readonly AIProviderDefinition[] = Object.freeze(
@@ -194,35 +183,35 @@ export const AI_PROVIDER_DEFINITIONS: readonly AIProviderDefinition[] = Object.f
       models: provider.models,
     }),
   ),
-);
+)
 
-export const DEFAULT_AI_PROVIDER_ID: AIProviderId = 'openai';
-export const DEFAULT_AI_MODEL = _providerMap.get(DEFAULT_AI_PROVIDER_ID)!.defaultModel;
+export const DEFAULT_AI_PROVIDER_ID: AIProviderId = 'openai'
+export const DEFAULT_AI_MODEL = _providerMap.get(DEFAULT_AI_PROVIDER_ID)!.defaultModel
 
 // Returns the available AI providers in the normalized form used by callers.
 export function listAIProviders(): readonly AIProvider[] {
-  return _providers;
+  return _providers
 }
 
 // Returns the normalized definitions used to populate provider settings and lookups.
 export function listAIProviderDefinitions(): readonly AIProviderDefinition[] {
-  return AI_PROVIDER_DEFINITIONS;
+  return AI_PROVIDER_DEFINITIONS
 }
 
 // Determines whether a value names a registered AI provider.
 export function isAIProviderId(value: unknown): value is AIProviderId {
-  return _providerMap.has(String(value || '').toLowerCase() as AIProviderId);
+  return _providerMap.has(String(value || '').toLowerCase() as AIProviderId)
 }
 
 // Provides find AI state and actions to descendant renderer components.
 export function findAIProvider(value: unknown): AIProvider | null {
-  return _providerMap.get(String(value || '').toLowerCase() as AIProviderId) || null;
+  return _providerMap.get(String(value || '').toLowerCase() as AIProviderId) || null
 }
 
 // Returns the registered provider definition for the supplied provider ID.
 export function getAIProvider(value: unknown): AIProvider {
-  const provider = findAIProvider(value);
-  if (provider) return provider;
-  const valid = _providers.map((entry) => entry.id).join(', ');
-  throw new Error(`Unknown AI provider "${String(value || '')}". Valid providers: ${valid}.`);
+  const provider = findAIProvider(value)
+  if (provider) return provider
+  const valid = _providers.map((entry) => entry.id).join(', ')
+  throw new Error(`Unknown AI provider "${String(value || '')}". Valid providers: ${valid}.`)
 }

@@ -65,9 +65,7 @@ function build_pattern_blocks(
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
-    const matched = matcher
-      ? matcher.test(line)
-      : (ignore_case ? line.toLowerCase() : line).includes(needle)
+    const matched = matcher ? matcher.test(line) : (ignore_case ? line.toLowerCase() : line).includes(needle)
     if (matched) matches.push(index)
   }
 
@@ -193,7 +191,6 @@ function apply_unified_patch(content: string, patch: string) {
   return output.join('\n')
 }
 
-
 export function create_editor_file_authority(
   workspace_root: string | null,
   host: EditorFileAuthorityHost,
@@ -273,7 +270,7 @@ export function create_editor_file_authority(
       workspace_root,
       resolved_path,
       next_content,
-      current ? observed_disk_revisions.get(key) ?? current.disk_revision : null,
+      current ? (observed_disk_revisions.get(key) ?? current.disk_revision) : null,
     )
     host.apply_content(disk_result.path, next_content, true)
     const revision = `disk:${disk_result.revision}`
@@ -288,13 +285,20 @@ export function create_editor_file_authority(
       if (!FILE_TOOL_NAMES.has(tool_name)) throw new Error(`Unsupported editor file tool: ${tool_name}`)
 
       if (tool_name === 'files.list') {
-        return window.editor_api.workspace.agent_list(workspace_root, String(args.path || workspace_root), Number(args.depth) || 3)
+        return window.editor_api.workspace.agent_list(
+          workspace_root,
+          String(args.path || workspace_root),
+          Number(args.depth) || 3,
+        )
       }
 
       if (tool_name === 'files.stat') {
         const paths = Array.isArray(args.path) ? args.path : [args.path]
         const files = await Promise.all(
-          paths.filter(Boolean).slice(0, 20).map((file_path) => window.editor_api.workspace.agent_stat(workspace_root, String(file_path))),
+          paths
+            .filter(Boolean)
+            .slice(0, 20)
+            .map((file_path) => window.editor_api.workspace.agent_stat(workspace_root, String(file_path))),
         )
         return { files }
       }
@@ -369,7 +373,9 @@ export function create_editor_file_authority(
           ...result,
           mode: append ? 'append' : 'create',
           bytesWritten: content.length,
-          ...(before ? build_simple_diff(before.path, before.content, append ? before.content + content : content) : {}),
+          ...(before
+            ? build_simple_diff(before.path, before.content, append ? before.content + content : content)
+            : {}),
         }
       }
 
@@ -381,10 +387,19 @@ export function create_editor_file_authority(
         if (!old_text) throw new Error('oldText is required for files.edit.')
         const matches = current.content.split(old_text).length - 1
         if (matches === 0) throw new Error('oldText was not found. Read the file again before editing.')
-        if (matches > 1 && args.replaceAll !== true) throw new Error('oldText matches more than once. Include more context or set replaceAll.')
-        const next_content = args.replaceAll === true ? current.content.split(old_text).join(new_text) : current.content.replace(old_text, new_text)
+        if (matches > 1 && args.replaceAll !== true)
+          throw new Error('oldText matches more than once. Include more context or set replaceAll.')
+        const next_content =
+          args.replaceAll === true
+            ? current.content.split(old_text).join(new_text)
+            : current.content.replace(old_text, new_text)
         const result = await write_content(file_path, next_content)
-        return { ...result, applied: true, replacements: args.replaceAll === true ? matches : 1, ...build_simple_diff(current.path, current.content, next_content) }
+        return {
+          ...result,
+          applied: true,
+          replacements: args.replaceAll === true ? matches : 1,
+          ...build_simple_diff(current.path, current.content, next_content),
+        }
       }
 
       if (tool_name === 'files.patch') {

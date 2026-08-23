@@ -13,7 +13,8 @@ const verificationRequireDefinition: ToolDefinition = {
   description:
     'Declare the verification checks you judge necessary for this development task. Choose project-appropriate requirement names yourself; the runtime does not infer framework-specific checks. Calling again replaces the current requirements unless mode:"add" is used.',
   args: {
-    kinds: 'string[] — model-chosen verification requirement names such as tests, typecheck, browser-runtime, or another project-appropriate check',
+    kinds:
+      'string[] — model-chosen verification requirement names such as tests, typecheck, browser-runtime, or another project-appropriate check',
     mode: 'replace|add (optional, default replace)',
   },
 }

@@ -17,7 +17,9 @@ const MAX_WRITE_LEASE_TTL_MS = 30 * 60 * 1000
 const write_leases = new Map<string, AgentWriteLease>()
 
 function normalize_lease_path(file_path: string) {
-  return String(file_path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  return String(file_path || '')
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
 }
 
 function normalized_ttl(value: unknown) {

@@ -4,14 +4,14 @@
  * development workflow state.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest'
 import {
   buildLauncherCatalog,
   resolveLauncherEntry,
   semanticApplicationLauncherEntry,
-} from '@/platform/launcherCatalog';
-import { initializeStorageForTests } from '@/platform/localStorageStore';
-import type { BridgeLauncherDiscovery } from '@/platform/desktopBridge';
+} from '@/platform/launcherCatalog'
+import { initializeStorageForTests } from '@/platform/localStorageStore'
+import type { BridgeLauncherDiscovery } from '@/platform/desktopBridge'
 
 const discovery: BridgeLauncherDiscovery = {
   desktop: 'KDE',
@@ -59,7 +59,7 @@ const discovery: BridgeLauncherDiscovery = {
       discoveredAt: 1,
     },
   ],
-};
+}
 
 describe('launcherCatalog', () => {
   it('shows only discovered application cards and uses the detected editor name', () => {
@@ -67,16 +67,16 @@ describe('launcherCatalog', () => {
       shortcuts: [],
       discovery,
       workingDirectory: '/home/jared/project',
-    });
-    const names = catalog.map((entry) => entry.name);
+    })
+    const names = catalog.map((entry) => entry.name)
 
-    expect(names).toContain('Files');
-    expect(names).toContain('Terminal');
-    expect(names).toContain('Sublime Text');
-    expect(names).not.toContain('Web Browser');
-    expect(names).not.toContain('VS Code');
-    expect(catalog.find((entry) => entry.name === 'Files')?.subtitle).toBe('Dolphin');
-  });
+    expect(names).toContain('Files')
+    expect(names).toContain('Terminal')
+    expect(names).toContain('Sublime Text')
+    expect(names).not.toContain('Web Browser')
+    expect(names).not.toContain('VS Code')
+    expect(catalog.find((entry) => entry.name === 'Files')?.subtitle).toBe('Dolphin')
+  })
 
   it('keeps start and stop as one managed pair without a port-kill command', () => {
     const catalog = buildLauncherCatalog({
@@ -91,21 +91,21 @@ describe('launcherCatalog', () => {
         projectName: 'project',
         command: 'npm run dev',
       },
-    });
+    })
 
-    const start = catalog.find((entry) => entry.action === 'dev_start');
-    const stop = catalog.find((entry) => entry.action === 'dev_stop');
+    const start = catalog.find((entry) => entry.action === 'dev_start')
+    const stop = catalog.find((entry) => entry.action === 'dev_stop')
     expect(start).toMatchObject({
       name: 'Start Dev Environment',
       disabled: true,
-    });
+    })
     expect(stop).toMatchObject({
       name: 'Stop Dev Environment',
       disabled: false,
-    });
-    expect(stop?.subtitle).toContain('PID 4321');
-    expect(catalog.some((entry) => entry.command.includes('lsof -t -i:3000'))).toBe(false);
-  });
+    })
+    expect(stop?.subtitle).toContain('PID 4321')
+    expect(catalog.some((entry) => entry.command.includes('lsof -t -i:3000'))).toBe(false)
+  })
 
   it('maps semantic results to structured launch requests and wraps terminal applications', () => {
     const graphical = semanticApplicationLauncherEntry(
@@ -128,14 +128,14 @@ describe('launcherCatalog', () => {
         score: 0.9,
       },
       discovery,
-    );
+    )
     expect(graphical).toMatchObject({
       name: 'Blender',
       executable: '/usr/bin/blender',
       args: [],
       icon: 'graphics',
       subtitle: 'Create 3D models and animations',
-    });
+    })
 
     const terminalApp = semanticApplicationLauncherEntry(
       {
@@ -157,28 +157,28 @@ describe('launcherCatalog', () => {
         score: 0.8,
       },
       discovery,
-    );
-    expect(terminalApp.executable).toBe('/usr/bin/konsole');
-    expect(terminalApp.args?.join(' ')).toContain('/usr/bin/htop');
-  });
+    )
+    expect(terminalApp.executable).toBe('/usr/bin/konsole')
+    expect(terminalApp.args?.join(' ')).toContain('/usr/bin/htop')
+  })
 
   it('resolves cached application entries by visible name for agent launch', () => {
     initializeStorageForTests({
       iris_launcher_discovery: JSON.stringify(discovery),
       iris_launcher_shortcuts: '[]',
-    });
+    })
 
     expect(
       resolveLauncherEntry('Sublime Text', {
         workingDirectory: '/home/jared/project',
         agentOnly: true,
       })?.executable,
-    ).toBe('/usr/bin/subl');
+    ).toBe('/usr/bin/subl')
     expect(
       resolveLauncherEntry('Web Browser', {
         workingDirectory: '/home/jared/project',
         agentOnly: true,
       }),
-    ).toBeNull();
-  });
-});
+    ).toBeNull()
+  })
+})

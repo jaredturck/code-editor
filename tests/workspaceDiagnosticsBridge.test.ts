@@ -56,18 +56,22 @@ describe('workspace diagnostics bridge', () => {
       actorId: 'orchestrator',
       lineNumbers: false,
     })
-    expect(analyze).toHaveBeenCalledWith(expect.objectContaining({
-      language: 'tsx',
-      content: 'const value: string = 42',
-      file_path: '/project/src/App.tsx',
-    }))
-    expect(result).toEqual(expect.objectContaining({
-      supported: true,
-      ok: false,
-      clean: false,
-      revision: 'live-revision-7',
-      counts: { errors: 1, warnings: 0, info: 0, total: 1 },
-    }))
+    expect(analyze).toHaveBeenCalledWith(
+      expect.objectContaining({
+        language: 'tsx',
+        content: 'const value: string = 42',
+        file_path: '/project/src/App.tsx',
+      }),
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        supported: true,
+        ok: false,
+        clean: false,
+        revision: 'live-revision-7',
+        counts: { errors: 1, warnings: 0, info: 0, total: 1 },
+      }),
+    )
   })
 
   it('reports unsupported languages instead of claiming they are clean', async () => {

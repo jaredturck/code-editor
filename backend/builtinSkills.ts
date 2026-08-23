@@ -72,17 +72,7 @@ export const BUILTIN_SKILLS = [
     guard: true,
     priority: 9,
     enabled: true,
-    triggers: [
-      'done',
-      'complete',
-      'finished',
-      'works',
-      'fixed',
-      'verify',
-      'test',
-      'check',
-      'build',
-    ],
+    triggers: ['done', 'complete', 'finished', 'works', 'fixed', 'verify', 'test', 'check', 'build'],
     summary:
       'Verification discipline before reporting done. Applies whenever you finish a change or claim something works (e.g. after an edit, build, test, or fix). Covers proving it with evidence, reading failures honestly, finishing the full scope, no silent skips, and ending with one coherent summary.',
     instructions: `FINISH & VERIFY — "done" is a claim, and a claim needs evidence. The failure this guards against is the confident false positive: reporting success you never actually checked. Proof beats assertion every time, and an honest failure beats a fabricated success.
@@ -428,18 +418,7 @@ AFTER INSTALLING — verify it actually landed before relying on it: import it (
     guard: false,
     priority: 7,
     enabled: true,
-    triggers: [
-      'file',
-      'read',
-      'write',
-      'edit',
-      'patch',
-      'modify',
-      'create file',
-      'diff',
-      'stat',
-      'open',
-    ],
+    triggers: ['file', 'read', 'write', 'edit', 'patch', 'modify', 'create file', 'diff', 'stat', 'open'],
     summary:
       'Read, edit, or create file contents. Use when the task needs to inspect a specific file, make a surgical edit, apply a multi-hunk diff, or write a whole file. Covers targeted reads, files.edit vs files.patch vs files.write, read-before-edit, and verify-after.',
     instructions: `FILE TOOLS — work with file content through editor-aware structured tools so the live editor buffer, revision checks, and collision protection remain authoritative. A file edit is a surgical act: read enough to understand the target, change the smallest thing that satisfies the task, and prove the change landed.
@@ -665,16 +644,7 @@ DISCIPLINE: if the file already has a house style, match it; otherwise follow th
     guard: false,
     priority: 6,
     enabled: true,
-    triggers: [
-      'skill',
-      'skills',
-      'how do i',
-      'recipe',
-      'procedure',
-      'load skill',
-      'find skill',
-      'capability',
-    ],
+    triggers: ['skill', 'skills', 'how do i', 'recipe', 'procedure', 'load skill', 'find skill', 'capability'],
     summary:
       'How IRIS\'s skill system works. Use when you are unsure how to find or apply a skill, or want to manage what is in context (e.g. "is there a recipe for this", loading or unloading skills). Covers discovery via cards, skills.load to read a full body, skills.search to find one, and skills.offload to free context.',
     instructions: `THE SKILL SYSTEM — progressive disclosure: you carry a small menu of pointers and pull the full method only when you need it. This is what keeps a capable model's context lean while still giving it IRIS-specific procedure on demand. A card tells you a skill EXISTS and when it applies; it is not the method itself.
@@ -712,18 +682,7 @@ THE RHYTHM: skim the cards → load the one this step needs → read and apply i
     guard: false,
     priority: 5,
     enabled: true,
-    triggers: [
-      'remember',
-      'note',
-      'notes',
-      'recall',
-      'memory',
-      'log',
-      'history',
-      'earlier',
-      'last time',
-      'persist',
-    ],
+    triggers: ['remember', 'note', 'notes', 'recall', 'memory', 'log', 'history', 'earlier', 'last time', 'persist'],
     summary:
       'Durable cross-session memory via notes. Use when the task references earlier work or a fact worth keeping (e.g. "what did we decide about X", "remember this preference", recalling a past convention or dead-end). Covers memory.query to recall first, notes.add/update/delete to store sparingly, one clear fact per note.',
     instructions: `MEMORY & NOTES — IRIS persists notes on disk across sessions, so they are your long-term memory between conversations. Good memory is relevant and sparse; a pile of stale or obvious notes is worse than none, because it crowds out the one fact that actually mattered.
@@ -997,17 +956,7 @@ CLOSING REVIEW (complex code): after writing non-trivial code, agent.review({ di
     guard: false,
     priority: 7,
     enabled: true,
-    triggers: [
-      'delegate',
-      'executor',
-      'scout',
-      'sub-agent',
-      'sub agent',
-      'assign',
-      'hand off',
-      'handoff',
-      'parallel',
-    ],
+    triggers: ['delegate', 'executor', 'scout', 'sub-agent', 'sub agent', 'assign', 'hand off', 'handoff', 'parallel'],
     summary:
       "Tune a delegated task to the sub-agent's provider family. Use when writing a delegation and the executor/scout runs on a specific model (e.g. delegating to a Claude vs DeepSeek vs local sub-agent). Covers per-family instructions, step budgets, output schemas, and what each family is safe to handle.",
     instructions: `PROVIDER PLAYBOOK — a delegated task should be written for the model that will run it. The same instructions a frontier model handles from a one-line goal will derail a small local model that needed numbered steps. Match the spec, the step budget, and the trust level to the sub-agent's provider family.
@@ -1050,14 +999,7 @@ UNIVERSAL: always pass toAgent ("executor" | "scout"), concrete numbered instruc
     guard: false,
     priority: 8,
     enabled: true,
-    triggers: [
-      'parallel',
-      'simultaneously',
-      'at the same time',
-      'multiple agents',
-      'split the work',
-      'both agents',
-    ],
+    triggers: ['parallel', 'simultaneously', 'at the same time', 'multiple agents', 'split the work', 'both agents'],
     summary:
       'Delegate multiple tasks at the same time safely. Use when splitting work across both sub-agents in parallel (e.g. "scan auth while listing config"). Covers confirming both agents are connected, planning and logging the split, avoiding same-file conflicts, awaiting with recallAll, and verifying results.',
     instructions: `PARALLEL DELEGATION PROTOCOL — running two sub-agents at once is a real speedup, but only when both are live and their work cannot collide. Set it up deliberately; a sloppy parallel split costs more than the sequential version it replaced. Work the steps in order:
@@ -1069,9 +1011,7 @@ UNIVERSAL: always pass toAgent ("executor" | "scout"), concrete numbered instruc
 5. POST in parallel via agent.delegate and await ALL of them with agent.recallAll — don't proceed on a partial set.
 6. VERIFY every file-write result with agent.verify before you build on it.
 7. ON ANY failure or timeout, take that task over yourself — don't immediately re-delegate it into the same wall.`,
-    examples: [
-      'Scan auth files (executor) + list config files (scout) at the same time — only if both are connected.',
-    ],
+    examples: ['Scan auth files (executor) + list config files (scout) at the same time — only if both are connected.'],
     modelVariants: {
       simple: `PARALLEL:
 1. Both agents connected (agent.available)? else go sequential.
@@ -1092,17 +1032,7 @@ UNIVERSAL: always pass toAgent ("executor" | "scout"), concrete numbered instruc
     guard: false,
     priority: 8,
     enabled: true,
-    triggers: [
-      'plan',
-      'build',
-      'implement',
-      'refactor',
-      'analyze',
-      'multi-step',
-      'complex',
-      'feature',
-      'fix',
-    ],
+    triggers: ['plan', 'build', 'implement', 'refactor', 'analyze', 'multi-step', 'complex', 'feature', 'fix'],
     summary:
       'Break a complex request into a plan and synthesize the result. Use for any non-trivial, multi-step request (e.g. "build a feature", "refactor X", "analyze and fix"). Covers restating the goal, decomposing into tagged sub-tasks, dependency-ordering, right-sizing act-vs-delegate, and synthesizing one verified answer.',
     instructions: `ADVANCED DECOMPOSITION (orchestrator) — a complex request is won or lost in how you break it down. The orchestrator's value isn't doing every step; it's seeing the whole shape, routing each piece to whoever does it best, and reassembling the results into one coherent answer. For any non-trivial request:
@@ -1139,18 +1069,7 @@ UNIVERSAL: always pass toAgent ("executor" | "scout"), concrete numbered instruc
     guard: false,
     priority: 6,
     enabled: true,
-    triggers: [
-      'list',
-      'read',
-      'search',
-      'find',
-      'grep',
-      'files',
-      'run',
-      'command',
-      'inspect',
-      'check',
-    ],
+    triggers: ['list', 'read', 'search', 'find', 'grep', 'files', 'run', 'command', 'inspect', 'check'],
     summary:
       'Use fewer tool round-trips. Use when a task would otherwise take many small calls (e.g. listing, then reading, then searching separately). Covers one shell command over many calls, ripgrep/find to locate vs reading whole files, survey-before-read, chaining with &&, chunked reads, and not re-fetching.',
     instructions: `TOKEN-EFFICIENT TOOL USE — every tool call costs a round-trip: tokens going out, latency coming back, and context spent on the result. Efficiency isn't doing less work; it's getting the same answer in fewer, denser steps. A model that asks one sharp question beats one that asks five vague ones.
@@ -1438,6 +1357,6 @@ FRONTMATTER: set \`triggers\` (keywords/phrases that should surface the card), o
     },
     dependencies: [],
   },
-];
+]
 
-export default BUILTIN_SKILLS;
+export default BUILTIN_SKILLS

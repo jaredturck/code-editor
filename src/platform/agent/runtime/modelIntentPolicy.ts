@@ -1,15 +1,15 @@
-import { extractJsonObject } from '@/platform/agent/agentJsonUtils';
-import { TOOL_BY_NAME, TOOL_DEFINITIONS } from '@/platform/agent/toolCatalog';
+import { extractJsonObject } from '@/platform/agent/agentJsonUtils'
+import { TOOL_BY_NAME, TOOL_DEFINITIONS } from '@/platform/agent/toolCatalog'
 
 interface CapabilitySnapshot {
-  advertisedTools?: unknown;
-  availableTools?: unknown;
+  advertisedTools?: unknown
+  availableTools?: unknown
 }
 
 interface ForcedActionInput {
-  userInput: unknown;
-  capabilitySnapshot: CapabilitySnapshot;
-  requestAI: (messages: Array<Record<string, unknown>>) => Promise<unknown>;
+  userInput: unknown
+  capabilitySnapshot: CapabilitySnapshot
+  requestAI: (messages: Array<Record<string, unknown>>) => Promise<unknown>
 }
 
 /**
@@ -18,28 +18,22 @@ interface ForcedActionInput {
  * validates only that the selected tool exists and is available; it never infers intent
  * from keywords, regexes, or hard-coded task categories.
  */
-export async function inferForcedToolActionForRequest({
-  userInput,
-  capabilitySnapshot,
-  requestAI,
-}: ForcedActionInput) {
+export async function inferForcedToolActionForRequest({ userInput, capabilitySnapshot, requestAI }: ForcedActionInput) {
   const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
     ? capabilitySnapshot.advertisedTools
-    : capabilitySnapshot?.availableTools;
+    : capabilitySnapshot?.availableTools
   const availableTools = Array.isArray(advertisedTools)
     ? advertisedTools.map(String).filter((name) => TOOL_BY_NAME[name])
-    : [];
+    : []
 
-  if (!availableTools.length) return null;
+  if (!availableTools.length) return null
 
-  const toolSpecs = TOOL_DEFINITIONS.filter((tool) => availableTools.includes(tool.name)).map(
-    (tool) => ({
-      name: tool.name,
-      module: tool.module,
-      description: tool.description,
-      args: tool.args,
-    }),
-  );
+  const toolSpecs = TOOL_DEFINITIONS.filter((tool) => availableTools.includes(tool.name)).map((tool) => ({
+    name: tool.name,
+    module: tool.module,
+    description: tool.description,
+    args: tool.args,
+  }))
 
   try {
     const raw = await requestAI([
@@ -64,24 +58,26 @@ export async function inferForcedToolActionForRequest({
           tool_specs: toolSpecs,
         }),
       },
-    ]);
+    ])
 
-    const parsed = extractJsonObject(raw);
-    const action = String(parsed?.action || '').trim().toLowerCase();
-    if (action === 'none') return null;
+    const parsed = extractJsonObject(raw)
+    const action = String(parsed?.action || '')
+      .trim()
+      .toLowerCase()
+    if (action === 'none') return null
 
-    const tool = String(parsed?.tool || '').trim();
-    const args = parsed?.args && typeof parsed.args === 'object' ? parsed.args : {};
-    const reason = String(parsed?.reason || '').trim();
+    const tool = String(parsed?.tool || '').trim()
+    const args = parsed?.args && typeof parsed.args === 'object' ? parsed.args : {}
+    const reason = String(parsed?.reason || '').trim()
 
-    if (action !== 'tool' || !tool || !availableTools.includes(tool)) return null;
+    if (action !== 'tool' || !tool || !availableTools.includes(tool)) return null
 
     return {
       tool,
       args,
       reason: reason || 'The model selected this tool as the best next action for the request.',
-    };
+    }
   } catch {
-    return null;
+    return null
   }
 }

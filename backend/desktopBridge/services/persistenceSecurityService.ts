@@ -4,25 +4,23 @@
  * stay sealed until the renderer explicitly requests the active record.
  */
 
-import { readEncryptedStoreAll } from '../storage/encryptedDatabase.js';
+import { readEncryptedStoreAll } from '../storage/encryptedDatabase.js'
 import {
   filterRendererBootstrapValues,
   normalizeRequestedDurableStoreKeys,
-} from '../storage/persistenceSecurityPolicy.js';
+} from '../storage/persistenceSecurityPolicy.js'
 
 export async function readRendererBootstrapStore(): Promise<Record<string, string>> {
-  return filterRendererBootstrapValues(await readEncryptedStoreAll());
+  return filterRendererBootstrapValues(await readEncryptedStoreAll())
 }
 
-export async function readRequestedDurableStoreKeys(
-  keys: unknown,
-): Promise<Record<string, string>> {
-  const normalized = normalizeRequestedDurableStoreKeys(keys);
-  if (!normalized.length) return {};
-  const allValues = await readEncryptedStoreAll();
-  const requested: Record<string, string> = {};
+export async function readRequestedDurableStoreKeys(keys: unknown): Promise<Record<string, string>> {
+  const normalized = normalizeRequestedDurableStoreKeys(keys)
+  if (!normalized.length) return {}
+  const allValues = await readEncryptedStoreAll()
+  const requested: Record<string, string> = {}
   for (const key of normalized) {
-    if (typeof allValues[key] === 'string') requested[key] = allValues[key];
+    if (typeof allValues[key] === 'string') requested[key] = allValues[key]
   }
-  return requested;
+  return requested
 }

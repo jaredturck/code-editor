@@ -1,32 +1,32 @@
 /** Benchmarks request-policy, authorization, launcher-safety, and HTTP transport boundaries. */
 
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { once } from 'node:events';
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { once } from 'node:events'
 import {
   DEFAULT_BRIDGE_PERMISSIONS,
   normalizeBridgePermissions,
   requireBridgePermission,
-} from '../../../backend/desktopBridge/shared/bridgeAuthorization.js';
+} from '../../../backend/desktopBridge/shared/bridgeAuthorization.js'
 import {
   classifyLauncherRequest,
   consumeLauncherApproval,
   createLauncherApproval,
   normalizeLauncherRequest,
-} from '../../../backend/desktopBridge/shared/launcherSafety.js';
+} from '../../../backend/desktopBridge/shared/launcherSafety.js'
 import {
   normalizeRemoteRequestHeaders,
   safeRemoteRequestBuffer,
-} from '../../../backend/desktopBridge/shared/networkSecurity.js';
+} from '../../../backend/desktopBridge/shared/networkSecurity.js'
 import {
   createProviderProxyRequestPolicy,
   normalizeProviderProxyHeaders,
-} from '../../../backend/desktopBridge/shared/providerProxyPolicy.js';
-import type { BenchmarkDefinition } from '../core/types.js';
+} from '../../../backend/desktopBridge/shared/providerProxyPolicy.js'
+import type { BenchmarkDefinition } from '../core/types.js'
 
 interface LoopbackApiContext {
-  server: Server;
-  baseUrl: string;
+  server: Server
+  baseUrl: string
 }
 
 /** Starts a deterministic loopback API so transport measurements never depend on the internet. */
@@ -34,51 +34,47 @@ async function createLoopbackApiContext(): Promise<LoopbackApiContext> {
   const smallPayload = JSON.stringify({
     status: 'ok',
     values: Array.from({ length: 64 }, (_, index) => index),
-  });
+  })
   const largePayload = JSON.stringify({
     status: 'ok',
     content: 'iris-network-benchmark '.repeat(10_000),
-  });
+  })
   const server = createServer((request, response) => {
-    response.setHeader('Content-Type', 'application/json');
+    response.setHeader('Content-Type', 'application/json')
     if (request.url === '/large') {
-      response.end(largePayload);
-      return;
+      response.end(largePayload)
+      return
     }
     if (request.url === '/chunks') {
-      let index = 0;
+      let index = 0
       const writeNext = (): void => {
         if (index >= 100) {
-          response.end();
-          return;
+          response.end()
+          return
         }
-        response.write(Buffer.alloc(1024, index % 251));
-        index += 1;
-        setImmediate(writeNext);
-      };
-      writeNext();
-      return;
+        response.write(Buffer.alloc(1024, index % 251))
+        index += 1
+        setImmediate(writeNext)
+      }
+      writeNext()
+      return
     }
-    response.end(smallPayload);
-  });
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address() as AddressInfo;
-  return { server, baseUrl: `http://127.0.0.1:${address.port}` };
+    response.end(smallPayload)
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address() as AddressInfo
+  return { server, baseUrl: `http://127.0.0.1:${address.port}` }
 }
 
 /** Stops the isolated loopback API after its benchmark case completes. */
 async function closeLoopbackApiContext(context: LoopbackApiContext): Promise<void> {
-  context.server.close();
-  await once(context.server, 'close');
+  context.server.close()
+  await once(context.server, 'close')
 }
 
 /** Fetches one loopback response through IRIS's DNS, address, timeout, and size policy. */
-function requestLoopbackBuffer(
-  context: LoopbackApiContext,
-  pathname: string,
-  maximumBytes: number,
-) {
+function requestLoopbackBuffer(context: LoopbackApiContext, pathname: string, maximumBytes: number) {
   return safeRemoteRequestBuffer(`${context.baseUrl}${pathname}`, {
     policy: {
       addressMode: 'loopback',
@@ -89,7 +85,7 @@ function requestLoopbackBuffer(
       timeoutMs: 10_000,
       idleTimeoutMs: 5_000,
     },
-  });
+  })
 }
 
 /** Exercises the high-frequency policy work performed before network or operating-system effects. */
@@ -123,8 +119,7 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'network.loopback-api.chunked-response',
     suite: 'Network and safety',
     name: 'Validated loopback API request · 100 chunks',
-    description:
-      'Consumes a deliberately chunked response through the production async iterator and cleanup path.',
+    description: 'Consumes a deliberately chunked response through the production async iterator and cleanup path.',
     iterations: 8,
     warmupIterations: 2,
     bytesPerOperation: 100 * 1024,
@@ -136,8 +131,7 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
     id: 'network.provider-policy.resolve',
     suite: 'Network and safety',
     name: 'Provider proxy policy resolution',
-    description:
-      'Validates provider identity, protocol, host, path, method, redirect, and address-class policy.',
+    description: 'Validates provider identity, protocol, host, path, method, redirect, and address-class policy.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 5000,
@@ -145,28 +139,24 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
       urls: [
         ['https://api.openai.com/v1/chat/completions', 'openai'],
         ['https://api.anthropic.com/v1/messages', 'anthropic'],
-        [
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent',
-          'gemini',
-        ],
+        ['https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent', 'gemini'],
         ['http://127.0.0.1:11434/api/chat', 'local'],
       ],
     }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 5000; index += 1) {
-        const [url, provider] = context.urls[index % context.urls.length];
-        result = createProviderProxyRequestPolicy(url, provider);
+        const [url, provider] = context.urls[index % context.urls.length]
+        result = createProviderProxyRequestPolicy(url, provider)
       }
-      return result;
+      return result
     },
   },
   {
     id: 'network.headers.normalize',
     suite: 'Network and safety',
     name: 'Remote and provider header normalization',
-    description:
-      'Filters renderer-supplied headers through the generic and provider-specific allowlists.',
+    description: 'Filters renderer-supplied headers through the generic and provider-specific allowlists.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 5000,
@@ -182,10 +172,10 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
       },
     }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 5000; index += 1) {
-        const openAI = index % 2 === 1;
-        const headers = openAI ? context.openAIHeaders : context.anthropicHeaders;
+        const openAI = index % 2 === 1
+        const headers = openAI ? context.openAIHeaders : context.anthropicHeaders
         result = {
           remote: normalizeRemoteRequestHeaders(headers, [
             'authorization',
@@ -194,31 +184,30 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
             'anthropic-version',
           ]),
           provider: normalizeProviderProxyHeaders(openAI ? 'openai' : 'anthropic', headers),
-        };
+        }
       }
-      return result;
+      return result
     },
   },
   {
     id: 'security.bridge-permissions',
     suite: 'Network and safety',
     name: 'Bridge permission normalization and enforcement',
-    description:
-      'Normalizes partial permission state and enforces the final route-owned capability check.',
+    description: 'Normalizes partial permission state and enforces the final route-owned capability check.',
     iterations: 15,
     warmupIterations: 4,
     operationsPerIteration: 10000,
     run: () => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 10000; index += 1) {
         const permissions = normalizeBridgePermissions(
           { fileRead: true, fileWrite: index % 2 === 0, terminal: true },
           DEFAULT_BRIDGE_PERMISSIONS,
-        );
-        requireBridgePermission({ permissions }, 'fileRead');
-        result = permissions;
+        )
+        requireBridgePermission({ permissions }, 'fileRead')
+        result = permissions
       }
-      return result;
+      return result
     },
   },
   {
@@ -243,15 +232,12 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
       ],
     }),
     run: (context) => {
-      let result: unknown;
+      let result: unknown
       for (let index = 0; index < 5000; index += 1) {
-        const request = normalizeLauncherRequest(
-          context.requests[index % context.requests.length],
-          '/tmp',
-        );
-        result = { request, risk: classifyLauncherRequest(request) };
+        const request = normalizeLauncherRequest(context.requests[index % context.requests.length], '/tmp')
+        result = { request, risk: classifyLauncherRequest(request) }
       }
-      return result;
+      return result
     },
   },
   {
@@ -269,12 +255,12 @@ export const networkBenchmarks: BenchmarkDefinition<any>[] = [
       ),
     }),
     run: (context) => {
-      let accepted = false;
+      let accepted = false
       for (let index = 0; index < 1000; index += 1) {
-        const approval = createLauncherApproval(context.request);
-        accepted = consumeLauncherApproval(approval, context.request);
+        const approval = createLauncherApproval(context.request)
+        accepted = consumeLauncherApproval(approval, context.request)
       }
-      return accepted;
+      return accepted
     },
   },
-];
+]

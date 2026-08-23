@@ -32,11 +32,7 @@ import {
   recordVerificationEvidence,
   type VerificationState,
 } from '../src/platform/agent/verificationEvidence'
-import {
-  runAgentSession,
-  type AgentSessionInput,
-  type AgentSessionResult,
-} from '../src/platform/agentRuntime'
+import { runAgentSession, type AgentSessionInput, type AgentSessionResult } from '../src/platform/agentRuntime'
 
 function result(reply: string, step: number): AgentSessionResult {
   return {
@@ -73,12 +69,7 @@ describe('project verification acceptance', () => {
       const state = verification_state(input)
       declareVerificationRequirements(state, ['tests', 'browser-runtime'])
 
-      const tests = addVerificationCandidate(
-        state,
-        'terminal.exec',
-        { command: 'npm test' },
-        { exitCode: 0 },
-      )!
+      const tests = addVerificationCandidate(state, 'terminal.exec', { command: 'npm test' }, { exitCode: 0 })!
       recordVerificationEvidence(state, 'tests', tests.id)
 
       const browser = addVerificationCandidate(
@@ -95,12 +86,7 @@ describe('project verification acceptance', () => {
       const state = verification_state(input)
       markVerificationMutation(state)
 
-      const fresh_tests = addVerificationCandidate(
-        state,
-        'terminal.exec',
-        { command: 'npm test' },
-        { exitCode: 0 },
-      )!
+      const fresh_tests = addVerificationCandidate(state, 'terminal.exec', { command: 'npm test' }, { exitCode: 0 })!
       const fixed_browser = addVerificationCandidate(
         state,
         'browser.inspect',
@@ -156,17 +142,9 @@ describe('project verification acceptance', () => {
       successCriteria: ['The resumed implementation remains correct.'],
       verificationChecks: [],
     }
-    const state = createVerificationState(
-      buildVerificationContractKey(persisted_plan),
-      true,
-    )
+    const state = createVerificationState(buildVerificationContractKey(persisted_plan), true)
     declareVerificationRequirements(state, ['tests'])
-    const tests = addVerificationCandidate(
-      state,
-      'terminal.exec',
-      { command: 'npm test' },
-      { exitCode: 0 },
-    )!
+    const tests = addVerificationCandidate(state, 'terminal.exec', { command: 'npm test' }, { exitCode: 0 })!
     recordVerificationEvidence(state, 'tests', tests.id)
 
     runtime_state.sessions.set('resume-chat', {
@@ -201,5 +179,4 @@ describe('project verification acceptance', () => {
     expect(output.summary.verification).toMatchObject({ required: true, passed: true })
     expect(output.summary.taskPreflightPlan).toEqual(persisted_plan)
   })
-
 })

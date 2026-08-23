@@ -5,9 +5,9 @@
  * behavior so implementation refactors cannot silently weaken those guarantees.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { STPTask } from '@/platform/stpBuilder';
-import type { SubAgentLoopHandle } from '@/platform/agent/subAgentTypes';
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { STPTask } from '@/platform/stpBuilder'
+import type { SubAgentLoopHandle } from '@/platform/agent/subAgentTypes'
 
 const runtime = vi.hoisted(() => ({
   postTask: vi.fn((stp: STPTask) => stp.taskId),
@@ -19,9 +19,9 @@ const runtime = vi.hoisted(() => ({
   getAgentRoster: vi.fn<() => Array<Record<string, unknown>>>(() => []),
   isAgentAvailable: vi.fn<(agentId: string) => boolean>(() => true),
   broadcastToAgents: vi.fn<(message: unknown, context?: Record<string, unknown>) => void>(),
-  startSubAgentLoop: vi.fn<
-    (agentId: string, settings: Record<string, unknown>) => SubAgentLoopHandle
-  >(() => ({ stop: vi.fn() })),
+  startSubAgentLoop: vi.fn<(agentId: string, settings: Record<string, unknown>) => SubAgentLoopHandle>(() => ({
+    stop: vi.fn(),
+  })),
   resolveAgentId: vi.fn<(settings: Record<string, unknown>) => string>(() => 'claude'),
   TASK_STATUS: {
     PENDING: 'pending',
@@ -31,9 +31,9 @@ const runtime = vi.hoisted(() => ({
     TIMEOUT: 'timeout',
     PARTIAL: 'partial',
   },
-}));
+}))
 
-vi.mock('@/platform/subAgentRuntime', () => runtime);
+vi.mock('@/platform/subAgentRuntime', () => runtime)
 
 import {
   delegateParallel,
@@ -53,51 +53,48 @@ import {
   stopAllSubAgentLoops,
   stopSubAgentLoop,
   syncStandbyPool,
-} from '@/platform/orchestrationClient';
-import { resetModelHealth } from '@/platform/agent/modelHealth';
-import { setKey } from '@/platform/keyStore';
+} from '@/platform/orchestrationClient'
+import { resetModelHealth } from '@/platform/agent/modelHealth'
+import { setKey } from '@/platform/keyStore'
 
 describe('orchestrationClient', () => {
   beforeEach(() => {
-    stopAllSubAgentLoops();
-    runtime.postTask.mockImplementation((stp) => stp.taskId);
-    runtime.waitForTask.mockReset();
-    runtime.waitForAllTasks.mockReset();
-    runtime.pollTaskResult.mockReset();
-    runtime.getTaskStatus.mockReset().mockReturnValue('unknown');
-    runtime.getAgentRoster.mockReset().mockReturnValue([]);
-    runtime.isAgentAvailable.mockReset().mockReturnValue(true);
-    runtime.broadcastToAgents.mockReset();
-    runtime.startSubAgentLoop.mockReset().mockImplementation(() => ({ stop: vi.fn() }));
-  });
+    stopAllSubAgentLoops()
+    runtime.postTask.mockImplementation((stp) => stp.taskId)
+    runtime.waitForTask.mockReset()
+    runtime.waitForAllTasks.mockReset()
+    runtime.pollTaskResult.mockReset()
+    runtime.getTaskStatus.mockReset().mockReturnValue('unknown')
+    runtime.getAgentRoster.mockReset().mockReturnValue([])
+    runtime.isAgentAvailable.mockReset().mockReturnValue(true)
+    runtime.broadcastToAgents.mockReset()
+    runtime.startSubAgentLoop.mockReset().mockImplementation(() => ({ stop: vi.fn() }))
+  })
 
   it('rejects absent, failed, timed-out, empty, and schema-mismatched results', () => {
     expect(evaluateDelegationResult({}, null)).toEqual({
       satisfied: false,
       reason: 'no_result',
-    });
+    })
     expect(evaluateDelegationResult({}, { status: 'failed' })).toEqual({
       satisfied: false,
       reason: 'agent_failed',
-    });
+    })
     expect(evaluateDelegationResult({}, { status: 'timeout' })).toEqual({
       satisfied: false,
       reason: 'timeout',
-    });
+    })
     expect(evaluateDelegationResult({}, { status: 'done', result: {} })).toEqual({
       satisfied: false,
       reason: 'empty_result',
-    });
+    })
     expect(
-      evaluateDelegationResult(
-        { output: { schema: { answer: '' } } },
-        { status: 'done', result: { other: true } },
-      ),
+      evaluateDelegationResult({ output: { schema: { answer: '' } } }, { status: 'done', result: { other: true } }),
     ).toEqual({
       satisfied: false,
       reason: 'missing_fields: answer',
-    });
-  });
+    })
+  })
 
   it('accepts valid results regardless of reasoning turns used', () => {
     // The old "near step budget" warning was removed with the user-facing steps system — a valid
@@ -111,7 +108,7 @@ describe('orchestrationClient', () => {
           stepsUsed: 9,
         },
       ),
-    ).toEqual({ satisfied: true, reason: 'ok' });
+    ).toEqual({ satisfied: true, reason: 'ok' })
 
     expect(
       evaluateDelegationResult(
@@ -122,8 +119,8 @@ describe('orchestrationClient', () => {
           stepsUsed: 2,
         },
       ),
-    ).toEqual({ satisfied: true, reason: 'ok' });
-  });
+    ).toEqual({ satisfied: true, reason: 'ok' })
+  })
 
   it('separates the target role from its assigned provider and model', () => {
     const target = resolveDelegateTarget('deepseek', {
@@ -138,7 +135,7 @@ describe('orchestrationClient', () => {
           primary: true,
         },
       ],
-    });
+    })
 
     expect(target).toMatchObject({
       agentId: 'executor',
@@ -155,8 +152,8 @@ describe('orchestrationClient', () => {
         ai_provider: 'openrouter',
         ai_model: 'deepseek/deepseek-r1',
       },
-    });
-  });
+    })
+  })
 
   it('builds and posts a normalized delegated task', async () => {
     const result = await handleAgentDelegate(
@@ -176,13 +173,13 @@ describe('orchestrationClient', () => {
         priority: 'high',
       },
       { ai_provider: 'openai' },
-    );
+    )
 
-    expect(result).toMatchObject({ toAgent: 'executor', status: 'posted' });
-    expect(result.summary).toContain('[STP discover → executor]');
+    expect(result).toMatchObject({ toAgent: 'executor', status: 'posted' })
+    expect(result.summary).toContain('[STP discover → executor]')
     expect(runtime.startSubAgentLoop).toHaveBeenCalledWith('executor', {
       ai_provider: 'openai',
-    });
+    })
     expect(runtime.postTask).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'discover',
@@ -203,13 +200,13 @@ describe('orchestrationClient', () => {
         }),
         budget: expect.objectContaining({ maxSteps: 4, timeoutMs: 12000 }),
       }),
-    );
-  });
+    )
+  })
 
   it('can post without waiting for idle', async () => {
-    await handleAgentDelegate({ instructions: 'Task', waitForIdle: false }, {});
-    expect(runtime.isAgentAvailable).not.toHaveBeenCalled();
-  });
+    await handleAgentDelegate({ instructions: 'Task', waitForIdle: false }, {})
+    expect(runtime.isAgentAvailable).not.toHaveBeenCalled()
+  })
 
   it('recalls ready and pending task results', async () => {
     runtime.pollTaskResult.mockReturnValueOnce({
@@ -220,7 +217,7 @@ describe('orchestrationClient', () => {
       tokensUsed: 20,
       satisfactionHint: 'good',
       durationMs: 10,
-    });
+    })
     await expect(handleAgentRecall({ taskId: 'task-1' })).resolves.toEqual({
       taskId: 'task-1',
       status: 'done',
@@ -231,50 +228,50 @@ describe('orchestrationClient', () => {
       satisfactionHint: 'good',
       durationMs: 10,
       ready: true,
-    });
+    })
 
-    runtime.pollTaskResult.mockReturnValueOnce(null);
-    runtime.getTaskStatus.mockReturnValueOnce('pending');
+    runtime.pollTaskResult.mockReturnValueOnce(null)
+    runtime.getTaskStatus.mockReturnValueOnce('pending')
     await expect(handleAgentRecall({ taskId: 'task-2' })).resolves.toMatchObject({
       taskId: 'task-2',
       status: 'pending',
       ready: false,
-    });
-  });
+    })
+  })
 
   it('waits for recall results and converts timeout errors', async () => {
     runtime.waitForTask.mockResolvedValueOnce({
       status: 'done',
       result: { answer: 'ok' },
-    });
+    })
     await expect(handleAgentRecall({ taskId: 'task', waitMs: 1000 })).resolves.toMatchObject({
       status: 'done',
       result: { answer: 'ok' },
-    });
+    })
 
-    runtime.waitForTask.mockRejectedValueOnce(new Error('timed out'));
+    runtime.waitForTask.mockRejectedValueOnce(new Error('timed out'))
     await expect(handleAgentRecall({ taskId: 'task', waitMs: 1000 })).resolves.toMatchObject({
       status: 'timeout',
       result: null,
       satisfactionHint: 'timed out',
       durationMs: 1000,
-    });
-  });
+    })
+  })
 
   it('validates required task ids', async () => {
-    await expect(handleAgentRecall({})).rejects.toThrow('taskId is required');
-    expect(() => handleAgentStatus({})).toThrow('taskId is required');
-    await expect(handleAgentVerify({})).rejects.toThrow('taskId is required');
-  });
+    await expect(handleAgentRecall({})).rejects.toThrow('taskId is required')
+    expect(() => handleAgentStatus({})).toThrow('taskId is required')
+    await expect(handleAgentVerify({})).rejects.toThrow('taskId is required')
+  })
 
   it('returns status, roster, and broadcast results', () => {
-    runtime.getTaskStatus.mockReturnValue('running');
-    runtime.getAgentRoster.mockReturnValue([{ id: 'executor' }]);
+    runtime.getTaskStatus.mockReturnValue('running')
+    runtime.getAgentRoster.mockReturnValue([{ id: 'executor' }])
     expect(handleAgentStatus({ taskId: 'task' })).toEqual({
       taskId: 'task',
       status: 'running',
-    });
-    expect(handleAgentRoster()).toEqual({ agents: [{ id: 'executor' }] });
+    })
+    expect(handleAgentRoster()).toEqual({ agents: [{ id: 'executor' }] })
     expect(
       handleAgentBroadcast({
         message: ' update ',
@@ -283,44 +280,42 @@ describe('orchestrationClient', () => {
     ).toEqual({
       broadcasted: true,
       message: 'update',
-    });
+    })
     expect(runtime.broadcastToAgents).toHaveBeenCalledWith('update', {
       root: '/project',
-    });
-  });
+    })
+  })
 
   it('verifies missing, passing, and failed task results', async () => {
-    runtime.pollTaskResult.mockReturnValueOnce(null);
+    runtime.pollTaskResult.mockReturnValueOnce(null)
     await expect(handleAgentVerify({ taskId: 'missing' })).resolves.toMatchObject({
       verdict: 'not_ready',
-    });
+    })
 
     runtime.pollTaskResult.mockReturnValueOnce({
       status: 'done',
       result: { answer: 'ok' },
       satisfactionHint: 'good',
-    });
-    await expect(
-      handleAgentVerify({ taskId: 'pass', criteria: 'has answer' }),
-    ).resolves.toMatchObject({
+    })
+    await expect(handleAgentVerify({ taskId: 'pass', criteria: 'has answer' })).resolves.toMatchObject({
       verdict: 'pass',
       reason: 'ok',
       criteria: 'has answer',
       result: { answer: 'ok' },
-    });
+    })
 
     runtime.pollTaskResult.mockReturnValueOnce({
       status: 'failed',
       result: null,
-    });
+    })
     await expect(handleAgentVerify({ taskId: 'fail' })).resolves.toMatchObject({
       verdict: 'fail',
       reason: 'agent_failed',
-    });
-  });
+    })
+  })
 
   it('delegates tasks in parallel and waits for all results', async () => {
-    runtime.waitForAllTasks.mockResolvedValue([{ taskId: 'one' }, { taskId: 'two' }]);
+    runtime.waitForAllTasks.mockResolvedValue([{ taskId: 'one' }, { taskId: 'two' }])
     const results = await delegateParallel(
       [
         { instructions: 'One', toAgent: 'executor', waitForIdle: false },
@@ -328,59 +323,55 @@ describe('orchestrationClient', () => {
       ],
       {},
       5000,
-    );
-    expect(results).toEqual([{ taskId: 'one' }, { taskId: 'two' }]);
+    )
+    expect(results).toEqual([{ taskId: 'one' }, { taskId: 'two' }])
     expect(runtime.waitForAllTasks).toHaveBeenCalledWith(
       expect.arrayContaining([expect.any(String), expect.any(String)]),
       5000,
-    );
-  });
+    )
+  })
 
   it('starts loops idempotently and stops one or all loops', () => {
-    const firstHandle = { stop: vi.fn() };
-    const secondHandle = { stop: vi.fn() };
-    runtime.startSubAgentLoop.mockReturnValueOnce(firstHandle).mockReturnValueOnce(secondHandle);
+    const firstHandle = { stop: vi.fn() }
+    const secondHandle = { stop: vi.fn() }
+    runtime.startSubAgentLoop.mockReturnValueOnce(firstHandle).mockReturnValueOnce(secondHandle)
 
-    ensureSubAgentLoop('executor', { model: 'one' });
-    ensureSubAgentLoop('executor', { model: 'two' });
-    ensureSubAgentLoop('scout', { model: 'three' });
-    expect(runtime.startSubAgentLoop).toHaveBeenCalledTimes(2);
+    ensureSubAgentLoop('executor', { model: 'one' })
+    ensureSubAgentLoop('executor', { model: 'two' })
+    ensureSubAgentLoop('scout', { model: 'three' })
+    expect(runtime.startSubAgentLoop).toHaveBeenCalledTimes(2)
 
-    stopSubAgentLoop('executor');
-    expect(firstHandle.stop).toHaveBeenCalledOnce();
-    stopAllSubAgentLoops();
-    expect(secondHandle.stop).toHaveBeenCalledOnce();
-  });
+    stopSubAgentLoop('executor')
+    expect(firstHandle.stop).toHaveBeenCalledOnce()
+    stopAllSubAgentLoops()
+    expect(secondHandle.stop).toHaveBeenCalledOnce()
+  })
 
   it('detects solo, dual, and full orchestration modes', async () => {
-    const now = Date.now();
-    runtime.getAgentRoster.mockReturnValueOnce([]);
-    const solo = await detectOrchestrationMode();
-    expect(solo.mode).toBe('solo');
-    expect([...solo.available, ...solo.offline].sort()).toEqual([
-      'executor',
-      'orchestrator',
-      'scout',
-    ]);
-    expect(solo.available.filter((role) => role !== 'orchestrator')).toEqual([]);
+    const now = Date.now()
+    runtime.getAgentRoster.mockReturnValueOnce([])
+    const solo = await detectOrchestrationMode()
+    expect(solo.mode).toBe('solo')
+    expect([...solo.available, ...solo.offline].sort()).toEqual(['executor', 'orchestrator', 'scout'])
+    expect(solo.available.filter((role) => role !== 'orchestrator')).toEqual([])
 
-    runtime.getAgentRoster.mockReturnValueOnce([{ id: 'executor', lastSeen: now, status: 'idle' }]);
+    runtime.getAgentRoster.mockReturnValueOnce([{ id: 'executor', lastSeen: now, status: 'idle' }])
     await expect(detectOrchestrationMode()).resolves.toMatchObject({
       mode: 'dual',
       available: ['executor', 'orchestrator'],
       offline: ['scout'],
-    });
+    })
 
     runtime.getAgentRoster.mockReturnValueOnce([
       { id: 'executor', lastSeen: now, status: 'idle' },
       { id: 'scout', lastSeen: now, status: 'idle' },
-    ]);
+    ])
     await expect(detectOrchestrationMode()).resolves.toMatchObject({
       mode: 'full',
       available: ['executor', 'scout', 'orchestrator'],
       offline: [],
-    });
-  });
+    })
+  })
 
   it('resolves explicit and inferred current roles', () => {
     expect(
@@ -397,14 +388,12 @@ describe('orchestrationClient', () => {
           },
         ],
       }),
-    ).toBe('orchestrator');
-    expect(resolveCurrentRole({ ai_provider: 'anthropic', ai_model: 'other' })).toBe(
-      'orchestrator',
-    );
-    expect(resolveCurrentRole({ ai_provider: 'local', ai_model: 'llama3' })).toBe('scout');
-    expect(resolveCurrentRole({ ai_provider: 'openai', ai_model: 'gpt-4o' })).toBe('executor');
-  });
-});
+    ).toBe('orchestrator')
+    expect(resolveCurrentRole({ ai_provider: 'anthropic', ai_model: 'other' })).toBe('orchestrator')
+    expect(resolveCurrentRole({ ai_provider: 'local', ai_model: 'llama3' })).toBe('scout')
+    expect(resolveCurrentRole({ ai_provider: 'openai', ai_model: 'gpt-4o' })).toBe('executor')
+  })
+})
 
 describe('standby pool (§2 — per-key, distributed)', () => {
   // Local members are connectable without a stored key, so the pool can be exercised without the
@@ -436,22 +425,22 @@ describe('standby pool (§2 — per-key, distributed)', () => {
         primary: true,
       },
     ],
-  };
+  }
 
   beforeEach(() => {
-    stopAllSubAgentLoops();
-    runtime.startSubAgentLoop.mockReset().mockImplementation(() => ({ stop: vi.fn() }));
-    runtime.isAgentAvailable.mockReset().mockReturnValue(true);
-  });
+    stopAllSubAgentLoops()
+    runtime.startSubAgentLoop.mockReset().mockImplementation(() => ({ stop: vi.fn() }))
+    runtime.isAgentAvailable.mockReset().mockReturnValue(true)
+  })
 
   it('puts every connectable worker member on standby (eager), excluding the orchestrator answerer', () => {
-    const pool = syncStandbyPool(POOL_SETTINGS as never);
-    expect(pool.members.slice().sort()).toEqual(['executor', 'executor#2', 'scout']);
-    expect(pool.roles.slice().sort()).toEqual(['executor', 'scout']);
+    const pool = syncStandbyPool(POOL_SETTINGS as never)
+    expect(pool.members.slice().sort()).toEqual(['executor', 'executor#2', 'scout'])
+    expect(pool.roles.slice().sort()).toEqual(['executor', 'scout'])
     // One loop per worker member; the orchestrator primary (the answerer) is NOT looped.
-    const started = runtime.startSubAgentLoop.mock.calls.map((c) => c[0]).sort();
-    expect(started).toEqual(['executor', 'executor#2', 'scout']);
-  });
+    const started = runtime.startSubAgentLoop.mock.calls.map((c) => c[0]).sort()
+    expect(started).toEqual(['executor', 'executor#2', 'scout'])
+  })
 
   it('honors the team-role allowlist — excluded roles never load (and are not flagged as dropped)', () => {
     const pool = syncStandbyPool({
@@ -483,11 +472,11 @@ describe('standby pool (§2 — per-key, distributed)', () => {
           primary: true,
         },
       ],
-    } as never);
-    expect(pool.connected.map((m) => m.role)).toEqual(['executor']);
+    } as never)
+    expect(pool.connected.map((m) => m.role)).toEqual(['executor'])
     // The excluded orchestrator extra + scout are a choice, not a misconfiguration → not "dropped".
-    expect(pool.dropped).toHaveLength(0);
-  });
+    expect(pool.dropped).toHaveLength(0)
+  })
 
   it('reports a configured member with no resolvable key as dropped (with a reason) instead of silently removing it', () => {
     const pool = syncStandbyPool({
@@ -511,61 +500,61 @@ describe('standby pool (§2 — per-key, distributed)', () => {
         // Cloud member with no stored key (no credential bridge in the test env) → unconnectable.
         { role: 'executor', provider: 'anthropic', model: 'opus', keyId: '1' },
       ],
-    } as never);
-    expect(pool.connected.map((m) => m.model).sort()).toEqual(['exec-a']);
-    expect(pool.dropped).toHaveLength(1);
-    expect(pool.dropped[0].member.model).toBe('opus');
-    expect(pool.dropped[0].reason).toMatch(/no api key saved for anthropic/i);
-  });
+    } as never)
+    expect(pool.connected.map((m) => m.model).sort()).toEqual(['exec-a'])
+    expect(pool.dropped).toHaveLength(1)
+    expect(pool.dropped[0].member.model).toBe('opus')
+    expect(pool.dropped[0].reason).toMatch(/no api key saved for anthropic/i)
+  })
 
   it('tears the pool down and starts nothing when multi-agent is off', () => {
-    const pool = syncStandbyPool({ agent_multi_enabled: false } as never);
+    const pool = syncStandbyPool({ agent_multi_enabled: false } as never)
     expect(pool).toEqual({
       members: [],
       roles: [],
       connected: [],
       dropped: [],
-    });
-    expect(runtime.startSubAgentLoop).not.toHaveBeenCalled();
-  });
+    })
+    expect(runtime.startSubAgentLoop).not.toHaveBeenCalled()
+  })
 
   it('does not pre-start loops in lazy mode', () => {
-    syncStandbyPool({ ...POOL_SETTINGS, agent_standby_mode: 'lazy' } as never);
-    expect(runtime.startSubAgentLoop).not.toHaveBeenCalled();
-  });
+    syncStandbyPool({ ...POOL_SETTINGS, agent_standby_mode: 'lazy' } as never)
+    expect(runtime.startSubAgentLoop).not.toHaveBeenCalled()
+  })
 
   it('spreads delegations across a role’s keyed members (round-robin)', () => {
-    syncStandbyPool(POOL_SETTINGS as never);
-    const first = pickDelegateMember('executor', POOL_SETTINGS as never).agentId;
-    const second = pickDelegateMember('executor', POOL_SETTINGS as never).agentId;
+    syncStandbyPool(POOL_SETTINGS as never)
+    const first = pickDelegateMember('executor', POOL_SETTINGS as never).agentId
+    const second = pickDelegateMember('executor', POOL_SETTINGS as never).agentId
     // Two consecutive delegations hit two DIFFERENT executor members (different keys), not Key 1 twice.
-    expect([first, second].sort()).toEqual(['executor', 'executor#2']);
-  });
+    expect([first, second].sort()).toEqual(['executor', 'executor#2'])
+  })
 
   it('falls back to the role primary when no members are pooled', () => {
     const target = pickDelegateMember('executor', {
       ai_provider: 'openai',
       ai_model: 'gpt-4o',
-    } as never);
-    expect(target.agentId).toBe('executor');
-  });
+    } as never)
+    expect(target.agentId).toBe('executor')
+  })
 
   it('targets a specific member id directly (a teamwork part owner)', () => {
-    syncStandbyPool(POOL_SETTINGS as never);
+    syncStandbyPool(POOL_SETTINGS as never)
     // Delegating to "executor#2" hits THAT member, not a round-robin of the role.
-    expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2');
-    expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2');
-  });
+    expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2')
+    expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2')
+  })
 
   it('reassigns a failed teammate part to another healthy same-role member (§F4)', () => {
-    resetModelHealth();
-    syncStandbyPool(POOL_SETTINGS as never);
-    const reassign = reassignFailedPart('executor', POOL_SETTINGS as never);
-    expect(reassign?.memberId).toBe('executor#2'); // a different healthy executor takes the part
-  });
+    resetModelHealth()
+    syncStandbyPool(POOL_SETTINGS as never)
+    const reassign = reassignFailedPart('executor', POOL_SETTINGS as never)
+    expect(reassign?.memberId).toBe('executor#2') // a different healthy executor takes the part
+  })
 
   it('keeps delegation and teammate reassignment local during enforced local-only runs', () => {
-    setKey('openai', 'test-cloud-key');
+    setKey('openai', 'test-cloud-key')
     const mixedSettings = {
       agent_multi_enabled: true,
       agent_models: [
@@ -596,20 +585,20 @@ describe('standby pool (§2 — per-key, distributed)', () => {
           keyId: '1',
         },
       ],
-    };
-    syncStandbyPool(mixedSettings as never);
+    }
+    syncStandbyPool(mixedSettings as never)
 
     const localOnlySettings = {
       ...mixedSettings,
       agent_local_only_enforced: true,
       agent_models: mixedSettings.agent_models.filter((entry) => entry.provider === 'local'),
-    };
-    const picked = pickDelegateMember('executor', localOnlySettings as never);
-    expect(picked.identity.provider).toBe('local');
+    }
+    const picked = pickDelegateMember('executor', localOnlySettings as never)
+    expect(picked.identity.provider).toBe('local')
 
-    resetModelHealth();
-    const reassigned = reassignFailedPart(picked.agentId, localOnlySettings as never);
-    expect(reassigned?.memberId).toBeTruthy();
-    expect(['local-exec-a', 'local-exec-b'].includes(String(reassigned?.model || ''))).toBe(true);
-  });
-});
+    resetModelHealth()
+    const reassigned = reassignFailedPart(picked.agentId, localOnlySettings as never)
+    expect(reassigned?.memberId).toBeTruthy()
+    expect(['local-exec-a', 'local-exec-b'].includes(String(reassigned?.model || ''))).toBe(true)
+  })
+})

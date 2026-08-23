@@ -4,14 +4,14 @@
  * chat storage without placing persistence rules inside the panel component.
  */
 
-import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask';
-import { DEFAULT_MESSAGES } from '../constants';
-import type { ChatMessage, ChatSettings } from '../types';
+import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask'
+import { DEFAULT_MESSAGES } from '../constants'
+import type { ChatMessage, ChatSettings } from '../types'
 
 // Chat content is never persisted in Chromium storage. The active encrypted chat is loaded
 // from SQLite after mount; this initial value exists only until that hydration completes.
 export function loadPersistedMessages(): ChatMessage[] {
-  return DEFAULT_MESSAGES;
+  return DEFAULT_MESSAGES
 }
 
 // Retained as a presentation compatibility hook. Durable messages are written through the
@@ -25,7 +25,7 @@ export function provisionalChatTitle(text: unknown): string {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 60) || 'New chat'
-  );
+  )
 }
 
 // Generates chat title for the next stage of the chat presentation layer.
@@ -59,33 +59,27 @@ export async function generateChatTitle(
           content: `User: ${String(userText || '').slice(0, 600)}\nAssistant: ${String(assistantText || '').slice(0, 600)}`,
         },
       ],
-    });
+    })
 
     return String(titleResult.text || '')
       .split('\n')[0]
       .replace(/^["'\s]+|["'\s.]+$/g, '')
-      .slice(0, 80);
+      .slice(0, 80)
   } catch {
-    return '';
+    return ''
   }
 }
 
 // Generates compacted summary for the next stage of the chat presentation layer.
-export async function generateCompactedSummary(
-  messages: ChatMessage[],
-  settings: ChatSettings,
-): Promise<string> {
+export async function generateCompactedSummary(messages: ChatMessage[], settings: ChatSettings): Promise<string> {
   try {
     const conversation = messages
       .filter((message) => message.role && typeof message.content === 'string')
-      .map(
-        (message) =>
-          `${String(message.role).toUpperCase()}: ${String(message.content).slice(0, 1200)}`,
-      )
+      .map((message) => `${String(message.role).toUpperCase()}: ${String(message.content).slice(0, 1200)}`)
       .join('\n\n')
-      .slice(0, 16_000);
+      .slice(0, 16_000)
 
-    if (!conversation) return '';
+    if (!conversation) return ''
 
     const summaryResult = await runBoundedRoleTask({
       settings: {
@@ -113,10 +107,10 @@ export async function generateCompactedSummary(
           content: `Compact this chat into working notes so it can be recalled later:\n\n${conversation}`,
         },
       ],
-    });
+    })
 
-    return String(summaryResult.text || '').slice(0, 8000);
+    return String(summaryResult.text || '').slice(0, 8000)
   } catch {
-    return '';
+    return ''
   }
 }

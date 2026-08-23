@@ -28,13 +28,22 @@ describe('verification evidence', () => {
     recordVerificationEvidence(state, 'browser', brokenBrowser.id)
 
     expect(evaluateVerificationGate(state).passed).toBe(false)
-    expect(evaluateVerificationGate(state).requirements.find((item) => item.requirement === 'browser')?.status).toBe('failed')
+    expect(evaluateVerificationGate(state).requirements.find((item) => item.requirement === 'browser')?.status).toBe(
+      'failed',
+    )
 
     markVerificationMutation(state)
-    expect(evaluateVerificationGate(state).requirements.find((item) => item.requirement === 'tests')?.status).toBe('stale')
+    expect(evaluateVerificationGate(state).requirements.find((item) => item.requirement === 'tests')?.status).toBe(
+      'stale',
+    )
 
     const freshTests = addVerificationCandidate(state, 'terminal.exec', { command: 'npm test' }, { exitCode: 0 })!
-    const fixedBrowser = addVerificationCandidate(state, 'browser.inspect', { url: 'http://localhost:3000' }, { ok: true })!
+    const fixedBrowser = addVerificationCandidate(
+      state,
+      'browser.inspect',
+      { url: 'http://localhost:3000' },
+      { ok: true },
+    )!
     recordVerificationEvidence(state, 'tests', freshTests.id)
     recordVerificationEvidence(state, 'browser', fixedBrowser.id)
 
@@ -82,7 +91,6 @@ describe('verification evidence', () => {
     expect(gate.requirements[0].status).toBe('unknown')
   })
 
-
   it('snapshots bounded verification state and restores it only for the same task contract', () => {
     const state = createVerificationState('persistent-contract', true)
     declareVerificationRequirements(state, ['tests'])
@@ -102,7 +110,12 @@ describe('verification evidence', () => {
     declareVerificationRequirements(state, ['runtime', 'diagnostics'])
 
     const runtime = addVerificationCandidate(state, 'launch.run', { command: 'npm run dev' }, { pid: 42 })!
-    const diagnostics = addVerificationCandidate(state, 'diagnostics.check', { path: 'data.bin' }, { supported: false, ok: null })!
+    const diagnostics = addVerificationCandidate(
+      state,
+      'diagnostics.check',
+      { path: 'data.bin' },
+      { supported: false, ok: null },
+    )!
     recordVerificationEvidence(state, 'runtime', runtime.id)
     recordVerificationEvidence(state, 'diagnostics', diagnostics.id)
 

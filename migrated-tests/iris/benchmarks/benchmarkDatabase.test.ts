@@ -1,33 +1,30 @@
 /** Verifies the persistent benchmark schema retains history while clearing production-style workload rows. */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BenchmarkDatabase } from '../../benchmarks/core/database';
-import { summarizeSamples } from '../../benchmarks/core/statistics';
-import {
-  readEncryptedStoreAll,
-  writeEncryptedStoreKey,
-} from '../../server/desktopBridge/storage/encryptedDatabase';
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { BenchmarkDatabase } from '../../benchmarks/core/database'
+import { summarizeSamples } from '../../benchmarks/core/statistics'
+import { readEncryptedStoreAll, writeEncryptedStoreKey } from '../../server/desktopBridge/storage/encryptedDatabase'
 
-const roots: string[] = [];
+const roots: string[] = []
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
-});
+  await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
+})
 
 describe('benchmark database', () => {
   it('retains run results while deleting benchmark workload rows', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-benchmark-database-'));
-    roots.push(root);
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'iris-benchmark-database-'))
+    roots.push(root)
     const database = await BenchmarkDatabase.open({
       databasePath: path.join(root, 'iris-benchmark.sqlite3'),
       fixtureRoot: path.join(root, 'fixtures'),
-    });
+    })
 
     try {
-      const startedAt = '2026-06-26T00:00:00.000Z';
+      const startedAt = '2026-06-26T00:00:00.000Z'
       const run = await database.beginRun({
         startedAt,
         appVersion: 'test',
@@ -35,7 +32,7 @@ describe('benchmark database', () => {
         gitBranch: 'test',
         command: 'npm run benchmark',
         workingDirectory: root,
-      });
+      })
       await database.registerCases([
         {
           id: 'test.database.case',
@@ -44,10 +41,10 @@ describe('benchmark database', () => {
           description: 'Test retained result',
           run: () => undefined,
         },
-      ]);
-      await database.markWorkloadDirty(run.runId);
-      await writeEncryptedStoreKey('benchmark-workload', { value: 1 });
-      expect(await readEncryptedStoreAll()).toHaveProperty('benchmark-workload');
+      ])
+      await database.markWorkloadDirty(run.runId)
+      await writeEncryptedStoreKey('benchmark-workload', { value: 1 })
+      expect(await readEncryptedStoreAll()).toHaveProperty('benchmark-workload')
 
       await database.recordResult(run.runId, {
         id: 'test.database.case',
@@ -69,9 +66,9 @@ describe('benchmark database', () => {
         peakExternalBytes: 128,
         peakArrayBuffersBytes: 64,
         elapsedMs: 3,
-      });
-      await database.cleanupWorkloadData(run.runId);
-      expect(await readEncryptedStoreAll()).not.toHaveProperty('benchmark-workload');
+      })
+      await database.cleanupWorkloadData(run.runId)
+      expect(await readEncryptedStoreAll()).not.toHaveProperty('benchmark-workload')
 
       await database.finishRun({
         runId: run.runId,
@@ -98,17 +95,17 @@ describe('benchmark database', () => {
         ],
         modelsDownloaded: 0,
         remoteNetworkAttemptsBlocked: 0,
-      });
+      })
 
-      const rows = await database.latestResultRows();
-      expect(rows).toHaveLength(1);
+      const rows = await database.latestResultRows()
+      expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         case_id: 'test.database.case',
         status: 'passed',
         median_ms: 1.5,
-      });
+      })
     } finally {
-      await database.close();
+      await database.close()
     }
-  });
-});
+  })
+})

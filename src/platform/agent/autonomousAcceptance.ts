@@ -22,7 +22,9 @@ const REVIEW_TOOL = 'agent.review'
 const DELEGATION_TOOLS = new Set(['agent.delegate', 'agent.recall', 'agent.recallAll'])
 
 function lower(value: unknown) {
-  return String(value || '').trim().toLowerCase()
+  return String(value || '')
+    .trim()
+    .toLowerCase()
 }
 
 function is_open_todo(todo: Record<string, unknown>) {
@@ -67,14 +69,13 @@ function is_successful_timeline_tool(event: Record<string, unknown>, tool: strin
 function latest_timeline_mutation_index(timeline: Array<Record<string, unknown>>) {
   return last_index(
     timeline,
-    (event) => MUTATION_TOOLS.has(String(event.tool || '').trim()) &&
+    (event) =>
+      MUTATION_TOOLS.has(String(event.tool || '').trim()) &&
       is_successful_timeline_tool(event, String(event.tool || '').trim()),
   )
 }
 
-export function evaluateAutonomousAcceptance(
-  input: AutonomousAcceptanceInput,
-): AutonomousAcceptanceResult {
+export function evaluateAutonomousAcceptance(input: AutonomousAcceptanceInput): AutonomousAcceptanceResult {
   if (!input.multi_agent_enabled) {
     return { accepted: true, blockers: [], requires_review: false, latest_review: 'missing' }
   }
@@ -119,10 +120,7 @@ export function evaluateAutonomousAcceptance(
       input.step_history,
       (step) => step_tool(step) === REVIEW_TOOL && is_successful_step(step),
     )
-    const timeline_review_index = last_index(
-      input.timeline,
-      (event) => is_successful_timeline_tool(event, REVIEW_TOOL),
-    )
+    const timeline_review_index = last_index(input.timeline, (event) => is_successful_timeline_tool(event, REVIEW_TOOL))
 
     if (review_index < 0) {
       blockers.push('Independent review has not run after the coding changes.')
@@ -130,13 +128,12 @@ export function evaluateAutonomousAcceptance(
       latest_review = review_verdict(input.step_history[review_index])
       const later_change_or_handoff = input.step_history
         .slice(review_index + 1)
-        .some((step) =>
-          is_successful_step(step) &&
-          (MUTATION_TOOLS.has(step_tool(step)) || DELEGATION_TOOLS.has(step_tool(step))),
+        .some(
+          (step) =>
+            is_successful_step(step) && (MUTATION_TOOLS.has(step_tool(step)) || DELEGATION_TOOLS.has(step_tool(step))),
         )
       const timeline_review_is_stale =
-        timeline_mutation_index >= 0 &&
-        (timeline_review_index < 0 || timeline_review_index < timeline_mutation_index)
+        timeline_mutation_index >= 0 && (timeline_review_index < 0 || timeline_review_index < timeline_mutation_index)
 
       if (later_change_or_handoff || timeline_review_is_stale) {
         blockers.push('Code or delegated work changed after the latest independent review; re-review the final state.')

@@ -6,14 +6,9 @@
  */
 
 // Transitional extraction: behavior is preserved verbatim while runtime contracts are typed incrementally.
-import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security';
-import { callAIWithMeta } from '@/platform/aiService';
-import {
-  scoreSession,
-  recordReward,
-  recordToolHeatmap,
-  recordDelegationMetrics,
-} from '@/platform/skillRewards';
+import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
+import { callAIWithMeta } from '@/platform/aiService'
+import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
 import {
   listDirectory,
   findFiles,
@@ -40,7 +35,7 @@ import {
   chatsWriteMemory,
   chatsRecall,
   subagentReadOutput,
-} from '@/platform/desktopBridge';
+} from '@/platform/desktopBridge'
 import {
   addNote,
   deleteNote,
@@ -51,28 +46,20 @@ import {
   pruneNotesByCategory,
   recordUserPreferenceNote,
   clearSessionScopedNotes,
-} from '@/platform/notesStorage';
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles';
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles';
-import { buildJsonSchemaTools } from '@/platform/agent/toolSchema';
-import { createToolGuard } from '@/platform/agent/toolGuard';
-import {
-  buildControllerSystemPrompt,
-  buildControllerStateHeader,
-} from '@/platform/agent/controllerPrompt';
+} from '@/platform/notesStorage'
+import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
+import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
+import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
+import { createToolGuard } from '@/platform/agent/toolGuard'
+import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
 import {
   normalizeDecision,
   mapNativeMetaToDecision,
   looksLikeControllerSchemaText,
   recoverDecisionFromSchemaText,
-} from '@/platform/agent/controllerDecision';
-import {
-  estimateTokens,
-  createUsageTracker,
-  trackUsageSample,
-  buildUsageSummary,
-} from '@/platform/agent/usageMetrics';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
+} from '@/platform/agent/controllerDecision'
+import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
 import {
   handleAgentDelegate,
   handleAgentRecall,
@@ -86,7 +73,7 @@ import {
   detectOrchestrationMode,
   resolveCurrentRole,
   subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient';
+} from '@/platform/orchestrationClient'
 import {
   extractJsonObject,
   toPreview,
@@ -94,7 +81,7 @@ import {
   sanitizeJsonTextForParsing,
   tryParseJsonCandidate,
   collectBalancedJsonObjects,
-} from '@/platform/agent/agentJsonUtils';
+} from '@/platform/agent/agentJsonUtils'
 import {
   extractKeywords,
   normalizeSkill,
@@ -102,7 +89,7 @@ import {
   selectSkillsForPrompt,
   checkReflexSkills,
   loadSkillContext,
-} from '@/platform/agent/agentSkillEngine';
+} from '@/platform/agent/agentSkillEngine'
 import {
   DEFAULT_AGENT_READ_LINE_COUNT,
   DEFAULT_TOOL_TIMEOUT_MS,
@@ -116,9 +103,9 @@ import {
   isToolRisky,
   normalizeToolAliasKey,
   resolveCatalogToolRequest,
-} from '@/platform/agent/toolCatalog';
+} from '@/platform/agent/toolCatalog'
 
-import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport';
+import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
 const {
   MAX_AGENT_STEPS,
   AGENT_STEP_HARD_CAP,
@@ -244,22 +231,22 @@ const {
   assertSafePath,
   assertSafeCommand,
   assertAllowedTool,
-} = runtimeSupport;
+} = runtimeSupport
 
 // Determines whether the final reply incorrectly claims that no user request was provided.
 export function looksLikeMissingRequestReply(text, userInput) {
-  const latestRequest = String(userInput || '').trim();
-  if (!latestRequest) return false;
+  const latestRequest = String(userInput || '').trim()
+  if (!latestRequest) return false
 
-  const reply = String(text || '').toLowerCase();
-  if (!reply) return false;
+  const reply = String(text || '').toLowerCase()
+  if (!reply) return false
 
   const missingRequestSignals = [
     /has not provided (any )?(specific )?(request|task|context|instruction)/,
     /no specific (request|task|context|instruction)/,
     /no (actual )?(request|task|instruction)/,
     /without (a )?(specific )?(request|task|context|instruction)/,
-  ];
+  ]
 
   const clarificationSignals = [
     /ask(ing)? (the )?user (for )?(clarification|details)/,
@@ -270,12 +257,12 @@ export function looksLikeMissingRequestReply(text, userInput) {
     /what would you like me to do/,
     /i will respond by/,
     /self-correction/,
-  ];
+  ]
 
-  const claimsMissingRequest = missingRequestSignals.some((pattern) => pattern.test(reply));
-  if (!claimsMissingRequest) return false;
+  const claimsMissingRequest = missingRequestSignals.some((pattern) => pattern.test(reply))
+  if (!claimsMissingRequest) return false
 
-  return clarificationSignals.some((pattern) => pattern.test(reply));
+  return clarificationSignals.some((pattern) => pattern.test(reply))
 }
 
 // Synthesizes final reply from the completed agent steps and available result data.
@@ -293,11 +280,11 @@ export async function synthesizeFinalReply({
         .slice(-10)
         .map((item) => `- ${item.tool}: ${item.ok ? item.summary : `error ${item.error}`}`)
         .join('\n')
-    : '- No tools were executed.';
+    : '- No tools were executed.'
 
   const capabilityHint = Array.isArray(capabilitySnapshot?.availableTools)
     ? capabilitySnapshot.availableTools.join(', ')
-    : '';
+    : ''
 
   const messages = [
     {
@@ -328,21 +315,21 @@ export async function synthesizeFinalReply({
         'Respond to the user now.',
       ].join('\n\n'),
     },
-  ];
+  ]
 
-  const synthesized = String((await requestAI(messages)) || '').trim();
-  if (synthesized) return synthesized;
+  const synthesized = String((await requestAI(messages)) || '').trim()
+  if (synthesized) return synthesized
 
   // The model produced nothing — never hand back an empty final. Summarize what
   // actually happened so the run ends with a useful, honest reply rather than dead air.
-  const okSteps = stepHistory.filter((s) => s.ok);
+  const okSteps = stepHistory.filter((s) => s.ok)
   if (okSteps.length) {
-    const last = okSteps[okSteps.length - 1];
+    const last = okSteps[okSteps.length - 1]
     return `I worked through ${stepHistory.length} step(s) (${okSteps.length} successful) but couldn't compose a full summary. Latest result: ${String(
       last.summary || last.tool || 'completed a step',
-    ).slice(0, 400)}. Tell me how you'd like to proceed.`;
+    ).slice(0, 400)}. Tell me how you'd like to proceed.`
   }
-  return 'I could not produce a complete answer this time. Could you rephrase or add a bit more detail so I can try again?';
+  return 'I could not produce a complete answer this time. Could you rephrase or add a bit more detail so I can try again?'
 }
 
 // Assembles controller payload from lower-level state so callers receive one consistent
@@ -364,27 +351,26 @@ export function buildControllerPayload({
   capabilitySnapshot,
   toolset = 'structured',
 }) {
-  const recentSteps = stepHistory.slice(-8);
-  const latestStep = recentSteps[recentSteps.length - 1] || null;
-  const recoveryContext = latestStep?.ok === false
-    ? {
-        status: 'action_failed',
-        original_goal: userInput,
-        failed_action: {
-          tool: String(latestStep.tool || latestStep.requestedTool || ''),
-          error: String(latestStep.error || 'Tool execution failed.'),
-        },
-        recent_evidence: recentSteps.slice(-6).map((item) => ({
-          tool: String(item.tool || item.requestedTool || ''),
-          ok: item.ok !== false,
-          result: item.ok === false
-            ? String(item.error || '')
-            : String(item.summary || ''),
-        })),
-        instruction:
-          'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
-      }
-    : null;
+  const recentSteps = stepHistory.slice(-8)
+  const latestStep = recentSteps[recentSteps.length - 1] || null
+  const recoveryContext =
+    latestStep?.ok === false
+      ? {
+          status: 'action_failed',
+          original_goal: userInput,
+          failed_action: {
+            tool: String(latestStep.tool || latestStep.requestedTool || ''),
+            error: String(latestStep.error || 'Tool execution failed.'),
+          },
+          recent_evidence: recentSteps.slice(-6).map((item) => ({
+            tool: String(item.tool || item.requestedTool || ''),
+            ok: item.ok !== false,
+            result: item.ok === false ? String(item.error || '') : String(item.summary || ''),
+          })),
+          instruction:
+            'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
+        }
+      : null
 
   return {
     user_request: userInput,
@@ -402,15 +388,14 @@ export function buildControllerPayload({
     // pauses requestable tools for the persistent permission popup before execution.
     // In the 'lean' toolset (W2) the redundant files.*/search.* helpers remain hidden.
     tools: TOOL_DEFINITIONS.filter((tool) => {
-      const alwaysOn = tool.name === 'todo.update' || tool.name === 'trace.log' || tool.name === 'browser.inspect';
+      const alwaysOn = tool.name === 'todo.update' || tool.name === 'trace.log' || tool.name === 'browser.inspect'
       const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
         ? capabilitySnapshot.advertisedTools
-        : capabilitySnapshot?.availableTools;
-      const allowed =
-        alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name));
-      if (!allowed) return false;
-      if (toolset === 'lean' && !alwaysOn) return isLeanTool(tool.name);
-      return true;
+        : capabilitySnapshot?.availableTools
+      const allowed = alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
+      if (!allowed) return false
+      if (toolset === 'lean' && !alwaysOn) return isLeanTool(tool.name)
+      return true
     }).map((tool) => ({
       name: tool.name,
       module: tool.module,
@@ -448,9 +433,7 @@ export function buildControllerPayload({
     // sight of the plan; maintained via chat.remember; earlier history via chat.recall.
     chat_memory: String(chatMemory || ''),
     memory_hygiene: {
-      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed))
-        ? Number(webSearchState.callsUsed)
-        : 0,
+      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed)) ? Number(webSearchState.callsUsed) : 0,
       web_search_call_budget: Number.isFinite(Number(webSearchState?.maxCalls))
         ? Number(webSearchState.maxCalls)
         : SEARCH_WEB_DEFAULT_CALL_BUDGET,
@@ -482,7 +465,7 @@ export function buildControllerPayload({
             : MAX_AGENT_STEPS,
       },
     },
-  };
+  }
 }
 
 // Assembles run summary from lower-level state so callers receive one consistent representation.
@@ -495,28 +478,22 @@ export function buildRunSummary({
   userApprovalGranted,
   usage,
 }) {
-  const toolCalls = timeline.filter((event) => event.type === 'tool_call').length;
-  const toolResults = timeline.filter((event) => event.type === 'tool_result');
-  const toolSuccesses = toolResults.filter((event) => event.status === 'ok').length;
-  const toolFailures = toolResults.filter((event) => event.status !== 'ok').length;
-  const capabilityBlocks = stepHistory.filter(
-    (step) => !step.ok && isCapabilityOrPermissionError(step.error),
-  ).length;
-  const toolRetries = stepHistory.filter((step) => step.retried).length;
+  const toolCalls = timeline.filter((event) => event.type === 'tool_call').length
+  const toolResults = timeline.filter((event) => event.type === 'tool_result')
+  const toolSuccesses = toolResults.filter((event) => event.status === 'ok').length
+  const toolFailures = toolResults.filter((event) => event.status !== 'ok').length
+  const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
+  const toolRetries = stepHistory.filter((step) => step.retried).length
   // Invalid-argument failures → a signal that a tool's description/schema needs
   // sharpening (per Anthropic's "analyze tool-calling metrics" guidance).
   const invalidArgErrors = stepHistory.filter(
     (step) =>
-      !step.ok &&
-      /invalid|argument|required|missing|schema|expected|must be|parse/i.test(
-        String(step.error || ''),
-      ),
-  ).length;
+      !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
+  ).length
   // Consecutive same-tool calls — a proxy for redundant/thrashing tool use.
-  let redundantToolCalls = 0;
+  let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {
-    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool)
-      redundantToolCalls += 1;
+    if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool) redundantToolCalls += 1
   }
 
   return {
@@ -538,9 +515,7 @@ export function buildRunSummary({
     sudoBlocked: safetyConfig?.blockSudo !== false,
     explicitApprovalRequired: Boolean(safetyConfig?.requireExplicitApproval),
     explicitApprovalGranted: Boolean(userApprovalGranted),
-    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps))
-      ? Number(safetyConfig.maxSteps)
-      : MAX_AGENT_STEPS,
+    stepBudget: Number.isFinite(Number(safetyConfig?.maxSteps)) ? Number(safetyConfig.maxSteps) : MAX_AGENT_STEPS,
     usage: usage || buildUsageSummary(null),
-  };
+  }
 }

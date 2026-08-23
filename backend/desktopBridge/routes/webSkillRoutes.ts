@@ -4,9 +4,9 @@
  * separate review workflow.
  */
 
-import type { BridgeRequest, BridgeResponse } from '../types.js';
-import { inputErrorResponse, validateSkillInput } from '../shared/agentInputValidation.js';
-import { acquireOperation, operationLimitPayload } from '../shared/operationLimiter.js';
+import type { BridgeRequest, BridgeResponse } from '../types.js'
+import { inputErrorResponse, validateSkillInput } from '../shared/agentInputValidation.js'
+import { acquireOperation, operationLimitPayload } from '../shared/operationLimiter.js'
 import {
   deleteSkillFromProfile,
   listSkillProfiles,
@@ -15,7 +15,7 @@ import {
   runWebResearch,
   sendJson,
   upsertSkillForProfile,
-} from '../services/webSkillService.js';
+} from '../services/webSkillService.js'
 import {
   clearWebSearchHistory,
   createWebSearchHistorySession,
@@ -24,7 +24,7 @@ import {
   getWebSearchHistorySession,
   listWebSearchHistory,
   saveWebSearchHistorySession,
-} from '../services/webSearchHistoryService.js';
+} from '../services/webSearchHistoryService.js'
 
 function webSearchOptions(body: Record<string, unknown>) {
   return {
@@ -41,12 +41,12 @@ function webSearchOptions(body: Record<string, unknown>) {
     providerPolicy: body.providerPolicy,
     providerSettings: body.providerSettings,
     allowPaidFallback: body.allowPaidFallback === true,
-  };
+  }
 }
 
 function writeStreamMessage(res: BridgeResponse, value: Record<string, unknown>): void {
-  if (res.writableEnded || res.destroyed) return;
-  res.write(`${JSON.stringify(value)}\n`);
+  if (res.writableEnded || res.destroyed) return
+  res.write(`${JSON.stringify(value)}\n`)
 }
 
 /**
@@ -61,59 +61,59 @@ export async function handleWebSkillRoutes(
   pathname: string,
 ): Promise<boolean> {
   if (pathname === '/api/local/web/search' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const query = String(body.query || '').trim();
+    const body = await readJsonBody(req)
+    const query = String(body.query || '').trim()
     if (!query) {
-      sendJson(res, 400, { error: 'query is required' });
-      return true;
+      sendJson(res, 400, { error: 'query is required' })
+      return true
     }
-    const permit = acquireOperation('web');
+    const permit = acquireOperation('web')
     if (!permit.allowed) {
-      sendJson(res, 429, operationLimitPayload(permit));
-      return true;
+      sendJson(res, 429, operationLimitPayload(permit))
+      return true
     }
     try {
-      const result = await runWebResearch(query, webSearchOptions(body));
-      sendJson(res, 200, result);
+      const result = await runWebResearch(query, webSearchOptions(body))
+      sendJson(res, 200, result)
     } finally {
-      permit.release();
+      permit.release()
     }
-    return true;
+    return true
   }
 
   if (pathname === '/api/local/web/search/stream' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const query = String(body.query || '').trim();
+    const body = await readJsonBody(req)
+    const query = String(body.query || '').trim()
     if (!query) {
-      sendJson(res, 400, { error: 'query is required' });
-      return true;
+      sendJson(res, 400, { error: 'query is required' })
+      return true
     }
-    const permit = acquireOperation('web');
+    const permit = acquireOperation('web')
     if (!permit.allowed) {
-      sendJson(res, 429, operationLimitPayload(permit));
-      return true;
+      sendJson(res, 429, operationLimitPayload(permit))
+      return true
     }
 
-    const controller = new AbortController();
-    let sequence = 0;
-    const abort = () => controller.abort();
-    req.once('aborted', abort);
+    const controller = new AbortController()
+    let sequence = 0
+    const abort = () => controller.abort()
+    req.once('aborted', abort)
     res.once('close', () => {
-      if (!res.writableEnded) abort();
-    });
+      if (!res.writableEnded) abort()
+    })
     res.writeHead(200, {
       'Content-Type': 'application/x-ndjson; charset=utf-8',
       'Cache-Control': 'no-store',
       Connection: 'keep-alive',
       'X-Content-Type-Options': 'nosniff',
-    });
+    })
 
     try {
       const result = await runWebResearch(query, {
         ...webSearchOptions(body),
         signal: controller.signal,
         onProgress: (event: Record<string, unknown>) => {
-          sequence += 1;
+          sequence += 1
           writeStreamMessage(res, {
             kind: 'progress',
             event: {
@@ -121,124 +121,124 @@ export async function handleWebSkillRoutes(
               timestamp: Date.now(),
               ...event,
             },
-          });
+          })
         },
-      });
-      writeStreamMessage(res, { kind: 'result', result });
+      })
+      writeStreamMessage(res, { kind: 'result', result })
     } catch (error) {
       if (!controller.signal.aborted && !res.destroyed) {
         writeStreamMessage(res, {
           kind: 'error',
           error: error instanceof Error ? error.message : String(error || 'Search failed'),
           code: (error as { code?: string })?.code || '',
-        });
+        })
       }
     } finally {
-      req.removeListener('aborted', abort);
-      permit.release();
-      if (!res.writableEnded && !res.destroyed) res.end();
+      req.removeListener('aborted', abort)
+      permit.release()
+      if (!res.writableEnded && !res.destroyed) res.end()
     }
-    return true;
+    return true
   }
 
   if (pathname === '/api/local/web-history/list' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const sessions = await listWebSearchHistory(body.limit);
-    sendJson(res, 200, { sessions });
-    return true;
+    const body = await readJsonBody(req)
+    const sessions = await listWebSearchHistory(body.limit)
+    sendJson(res, 200, { sessions })
+    return true
   }
 
   if (pathname === '/api/local/web-history/create' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const session = await createWebSearchHistorySession(body.session);
-    sendJson(res, 200, { session });
-    return true;
+    const body = await readJsonBody(req)
+    const session = await createWebSearchHistorySession(body.session)
+    sendJson(res, 200, { session })
+    return true
   }
 
   if (pathname === '/api/local/web-history/get' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const session = await getWebSearchHistorySession(body.id);
+    const body = await readJsonBody(req)
+    const session = await getWebSearchHistorySession(body.id)
     if (!session) {
-      sendJson(res, 404, { error: 'saved search not found' });
-      return true;
+      sendJson(res, 404, { error: 'saved search not found' })
+      return true
     }
-    sendJson(res, 200, { session });
-    return true;
+    sendJson(res, 200, { session })
+    return true
   }
 
   if (pathname === '/api/local/web-history/save' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const session = await saveWebSearchHistorySession(body.id, body.session);
-    sendJson(res, 200, { session });
-    return true;
+    const body = await readJsonBody(req)
+    const session = await saveWebSearchHistorySession(body.id, body.session)
+    sendJson(res, 200, { session })
+    return true
   }
 
   if (pathname === '/api/local/web-history/duplicate' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const session = await duplicateWebSearchHistorySession(body.id);
-    sendJson(res, 200, { session });
-    return true;
+    const body = await readJsonBody(req)
+    const session = await duplicateWebSearchHistorySession(body.id)
+    sendJson(res, 200, { session })
+    return true
   }
 
   if (pathname === '/api/local/web-history/delete' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const removed = await deleteWebSearchHistorySession(body.id);
-    sendJson(res, 200, { removed });
-    return true;
+    const body = await readJsonBody(req)
+    const removed = await deleteWebSearchHistorySession(body.id)
+    sendJson(res, 200, { removed })
+    return true
   }
 
   if (pathname === '/api/local/web-history/clear' && req.method === 'POST') {
-    const removed = await clearWebSearchHistory();
-    sendJson(res, 200, { removed });
-    return true;
+    const removed = await clearWebSearchHistory()
+    sendJson(res, 200, { removed })
+    return true
   }
 
   if (pathname === '/api/local/skills/profiles' && req.method === 'GET') {
-    const profiles = await listSkillProfiles();
-    sendJson(res, 200, { profiles });
-    return true;
+    const profiles = await listSkillProfiles()
+    sendJson(res, 200, { profiles })
+    return true
   }
 
   if (pathname === '/api/local/skills/list' && req.method === 'POST') {
-    const body = await readJsonBody(req);
-    const result = await listSkillsForProfile(body.profile || 'default-model');
-    sendJson(res, 200, result);
-    return true;
+    const body = await readJsonBody(req)
+    const result = await listSkillsForProfile(body.profile || 'default-model')
+    sendJson(res, 200, result)
+    return true
   }
 
   if (pathname === '/api/local/skills/upsert' && req.method === 'POST') {
     try {
-      const body = await readJsonBody(req);
-      const skill = validateSkillInput(body.skill);
+      const body = await readJsonBody(req)
+      const skill = validateSkillInput(body.skill)
       if (!skill.provenance) {
-        const now = new Date().toISOString();
+        const now = new Date().toISOString()
         skill.provenance = {
           source: 'local_user',
           sourceLabel: 'skills_panel',
           receivedAt: now,
           approvedAt: now,
           approvedBy: 'local_user',
-        };
+        }
       }
-      const result = await upsertSkillForProfile(body.profile || 'default-model', skill);
-      sendJson(res, 200, result);
+      const result = await upsertSkillForProfile(body.profile || 'default-model', skill)
+      sendJson(res, 200, result)
     } catch (error) {
-      const detail = inputErrorResponse(error);
-      sendJson(res, detail.statusCode, { error: detail.message });
+      const detail = inputErrorResponse(error)
+      sendJson(res, detail.statusCode, { error: detail.message })
     }
-    return true;
+    return true
   }
 
   if (pathname === '/api/local/skills/delete' && req.method === 'POST') {
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(req)
     if (!body.skillId) {
-      sendJson(res, 400, { error: 'skillId is required' });
-      return true;
+      sendJson(res, 400, { error: 'skillId is required' })
+      return true
     }
-    const result = await deleteSkillFromProfile(body.profile || 'default-model', body.skillId);
-    sendJson(res, 200, result);
-    return true;
+    const result = await deleteSkillFromProfile(body.profile || 'default-model', body.skillId)
+    sendJson(res, 200, result)
+    return true
   }
 
-  return false;
+  return false
 }

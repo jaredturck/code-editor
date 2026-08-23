@@ -3,14 +3,11 @@
  * do not trigger redundant CodeMirror state notifications.
  */
 
-import { act, render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import CodeEditor from '@/features/editor/components/CodeEditor';
-import {
-  clone_editor_settings,
-  default_editor_settings,
-} from '@/features/editor/editor/editorSettings';
-import type { EditorDiagnostic, TextEditorDocument } from '@/features/editor/types/editor';
+import { act, render } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import CodeEditor from '@/features/editor/components/CodeEditor'
+import { clone_editor_settings, default_editor_settings } from '@/features/editor/editor/editorSettings'
+import type { EditorDiagnostic, TextEditorDocument } from '@/features/editor/types/editor'
 
 const document: TextEditorDocument = {
   kind: 'text',
@@ -25,7 +22,7 @@ const document: TextEditorDocument = {
   dirty: false,
   deleted: false,
   markdown_view: 'source',
-};
+}
 
 const diagnostic: EditorDiagnostic = {
   id: '1:ruff:E999',
@@ -39,12 +36,12 @@ const diagnostic: EditorDiagnostic = {
   column: 1,
   end_line: 1,
   end_column: 2,
-};
+}
 
 describe('CodeEditor performance guards', () => {
   it('does not emit command-state updates when equivalent diagnostics are reapplied', async () => {
-    const settings = clone_editor_settings(default_editor_settings);
-    const on_command_state_change = vi.fn();
+    const settings = clone_editor_settings(default_editor_settings)
+    const on_command_state_change = vi.fn()
     const props = {
       activeDocument: document,
       documents: [document],
@@ -54,16 +51,16 @@ describe('CodeEditor performance guards', () => {
       onCommandStateChange: on_command_state_change,
       onFocus: vi.fn(),
       onParserDiagnostics: vi.fn(),
-    };
-    const { rerender } = render(<CodeEditor {...props} diagnostics={[diagnostic]} />);
+    }
+    const { rerender } = render(<CodeEditor {...props} diagnostics={[diagnostic]} />)
 
-    await act(async () => Promise.resolve());
-    const initial_calls = on_command_state_change.mock.calls.length;
+    await act(async () => Promise.resolve())
+    const initial_calls = on_command_state_change.mock.calls.length
 
-    rerender(<CodeEditor {...props} diagnostics={[{ ...diagnostic }]} />);
-    await act(async () => Promise.resolve());
+    rerender(<CodeEditor {...props} diagnostics={[{ ...diagnostic }]} />)
+    await act(async () => Promise.resolve())
 
-    expect(initial_calls).toBeGreaterThan(0);
-    expect(on_command_state_change).toHaveBeenCalledTimes(initial_calls);
-  });
-});
+    expect(initial_calls).toBeGreaterThan(0)
+    expect(on_command_state_change).toHaveBeenCalledTimes(initial_calls)
+  })
+})

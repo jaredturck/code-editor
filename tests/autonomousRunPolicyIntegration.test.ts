@@ -2,10 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_IRIS_SETTINGS } from '../src/platform/settingsStorage'
-import {
-  get_core_agent_tool_allowlist,
-  should_block_core_agent_permission_grant,
-} from '../src/chat/agentChat'
+import { get_core_agent_tool_allowlist, should_block_core_agent_permission_grant } from '../src/chat/agentChat'
 
 function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), 'utf8')

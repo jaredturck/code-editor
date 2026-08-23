@@ -36,11 +36,7 @@ const core_agent_tools = [
   'browser.inspect',
 ]
 
-const local_system_read_tools = [
-  'system.stats',
-  'system.processes',
-  'launcher.list',
-]
+const local_system_read_tools = ['system.stats', 'system.processes', 'launcher.list']
 
 const editor_workspace_read_tools = [
   'files.list',
@@ -53,11 +49,7 @@ const editor_workspace_read_tools = [
   'rag.retrieve',
 ]
 
-const editor_workspace_write_tools = [
-  'files.write',
-  'files.patch',
-  'files.edit',
-]
+const editor_workspace_write_tools = ['files.write', 'files.patch', 'files.edit']
 
 const multi_agent_tools = [
   'agent.available',
@@ -79,7 +71,7 @@ const agent_terminal_tools = ['terminal.exec', 'launch.run']
 
 function runtime_agent_models(settings: Record<string, unknown>, multi_agent_enabled: boolean) {
   const models = Array.isArray(settings.agent_models)
-    ? settings.agent_models.filter((entry) => entry && typeof entry === 'object') as Record<string, unknown>[]
+    ? (settings.agent_models.filter((entry) => entry && typeof entry === 'object') as Record<string, unknown>[])
     : []
   if (!multi_agent_enabled) return models
 
@@ -110,9 +102,7 @@ function runtime_agent_models(settings: Record<string, unknown>, multi_agent_ena
       selected_local
   }
 
-  return models.filter(
-    (entry) => String(entry.provider || '').toLowerCase() !== 'local' || entry === selected_local,
-  )
+  return models.filter((entry) => String(entry.provider || '').toLowerCase() !== 'local' || entry === selected_local)
 }
 
 export function get_core_agent_tool_allowlist(
@@ -133,10 +123,7 @@ export function get_core_agent_tool_allowlist(
   return tools
 }
 
-export function should_block_core_agent_permission_grant(
-  request_type: string,
-  permission_keys: string[],
-) {
+export function should_block_core_agent_permission_grant(request_type: string, permission_keys: string[]) {
   return request_type === 'permission' && permission_keys.length > 0
 }
 
@@ -199,13 +186,9 @@ export function build_core_agent_settings(
       ? execution_policy
       : 'hybrid',
     agent_model_routing: model_routing,
-    agent_peer_consult_enabled: Boolean(
-      multi_agent_enabled && bound.agent_peer_consult_enabled === true,
-    ),
+    agent_peer_consult_enabled: Boolean(multi_agent_enabled && bound.agent_peer_consult_enabled === true),
     agent_peer_review: multi_agent_enabled ? bound.agent_peer_review : 'off',
-    agent_overwatch_continuous: Boolean(
-      multi_agent_enabled && bound.agent_overwatch_continuous === true,
-    ),
+    agent_overwatch_continuous: Boolean(multi_agent_enabled && bound.agent_overwatch_continuous === true),
     agent_planning_mode: false,
     agent_project_run_mode: run_mode,
     force_session_alive: false,
@@ -227,7 +210,9 @@ export function build_core_agent_settings(
 
 export function build_project_run_seed_todos(goal: string, run_mode: ProjectRunMode) {
   if (run_mode !== 'plan_first') return []
-  const clean_goal = String(goal || '').replace(/\s+/g, ' ').trim()
+  const clean_goal = String(goal || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return [
     {
       id: 1,
@@ -338,8 +323,7 @@ export function normalize_persisted_attachment(value: unknown): AIAttachment | n
   const name = String(source.name || '')
   const source_type = String(source.type || '').toLowerCase()
   const mime_type = String(source.mime_type || '').toLowerCase()
-  const image =
-    source_type === 'image' || source_type.startsWith('image/') || mime_type.startsWith('image/')
+  const image = source_type === 'image' || source_type.startsWith('image/') || mime_type.startsWith('image/')
   const resolved_mime_type = source_type.startsWith('image/')
     ? source_type
     : mime_type.startsWith('image/')

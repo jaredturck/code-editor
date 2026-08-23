@@ -128,7 +128,11 @@ async function run_git(
     })
     return { stdout: String(result.stdout || ''), stderr: String(result.stderr || ''), code: 0 }
   } catch (error) {
-    const command_error = error as Error & { stdout?: string | Buffer; stderr?: string | Buffer; code?: number | string }
+    const command_error = error as Error & {
+      stdout?: string | Buffer
+      stderr?: string | Buffer
+      code?: number | string
+    }
     const stdout = String(command_error.stdout || '')
     const stderr = String(command_error.stderr || '')
     const code = typeof command_error.code === 'number' ? command_error.code : 1
@@ -213,7 +217,8 @@ function parse_porcelain_status(raw_status: string) {
     const index_status = record[0]
     const worktree_status = record[1]
     const path = record.slice(3)
-    const rename_or_copy = index_status === 'R' || index_status === 'C' || worktree_status === 'R' || worktree_status === 'C'
+    const rename_or_copy =
+      index_status === 'R' || index_status === 'C' || worktree_status === 'R' || worktree_status === 'C'
     const old_path = rename_or_copy ? records[++index] || null : null
     const untracked = index_status === '?' && worktree_status === '?'
 
@@ -318,7 +323,8 @@ export async function get_git_history(root_path: string, limit = 20): Promise<Gi
     .map((record) => record.replace(/^\n+|\n+$/g, ''))
     .filter(Boolean)
     .map((record) => {
-      const [hash = '', short_hash = '', subject = '', author_name = '', author_email = '', date = ''] = record.split('\x1f')
+      const [hash = '', short_hash = '', subject = '', author_name = '', author_email = '', date = ''] =
+        record.split('\x1f')
       return { hash, short_hash, subject, author_name, author_email, date }
     })
     .filter((commit) => Boolean(commit.hash))
@@ -443,11 +449,7 @@ export async function prepare_agent_git_run(root_path: string, run_id: string) {
   if (!status.clean) {
     await run_git(ensured.root_path, ['add', '-A'])
     if (await has_staged_changes(ensured.root_path)) {
-      baseline_commit = await create_commit(
-        ensured.root_path,
-        'Workspace baseline before IRIS run',
-        true,
-      )
+      baseline_commit = await create_commit(ensured.root_path, 'Workspace baseline before IRIS run', true)
     }
   }
 

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  is_privileged_editor_preload,
-  is_trusted_renderer_navigation,
-} from '../electron/navigationSecurity.cts'
+import { is_privileged_editor_preload, is_trusted_renderer_navigation } from '../electron/navigationSecurity.cts'
 
 describe('privileged renderer navigation security', () => {
   it('identifies only the privileged editor preload', () => {
@@ -24,7 +21,9 @@ describe('privileged renderer navigation security', () => {
 
   it('allows only the packaged editor entry document plus query/hash changes', () => {
     const trusted = 'file:///opt/code-editor/dist/index.html'
-    expect(is_trusted_renderer_navigation('file:///opt/code-editor/dist/index.html?bridgePort=123#chat', trusted)).toBe(true)
+    expect(is_trusted_renderer_navigation('file:///opt/code-editor/dist/index.html?bridgePort=123#chat', trusted)).toBe(
+      true,
+    )
     expect(is_trusted_renderer_navigation('file:///opt/code-editor/dist/other.html', trusted)).toBe(false)
     expect(is_trusted_renderer_navigation('https://example.com/', trusted)).toBe(false)
   })

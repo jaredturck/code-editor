@@ -33,12 +33,10 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
   const binding = useMemo(() => resolveAudioTranscriptionBinding(settings), [settings])
   const voice = useAudioTranscription({
     activeTarget: disabled ? null : 'agent-chat-prompt',
-    onTranscript: (_target, text) =>
-      setPrompt((current) => `${current}${current ? ' ' : ''}${text}`),
+    onTranscript: (_target, text) => setPrompt((current) => `${current}${current ? ' ' : ''}${text}`),
   })
   const definition =
-    AUDIO_PROVIDER_DEFINITIONS.find((entry) => entry.id === binding.provider) ||
-    AUDIO_PROVIDER_DEFINITIONS[0]
+    AUDIO_PROVIDER_DEFINITIONS.find((entry) => entry.id === binding.provider) || AUDIO_PROVIDER_DEFINITIONS[0]
   const models = audioModelsForProvider(binding.provider)
   const valid_key_ids = binding.cloud ? getValidProviderKeyIds(settings, binding.provider) : ['1']
   const key_ids = Array.from(new Set([binding.keyId, ...valid_key_ids].filter(Boolean)))
@@ -47,11 +45,8 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
 
   const update_provider = (provider_id: string) => {
     const next_definition =
-      AUDIO_PROVIDER_DEFINITIONS.find((entry) => entry.id === provider_id) ||
-      AUDIO_PROVIDER_DEFINITIONS[0]
-    const next_key_ids = next_definition.cloud
-      ? getValidProviderKeyIds(settings, provider_id)
-      : ['1']
+      AUDIO_PROVIDER_DEFINITIONS.find((entry) => entry.id === provider_id) || AUDIO_PROVIDER_DEFINITIONS[0]
+    const next_key_ids = next_definition.cloud ? getValidProviderKeyIds(settings, provider_id) : ['1']
     updateSettings({
       audio_provider: next_definition.id,
       audio_model: next_definition.models[0] || '',
@@ -66,8 +61,8 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
       <VoicePopover>
         <div className="font-medium">Cloud transcription notice</div>
         <p className="mt-1 leading-relaxed text-[var(--muted)]">
-          This recording will be uploaded to {voice.binding.label} for transcription. The IRIS
-          bridge does not persist the audio recording.
+          This recording will be uploaded to {voice.binding.label} for transcription. The IRIS bridge does not persist
+          the audio recording.
         </p>
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -92,8 +87,8 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
       <VoicePopover>
         <div className="font-medium">Microphone permission</div>
         <p className="mt-1 leading-relaxed text-[var(--muted)]">
-          Allow the trusted desktop bridge to accept microphone audio for voice prompts? Your
-          operating system may ask for microphone access separately.
+          Allow the trusted desktop bridge to accept microphone audio for voice prompts? Your operating system may ask
+          for microphone access separately.
         </p>
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -118,8 +113,7 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
       <VoicePopover>
         <div className="font-medium">Install local speech model?</div>
         <p className="mt-1 leading-relaxed text-[var(--muted)]">
-          Local transcription uses Granite Speech through Ollama. Install the configured model
-          before recording?
+          Local transcription uses Granite Speech through Ollama. Install the configured model before recording?
         </p>
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -171,8 +165,7 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
           <div>
             <div className="font-medium">Voice transcription</div>
             <div className="mt-0.5 text-[9px] text-[var(--muted)]">
-              Local audio stays on this machine. Cloud audio is uploaded only after the first-use
-              notice above.
+              Local audio stays on this machine. Cloud audio is uploaded only after the first-use notice above.
             </div>
           </div>
           <button
@@ -186,9 +179,7 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
         </div>
 
         <label className="mt-3 block">
-          <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">
-            Provider
-          </span>
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">Provider</span>
           <select
             aria-label="Voice transcription provider"
             className="h-8 w-full rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 text-[10px] outline-none focus:border-sky-500"
@@ -204,9 +195,7 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
         </label>
 
         <label className="mt-2 block">
-          <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">
-            Model
-          </span>
+          <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">Model</span>
           <select
             aria-label="Voice transcription model"
             className="h-8 w-full rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 font-mono text-[10px] outline-none focus:border-sky-500"
@@ -227,9 +216,7 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
         {binding.cloud ? (
           <>
             <label className="mt-2 block">
-              <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">
-                Credential
-              </span>
+              <span className="mb-1 block text-[9px] uppercase tracking-wide text-[var(--muted)]">Credential</span>
               <select
                 aria-label="Voice transcription credential"
                 className="h-8 w-full rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 text-[10px] outline-none focus:border-sky-500"
@@ -258,15 +245,15 @@ function AgentChatVoiceControls({ disabled, setPrompt }: AgentChatVoiceControlsP
             </label>
             {!key_ready ? (
               <div className="mt-2 text-[9px] text-amber-300">
-                Key {binding.keyId} is not stored for {definition.label}. Add and validate it in
-                Settings → AI → Providers, or keep local fallback enabled.
+                Key {binding.keyId} is not stored for {definition.label}. Add and validate it in Settings → AI →
+                Providers, or keep local fallback enabled.
               </div>
             ) : null}
           </>
         ) : (
           <div className="mt-2 text-[9px] text-[var(--muted)]">
-            Granite Speech runs through your local Ollama service. If the model is missing, the mic
-            button will offer to install it explicitly.
+            Granite Speech runs through your local Ollama service. If the model is missing, the mic button will offer to
+            install it explicitly.
           </div>
         )}
       </VoicePopover>

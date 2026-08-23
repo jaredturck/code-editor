@@ -6,45 +6,40 @@
  * new catalog entry cannot ship without a handler.
  */
 
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { getToolDefinitions } from '@/platform/agent/toolCatalog';
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { getToolDefinitions } from '@/platform/agent/toolCatalog'
 
 function read(rel: string) {
-  return readFileSync(resolve(process.cwd(), rel), 'utf8');
+  return readFileSync(resolve(process.cwd(), rel), 'utf8')
 }
 
 describe('tool catalog ↔ broker contract', () => {
   it('every catalog tool has a handler reference in the broker or sub-agent runtime', () => {
-    const dispatch =
-      read('src/lib/agent/runtime/toolBroker.ts') + '\n' + read('src/lib/subAgentRuntime.ts');
+    const dispatch = read('src/lib/agent/runtime/toolBroker.ts') + '\n' + read('src/lib/subAgentRuntime.ts')
 
-    const names = getToolDefinitions().map((tool) => tool.name);
-    expect(names.length).toBeGreaterThan(0);
+    const names = getToolDefinitions().map((tool) => tool.name)
+    expect(names.length).toBeGreaterThan(0)
 
-    const missing = names.filter(
-      (name) => !dispatch.includes(`'${name}'`) && !dispatch.includes(`"${name}"`),
-    );
-    expect(missing, `catalog tools without a dispatch handler: ${missing.join(', ')}`).toEqual([]);
-  });
+    const missing = names.filter((name) => !dispatch.includes(`'${name}'`) && !dispatch.includes(`"${name}"`))
+    expect(missing, `catalog tools without a dispatch handler: ${missing.join(', ')}`).toEqual([])
+  })
 
   it('keeps the generic missing-handler fallback after all concrete broker handlers', () => {
-    const broker = read('src/lib/agent/runtime/toolBroker.ts');
-    const fallback = broker.lastIndexOf('Tool handler not implemented: ${toolName}');
-    const lastSingleQuotedHandler = broker.lastIndexOf("if (toolName === '");
-    const lastDoubleQuotedHandler = broker.lastIndexOf('if (toolName === "');
-    const lastHandler = Math.max(lastSingleQuotedHandler, lastDoubleQuotedHandler);
+    const broker = read('src/lib/agent/runtime/toolBroker.ts')
+    const fallback = broker.lastIndexOf('Tool handler not implemented: ${toolName}')
+    const lastSingleQuotedHandler = broker.lastIndexOf("if (toolName === '")
+    const lastDoubleQuotedHandler = broker.lastIndexOf('if (toolName === "')
+    const lastHandler = Math.max(lastSingleQuotedHandler, lastDoubleQuotedHandler)
 
-    expect(fallback).toBeGreaterThan(-1);
-    expect(lastHandler).toBeGreaterThan(-1);
-    expect(fallback, 'generic fallback must not make later handlers unreachable').toBeGreaterThan(
-      lastHandler,
-    );
-  });
+    expect(fallback).toBeGreaterThan(-1)
+    expect(lastHandler).toBeGreaterThan(-1)
+    expect(fallback, 'generic fallback must not make later handlers unreachable').toBeGreaterThan(lastHandler)
+  })
 
   it('catalog tool names are unique', () => {
-    const names = getToolDefinitions().map((tool) => tool.name);
-    expect(new Set(names).size).toBe(names.length);
-  });
-});
+    const names = getToolDefinitions().map((tool) => tool.name)
+    expect(new Set(names).size).toBe(names.length)
+  })
+})

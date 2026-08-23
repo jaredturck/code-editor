@@ -3,11 +3,11 @@
  * standalone project was moved into the IRIS renderer.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import type { ComponentProps } from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import ExplorerPanel from '@/features/editor/components/ExplorerPanel';
-import type { WorkspaceNode } from '@/features/editor/types/workspace';
+import { fireEvent, render, screen } from '@testing-library/react'
+import type { ComponentProps } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import ExplorerPanel from '@/features/editor/components/ExplorerPanel'
+import type { WorkspaceNode } from '@/features/editor/types/workspace'
 
 function create_nodes() {
   return new Map<string, WorkspaceNode>([
@@ -50,7 +50,7 @@ function create_nodes() {
         error: null,
       },
     ],
-  ]);
+  ])
 }
 
 function render_explorer(overrides: Partial<ComponentProps<typeof ExplorerPanel>> = {}) {
@@ -80,23 +80,23 @@ function render_explorer(overrides: Partial<ComponentProps<typeof ExplorerPanel>
     rootPath: null,
     selectedPath: null,
     ...overrides,
-  };
+  }
 
-  return { ...render(<ExplorerPanel {...props} />), props };
+  return { ...render(<ExplorerPanel {...props} />), props }
 }
 
 describe('ExplorerPanel', () => {
   it('shows an open-folder action when no workspace is open', () => {
-    const on_open_folder = vi.fn();
-    render_explorer({ onOpenFolder: on_open_folder });
+    const on_open_folder = vi.fn()
+    render_explorer({ onOpenFolder: on_open_folder })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Folder' }));
-    expect(on_open_folder).toHaveBeenCalledOnce();
-  });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Folder' }))
+    expect(on_open_folder).toHaveBeenCalledOnce()
+  })
 
   it('opens a file when its tree row is selected', () => {
-    const on_open_file = vi.fn();
-    const on_select_path = vi.fn();
+    const on_open_file = vi.fn()
+    const on_select_path = vi.fn()
     render_explorer({
       expandedPaths: new Set(['/project']),
       nodes: create_nodes(),
@@ -104,10 +104,10 @@ describe('ExplorerPanel', () => {
       onSelectPath: on_select_path,
       rootName: 'project',
       rootPath: '/project',
-    });
+    })
 
-    fireEvent.click(screen.getByText('README.md'));
-    expect(on_select_path).toHaveBeenCalledWith('/project/README.md');
-    expect(on_open_file).toHaveBeenCalledWith('/project/README.md');
-  });
-});
+    fireEvent.click(screen.getByText('README.md'))
+    expect(on_select_path).toHaveBeenCalledWith('/project/README.md')
+    expect(on_open_file).toHaveBeenCalledWith('/project/README.md')
+  })
+})

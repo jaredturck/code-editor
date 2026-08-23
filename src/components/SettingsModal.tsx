@@ -1261,7 +1261,9 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
         </div>
         <footer className="flex h-14 shrink-0 items-center justify-between border-t border-[var(--border)] px-6">
           {active_tab === 'ai' ? (
-            <span className="text-[10px] text-[var(--muted)]">Provider credentials are managed separately from resettable editor preferences.</span>
+            <span className="text-[10px] text-[var(--muted)]">
+              Provider credentials are managed separately from resettable editor preferences.
+            </span>
           ) : (
             <button
               className="rounded-md px-3 py-2 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"

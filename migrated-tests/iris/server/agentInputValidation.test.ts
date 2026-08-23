@@ -5,7 +5,7 @@
  * so implementation refactors cannot silently weaken those guarantees.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest'
 import {
   InputValidationError,
   validateAgentRole,
@@ -13,28 +13,26 @@ import {
   validateStpTask,
   validateTaskResult,
   validateTrainingMessage,
-} from '../../server/desktopBridge/shared/agentInputValidation';
+} from '../../server/desktopBridge/shared/agentInputValidation'
 
 describe('agent input validation', () => {
   it('preserves supported current and legacy agent roles', () => {
-    expect(validateAgentRole('orchestrator')).toBe('orchestrator');
-    expect(validateAgentRole('executor')).toBe('executor');
-    expect(validateAgentRole('scout')).toBe('scout');
-    expect(validateAgentRole('claude')).toBe('claude');
-    expect(validateAgentRole('deepseek')).toBe('deepseek');
-    expect(validateAgentRole('local')).toBe('local');
-  });
+    expect(validateAgentRole('orchestrator')).toBe('orchestrator')
+    expect(validateAgentRole('executor')).toBe('executor')
+    expect(validateAgentRole('scout')).toBe('scout')
+    expect(validateAgentRole('claude')).toBe('claude')
+    expect(validateAgentRole('deepseek')).toBe('deepseek')
+    expect(validateAgentRole('local')).toBe('local')
+  })
 
   it('accepts known capability namespaces and rejects invented privileges', () => {
     expect(validateCapabilities(['files.read', 'terminal.exec', 'screen.capture'])).toEqual([
       'files.read',
       'terminal.exec',
       'screen.capture',
-    ]);
-    expect(() => validateCapabilities(['root_access.disable_security'])).toThrow(
-      InputValidationError,
-    );
-  });
+    ])
+    expect(() => validateCapabilities(['root_access.disable_security'])).toThrow(InputValidationError)
+  })
 
   it('normalizes valid STP tasks without dropping compatible fields', () => {
     const task = validateStpTask({
@@ -46,7 +44,7 @@ describe('agent input validation', () => {
       tools: { available: ['files.read'] },
       context: { root: '/project' },
       customField: true,
-    });
+    })
 
     expect(task).toMatchObject({
       taskId: 'task-1',
@@ -54,13 +52,11 @@ describe('agent input validation', () => {
       goal: 'Inspect the project',
       priority: 'high',
       customField: true,
-    });
-  });
+    })
+  })
 
   it('rejects oversized training input and invalid task result statuses', () => {
-    expect(() => validateTrainingMessage('x'.repeat(64001))).toThrow(InputValidationError);
-    expect(() => validateTaskResult({ taskId: 'task-1', status: 'exploded' })).toThrow(
-      InputValidationError,
-    );
-  });
-});
+    expect(() => validateTrainingMessage('x'.repeat(64001))).toThrow(InputValidationError)
+    expect(() => validateTaskResult({ taskId: 'task-1', status: 'exploded' })).toThrow(InputValidationError)
+  })
+})

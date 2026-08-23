@@ -106,9 +106,7 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
   const usage_provider = usage?.provider || project_run?.provider || String(settings.ai_provider || '')
   const usage_model = usage?.model || project_run?.model || String(settings.ai_model || '')
   const cost_tier = getRoutingProfile(usage_provider, usage_model).costTier
-  const active_agents = agents.filter(
-    (agent) => agent.status === 'working' || Boolean(agent.currentTaskId),
-  ).length
+  const active_agents = agents.filter((agent) => agent.status === 'working' || Boolean(agent.currentTaskId)).length
   const queued_work = agents.reduce((total, agent) => total + Math.max(0, Number(agent.queueDepth) || 0), 0)
 
   const start_dev_environment = async () => {
@@ -159,7 +157,12 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
         </span>
         <span>Load</span>
         <span className="text-right text-[var(--text)]">
-          {stats?.loadavg?.length ? stats.loadavg.slice(0, 3).map((value) => value.toFixed(2)).join(' · ') : '—'}
+          {stats?.loadavg?.length
+            ? stats.loadavg
+                .slice(0, 3)
+                .map((value) => value.toFixed(2))
+                .join(' · ')
+            : '—'}
         </span>
         <span>Agents</span>
         <span className="text-right text-[var(--text)]">{agents.length || (generating ? 1 : 0)}</span>
@@ -177,7 +180,9 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
           </span>
           <span>Context</span>
           <span className="text-right text-[var(--text)]">
-            {usage.contextWindow ? `${usage.contextUsedPct.toFixed(1)}% · ${format_tokens(usage.contextRemaining)} left` : '—'}
+            {usage.contextWindow
+              ? `${usage.contextUsedPct.toFixed(1)}% · ${format_tokens(usage.contextRemaining)} left`
+              : '—'}
           </span>
           <span>Prompt cache</span>
           <span className="text-right text-[var(--text)]">{Math.round(usage.cacheHitRatio * 100)}% hit</span>
@@ -189,27 +194,35 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
         <div className="grid grid-cols-2 gap-x-3 gap-y-1">
           <span>Workspace files</span>
           <span className="text-right text-[var(--text)]">
-            read {on_off(settings.permissions_file_read === true)} · write {on_off(settings.permissions_file_write === true)}
+            read {on_off(settings.permissions_file_read === true)} · write{' '}
+            {on_off(settings.permissions_file_write === true)}
           </span>
           <span>Local execution</span>
           <span className="text-right text-[var(--text)]">{on_off(settings.permissions_terminal === true)}</span>
           <span>Screen / desktop</span>
           <span className="text-right text-[var(--text)]">
-            {on_off(settings.permissions_screen_capture === true)} / {on_off(settings.permissions_mouse_control === true)}
+            {on_off(settings.permissions_screen_capture === true)} /{' '}
+            {on_off(settings.permissions_mouse_control === true)}
           </span>
           <span>Shell network</span>
-          <span className="text-right text-[var(--text)]">{on_off(settings.agent_allow_network_commands === true)}</span>
+          <span className="text-right text-[var(--text)]">
+            {on_off(settings.agent_allow_network_commands === true)}
+          </span>
           <span>Web site guard</span>
           <span className="text-right text-[var(--text)]">{on_off(settings.agent_web_site_guard !== false)}</span>
           <span>Package guard</span>
-          <span className="text-right text-[var(--text)]">{on_off(settings.agent_package_install_guard !== false)}</span>
+          <span className="text-right text-[var(--text)]">
+            {on_off(settings.agent_package_install_guard !== false)}
+          </span>
         </div>
       </div>
 
       <div className="mt-2 border-t border-[var(--border)] pt-2">
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 font-medium text-[var(--text)]">Dev environment</span>
-          <span className="max-w-[55%] truncate" title={dev_status_label(dev_status)}>{dev_status_label(dev_status)}</span>
+          <span className="max-w-[55%] truncate" title={dev_status_label(dev_status)}>
+            {dev_status_label(dev_status)}
+          </span>
         </div>
         <div className="mt-1.5 flex justify-end gap-1.5">
           <button
@@ -230,7 +243,9 @@ function AgentRuntimePanel({ generating }: AgentRuntimePanelProps) {
           </button>
         </div>
         {!launcher_enabled && (
-          <div className="mt-1">Enable terminal/local execution in Settings → AI to manage the development environment.</div>
+          <div className="mt-1">
+            Enable terminal/local execution in Settings → AI to manage the development environment.
+          </div>
         )}
         {dev_error && <div className="mt-1 text-amber-300">{dev_error}</div>}
       </div>

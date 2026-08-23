@@ -3,15 +3,8 @@
  * actions, and exact one-time approval for risky or destructive launcher operations.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react';
-import { useOrbSettings } from '@/platform-context/AgentSettingsContext';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useOrbSettings } from '@/platform-context/AgentSettingsContext'
 import {
   clearIRISData,
   getLauncherSemanticStatus,
@@ -27,9 +20,9 @@ import {
   type BridgeLauncherSemanticApplication,
   type BridgeLauncherSemanticStatus,
   type LocalBridgeError,
-} from '@/platform/desktopBridge';
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore';
-import { getSafeExternalUrl, stripTerminalControlCharacters } from '@/platform/security';
+} from '@/platform/desktopBridge'
+import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
+import { getSafeExternalUrl, stripTerminalControlCharacters } from '@/platform/security'
 import {
   buildLauncherCatalog,
   getLauncherDiscovery,
@@ -40,74 +33,74 @@ import {
   type LauncherCatalogState,
   type LauncherCategory,
   type LauncherEntry,
-} from '@/platform/launcherCatalog';
+} from '@/platform/launcherCatalog'
 
-export type { LauncherAction, LauncherCategory } from '@/platform/launcherCatalog';
+export type { LauncherAction, LauncherCategory } from '@/platform/launcherCatalog'
 
-export type LauncherId = number | string;
+export type LauncherId = number | string
 export interface LauncherApp extends LauncherEntry {}
 export interface LauncherShortcut extends LauncherApp {
-  id: number;
+  id: number
 }
 
 export interface LauncherDraft {
-  name: string;
-  command: string;
-  icon: string;
-  category: LauncherCategory;
+  name: string
+  command: string
+  icon: string
+  category: LauncherCategory
 }
 
 export interface LauncherRunRecord {
-  name: string;
-  command: string;
-  time: string;
-  status: 'success' | 'blocked' | 'error';
-  message: string;
+  name: string
+  command: string
+  time: string
+  status: 'success' | 'blocked' | 'error'
+  message: string
 }
 
 export interface PendingLaunchApproval extends BridgeLaunchResult {
-  approvalId: string;
-  reason: string;
-  command: string;
-  cwd: string;
-  app: LauncherApp;
-  request?: BridgeLaunchRequest;
-  approvalAction: 'launch' | 'clear_data';
-  time: string;
+  approvalId: string
+  reason: string
+  command: string
+  cwd: string
+  app: LauncherApp
+  request?: BridgeLaunchRequest
+  approvalAction: 'launch' | 'clear_data'
+  time: string
 }
 
 export interface LauncherPanelState {
-  search: string;
-  setSearch: Dispatch<SetStateAction<string>>;
-  shortcuts: LauncherShortcut[];
-  filteredApps: LauncherApp[];
-  showAddForm: boolean;
-  setShowAddForm: Dispatch<SetStateAction<boolean>>;
-  newShortcut: LauncherDraft;
-  setNewShortcut: Dispatch<SetStateAction<LauncherDraft>>;
-  lastRun: LauncherRunRecord | null;
-  pendingPermissionApp: LauncherApp | null;
-  pendingApproval: PendingLaunchApproval | null;
-  approvalBusy: boolean;
-  discoveryBusy: boolean;
-  discoveryError: string;
-  semanticPromptOpen: boolean;
-  semanticInstallBusy: boolean;
-  semanticSearchBusy: boolean;
-  semanticStatusMessage: string;
-  semanticStatusKind: 'info' | 'success' | 'error';
-  semanticModelName: string;
-  runApp: (app: LauncherApp, permissionGranted?: boolean) => Promise<void>;
-  retryPendingPermission: () => Promise<void>;
-  dismissPendingPermission: () => void;
-  refreshApps: () => Promise<void>;
-  installSemanticModel: () => Promise<void>;
-  cancelSemanticModelPrompt: () => void;
-  approvePendingLaunch: () => Promise<void>;
-  cancelPendingLaunch: () => void;
-  addShortcut: () => void;
-  removeShortcut: (id: LauncherId) => void;
-  togglePin: (id: LauncherId) => void;
+  search: string
+  setSearch: Dispatch<SetStateAction<string>>
+  shortcuts: LauncherShortcut[]
+  filteredApps: LauncherApp[]
+  showAddForm: boolean
+  setShowAddForm: Dispatch<SetStateAction<boolean>>
+  newShortcut: LauncherDraft
+  setNewShortcut: Dispatch<SetStateAction<LauncherDraft>>
+  lastRun: LauncherRunRecord | null
+  pendingPermissionApp: LauncherApp | null
+  pendingApproval: PendingLaunchApproval | null
+  approvalBusy: boolean
+  discoveryBusy: boolean
+  discoveryError: string
+  semanticPromptOpen: boolean
+  semanticInstallBusy: boolean
+  semanticSearchBusy: boolean
+  semanticStatusMessage: string
+  semanticStatusKind: 'info' | 'success' | 'error'
+  semanticModelName: string
+  runApp: (app: LauncherApp, permissionGranted?: boolean) => Promise<void>
+  retryPendingPermission: () => Promise<void>
+  dismissPendingPermission: () => void
+  refreshApps: () => Promise<void>
+  installSemanticModel: () => Promise<void>
+  cancelSemanticModelPrompt: () => void
+  approvePendingLaunch: () => Promise<void>
+  cancelPendingLaunch: () => void
+  addShortcut: () => void
+  removeShortcut: (id: LauncherId) => void
+  togglePin: (id: LauncherId) => void
 }
 
 const EMPTY_SHORTCUT: LauncherDraft = {
@@ -115,7 +108,7 @@ const EMPTY_SHORTCUT: LauncherDraft = {
   command: '',
   icon: 'start_env',
   category: 'command',
-};
+}
 
 const EMPTY_CATALOG_STATE: LauncherCatalogState = {
   discovery: getLauncherDiscovery(),
@@ -125,46 +118,42 @@ const EMPTY_CATALOG_STATE: LauncherCatalogState = {
     running: false,
     reason: 'No working directory configured.',
   },
-};
+}
 
 function isLegacyDefaultShortcut(shortcut: LauncherShortcut): boolean {
-  const name = String(shortcut.name || '').toLowerCase();
-  const command = String(shortcut.command || '').trim();
+  const name = String(shortcut.name || '').toLowerCase()
+  const command = String(shortcut.command || '').trim()
   return (
     (name === 'start dev server' && command === 'npm run dev') ||
     (name === 'kill port 3000' && command === 'kill -9 $(lsof -t -i:3000)')
-  );
+  )
 }
 
 function readShortcuts(): LauncherShortcut[] {
-  const parsed = readStorageJson<unknown>(SHORTCUTS_STORAGE_KEY, []);
+  const parsed = readStorageJson<unknown>(SHORTCUTS_STORAGE_KEY, [])
   return Array.isArray(parsed)
-    ? (parsed.slice(0, 100) as LauncherShortcut[]).filter(
-        (shortcut) => !isLegacyDefaultShortcut(shortcut),
-      )
-    : [];
+    ? (parsed.slice(0, 100) as LauncherShortcut[]).filter((shortcut) => !isLegacyDefaultShortcut(shortcut))
+    : []
 }
 
 function writeShortcuts(shortcuts: LauncherShortcut[]): void {
-  writeStorageJson(SHORTCUTS_STORAGE_KEY, shortcuts.slice(0, 100));
+  writeStorageJson(SHORTCUTS_STORAGE_KEY, shortcuts.slice(0, 100))
 }
 
-function getBridgeError(
-  error: unknown,
-): Pick<LocalBridgeError, 'message' | 'status' | 'retryAfterMs'> {
+function getBridgeError(error: unknown): Pick<LocalBridgeError, 'message' | 'status' | 'retryAfterMs'> {
   if (error instanceof Error) {
-    const detail = error as LocalBridgeError;
+    const detail = error as LocalBridgeError
     return {
       message: detail.message,
       status: detail.status,
       retryAfterMs: detail.retryAfterMs,
-    };
+    }
   }
-  return { message: 'Failed to launch', status: 0 };
+  return { message: 'Failed to launch', status: 0 }
 }
 
 function appCommand(app: LauncherApp): string {
-  return String(app.command || [app.executable, ...(app.args || [])].filter(Boolean).join(' '));
+  return String(app.command || [app.executable, ...(app.args || [])].filter(Boolean).join(' '))
 }
 
 /**
@@ -172,128 +161,122 @@ function appCommand(app: LauncherApp): string {
  * its structured launch, managed development, or destructive-data action.
  */
 export function useLauncherPanel(): LauncherPanelState {
-  const { settings } = useOrbSettings();
-  const [search, setSearch] = useState('');
-  const [shortcuts, setShortcuts] = useState<LauncherShortcut[]>(readShortcuts);
-  const [catalogState, setCatalogState] = useState<LauncherCatalogState>(EMPTY_CATALOG_STATE);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newShortcut, setNewShortcut] = useState<LauncherDraft>(EMPTY_SHORTCUT);
-  const [lastRun, setLastRun] = useState<LauncherRunRecord | null>(null);
-  const [pendingPermissionApp, setPendingPermissionApp] = useState<LauncherApp | null>(null);
-  const [pendingApproval, setPendingApproval] = useState<PendingLaunchApproval | null>(null);
-  const [approvalBusy, setApprovalBusy] = useState(false);
-  const [discoveryBusy, setDiscoveryBusy] = useState(false);
-  const [discoveryError, setDiscoveryError] = useState('');
-  const [semanticStatus, setSemanticStatus] = useState<BridgeLauncherSemanticStatus | null>(null);
-  const [semanticPromptDismissed, setSemanticPromptDismissed] = useState(false);
-  const [semanticInstallBusy, setSemanticInstallBusy] = useState(false);
-  const [semanticSearchBusy, setSemanticSearchBusy] = useState(false);
-  const [semanticResults, setSemanticResults] = useState<BridgeLauncherSemanticApplication[]>([]);
-  const [semanticError, setSemanticError] = useState('');
-  const [sessionCwd, setSessionCwd] = useState('~');
-  const workingDirectory = String(settings.agent_working_dir || '').trim();
+  const { settings } = useOrbSettings()
+  const [search, setSearch] = useState('')
+  const [shortcuts, setShortcuts] = useState<LauncherShortcut[]>(readShortcuts)
+  const [catalogState, setCatalogState] = useState<LauncherCatalogState>(EMPTY_CATALOG_STATE)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newShortcut, setNewShortcut] = useState<LauncherDraft>(EMPTY_SHORTCUT)
+  const [lastRun, setLastRun] = useState<LauncherRunRecord | null>(null)
+  const [pendingPermissionApp, setPendingPermissionApp] = useState<LauncherApp | null>(null)
+  const [pendingApproval, setPendingApproval] = useState<PendingLaunchApproval | null>(null)
+  const [approvalBusy, setApprovalBusy] = useState(false)
+  const [discoveryBusy, setDiscoveryBusy] = useState(false)
+  const [discoveryError, setDiscoveryError] = useState('')
+  const [semanticStatus, setSemanticStatus] = useState<BridgeLauncherSemanticStatus | null>(null)
+  const [semanticPromptDismissed, setSemanticPromptDismissed] = useState(false)
+  const [semanticInstallBusy, setSemanticInstallBusy] = useState(false)
+  const [semanticSearchBusy, setSemanticSearchBusy] = useState(false)
+  const [semanticResults, setSemanticResults] = useState<BridgeLauncherSemanticApplication[]>([])
+  const [semanticError, setSemanticError] = useState('')
+  const [sessionCwd, setSessionCwd] = useState('~')
+  const workingDirectory = String(settings.agent_working_dir || '').trim()
 
   useEffect(() => {
-    writeShortcuts(shortcuts);
-  }, [shortcuts]);
+    writeShortcuts(shortcuts)
+  }, [shortcuts])
 
   useEffect(() => {
     const loadSession = async (): Promise<void> => {
-      const info = await getLocalSessionInfo().catch(() => null);
-      if (info && typeof info.cwd === 'string') setSessionCwd(info.cwd);
-    };
-    void loadSession();
-  }, []);
+      const info = await getLocalSessionInfo().catch(() => null)
+      if (info && typeof info.cwd === 'string') setSessionCwd(info.cwd)
+    }
+    void loadSession()
+  }, [])
 
   const loadCatalog = useCallback(
     async (force = false): Promise<void> => {
-      setDiscoveryBusy(true);
-      setDiscoveryError('');
+      setDiscoveryBusy(true)
+      setDiscoveryError('')
       try {
-        const state = await refreshLauncherCatalog(workingDirectory, force);
-        setCatalogState(state);
+        const state = await refreshLauncherCatalog(workingDirectory, force)
+        setCatalogState(state)
       } catch (error) {
-        setDiscoveryError(
-          error instanceof Error ? error.message : 'Launcher application discovery failed.',
-        );
+        setDiscoveryError(error instanceof Error ? error.message : 'Launcher application discovery failed.')
       } finally {
-        setDiscoveryBusy(false);
+        setDiscoveryBusy(false)
       }
     },
     [workingDirectory],
-  );
+  )
 
   useEffect(() => {
-    void loadCatalog(false);
-  }, [loadCatalog]);
+    void loadCatalog(false)
+  }, [loadCatalog])
 
   const loadSemanticStatus = useCallback(async (buildIfMissing = true): Promise<void> => {
     try {
-      const status = await getLauncherSemanticStatus(buildIfMissing);
-      setSemanticStatus(status);
-      if (status.error) setSemanticError(status.error);
-      else if (status.indexStatus !== 'error') setSemanticError('');
+      const status = await getLauncherSemanticStatus(buildIfMissing)
+      setSemanticStatus(status)
+      if (status.error) setSemanticError(status.error)
+      else if (status.indexStatus !== 'error') setSemanticError('')
     } catch (error) {
-      setSemanticError(
-        error instanceof Error ? error.message : 'Semantic application search is unavailable.',
-      );
+      setSemanticError(error instanceof Error ? error.message : 'Semantic application search is unavailable.')
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    void loadSemanticStatus(true);
-  }, [loadSemanticStatus]);
+    void loadSemanticStatus(true)
+  }, [loadSemanticStatus])
 
   useEffect(() => {
-    if (semanticStatus?.indexStatus !== 'building') return;
+    if (semanticStatus?.indexStatus !== 'building') return
     const timer = window.setInterval(() => {
-      void loadSemanticStatus(false);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [loadSemanticStatus, semanticStatus?.indexStatus]);
+      void loadSemanticStatus(false)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [loadSemanticStatus, semanticStatus?.indexStatus])
 
   const semanticIndexUsable = Boolean(
     semanticStatus?.modelInstalled &&
     (semanticStatus.indexStatus === 'ready' ||
       (semanticStatus.indexStatus === 'building' && semanticStatus.applicationCount > 0)),
-  );
+  )
 
   useEffect(() => {
-    const query = search.trim();
+    const query = search.trim()
     if (!query || !semanticIndexUsable) {
-      setSemanticResults([]);
-      setSemanticSearchBusy(false);
-      return;
+      setSemanticResults([])
+      setSemanticSearchBusy(false)
+      return
     }
 
-    let cancelled = false;
+    let cancelled = false
     const timer = window.setTimeout(() => {
-      setSemanticSearchBusy(true);
+      setSemanticSearchBusy(true)
       void searchLauncherSemanticApplications(query, 20)
         .then((results) => {
           if (!cancelled) {
-            setSemanticResults(results);
-            setSemanticError('');
+            setSemanticResults(results)
+            setSemanticError('')
           }
         })
         .catch((error) => {
           if (!cancelled) {
-            setSemanticResults([]);
-            setSemanticError(
-              error instanceof Error ? error.message : 'Semantic application search failed.',
-            );
+            setSemanticResults([])
+            setSemanticError(error instanceof Error ? error.message : 'Semantic application search failed.')
           }
         })
         .finally(() => {
-          if (!cancelled) setSemanticSearchBusy(false);
-        });
-    }, 250);
+          if (!cancelled) setSemanticSearchBusy(false)
+        })
+    }, 250)
 
     return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [search, semanticIndexUsable, semanticStatus?.generatedAt]);
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [search, semanticIndexUsable, semanticStatus?.generatedAt])
 
   const filteredApps = useMemo<LauncherApp[]>(() => {
     const allApps = buildLauncherCatalog({
@@ -301,9 +284,9 @@ export function useLauncherPanel(): LauncherPanelState {
       discovery: catalogState.discovery,
       devStatus: catalogState.devStatus,
       workingDirectory,
-    });
-    const normalizedSearch = search.trim().toLowerCase();
-    if (!normalizedSearch) return allApps;
+    })
+    const normalizedSearch = search.trim().toLowerCase()
+    if (!normalizedSearch) return allApps
 
     const curatedMatches = allApps.filter(
       (app) =>
@@ -312,25 +295,23 @@ export function useLauncherPanel(): LauncherPanelState {
         String(app.subtitle || '')
           .toLowerCase()
           .includes(normalizedSearch),
-    );
-    if (!semanticIndexUsable || semanticResults.length === 0) return curatedMatches;
+    )
+    if (!semanticIndexUsable || semanticResults.length === 0) return curatedMatches
 
     const semanticEntries = semanticResults.map((application) =>
       semanticApplicationLauncherEntry(application, catalogState.discovery),
-    );
-    const result: LauncherApp[] = [];
-    const seen = new Set<string>();
+    )
+    const result: LauncherApp[] = []
+    const seen = new Set<string>()
     for (const app of [...curatedMatches, ...semanticEntries]) {
-      const key = app.executable
-        ? JSON.stringify([app.executable, app.args || []])
-        : `id:${String(app.id)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push(app);
-      if (result.length >= 30) break;
+      const key = app.executable ? JSON.stringify([app.executable, app.args || []]) : `id:${String(app.id)}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(app)
+      if (result.length >= 30) break
     }
-    return result;
-  }, [catalogState, search, semanticIndexUsable, semanticResults, shortcuts, workingDirectory]);
+    return result
+  }, [catalogState, search, semanticIndexUsable, semanticResults, shortcuts, workingDirectory])
 
   const recordLaunchResult = (app: LauncherApp, result: BridgeLaunchResult, time: string): void => {
     setLastRun({
@@ -338,15 +319,13 @@ export function useLauncherPanel(): LauncherPanelState {
       command: typeof result.command === 'string' ? result.command : appCommand(app),
       time,
       status: 'success',
-      message: stripTerminalControlCharacters(
-        typeof result.message === 'string' ? result.message : 'Process launched',
-      ),
-    });
-  };
+      message: stripTerminalControlCharacters(typeof result.message === 'string' ? result.message : 'Process launched'),
+    })
+  }
 
   const recordFailure = (app: LauncherApp, error: unknown, time: string): void => {
-    const detail = getBridgeError(error);
-    const retry = Number(detail.retryAfterMs);
+    const detail = getBridgeError(error)
+    const retry = Number(detail.retryAfterMs)
     setLastRun({
       name: app.name,
       command: appCommand(app),
@@ -357,57 +336,49 @@ export function useLauncherPanel(): LauncherPanelState {
           ? `Launcher is busy; retry in ${Math.ceil(retry / 1000)}s`
           : detail.message || 'Failed to launch',
       ),
-    });
-  };
+    })
+  }
 
   const installSemanticModel = async (): Promise<void> => {
-    if (semanticInstallBusy) return;
-    setSemanticInstallBusy(true);
-    setSemanticError('');
+    if (semanticInstallBusy) return
+    setSemanticInstallBusy(true)
+    setSemanticError('')
     try {
-      const status = await installLauncherSemanticModel();
-      setSemanticStatus(status);
-      setSemanticPromptDismissed(true);
+      const status = await installLauncherSemanticModel()
+      setSemanticStatus(status)
+      setSemanticPromptDismissed(true)
     } catch (error) {
-      setSemanticError(
-        error instanceof Error ? error.message : 'The embedding model download failed.',
-      );
+      setSemanticError(error instanceof Error ? error.message : 'The embedding model download failed.')
     } finally {
-      setSemanticInstallBusy(false);
+      setSemanticInstallBusy(false)
     }
-  };
+  }
 
   const refreshApps = async (): Promise<void> => {
-    await loadCatalog(true);
+    await loadCatalog(true)
     if (semanticStatus?.modelInstalled) {
       try {
-        const status = await rebuildLauncherSemanticIndex();
-        setSemanticStatus(status);
-        setSemanticError('');
+        const status = await rebuildLauncherSemanticIndex()
+        setSemanticStatus(status)
+        setSemanticError('')
       } catch (error) {
         setSemanticError(
-          error instanceof Error
-            ? error.message
-            : 'The semantic application index could not be rebuilt.',
-        );
+          error instanceof Error ? error.message : 'The semantic application index could not be rebuilt.',
+        )
       }
     } else {
-      await loadSemanticStatus(false);
+      await loadSemanticStatus(false)
     }
-  };
+  }
 
   const refreshAfterDevAction = async (): Promise<void> => {
-    const state = await refreshLauncherCatalog(workingDirectory, false);
-    setCatalogState(state);
-  };
+    const state = await refreshLauncherCatalog(workingDirectory, false)
+    setCatalogState(state)
+  }
 
-  const runManagedAction = async (
-    app: LauncherApp,
-    action: LauncherAction,
-    time: string,
-  ): Promise<void> => {
+  const runManagedAction = async (app: LauncherApp, action: LauncherAction, time: string): Promise<void> => {
     if (action === 'dev_start') {
-      const result = await startDevEnvironment(workingDirectory);
+      const result = await startDevEnvironment(workingDirectory)
       setLastRun({
         name: app.name,
         command: String(result.command || app.command),
@@ -416,26 +387,26 @@ export function useLauncherPanel(): LauncherPanelState {
         message: result.running
           ? `Started ${result.projectName || 'development environment'}`
           : String(result.reason || 'Development environment did not start.'),
-      });
-      await refreshAfterDevAction();
-      return;
+      })
+      await refreshAfterDevAction()
+      return
     }
 
     if (action === 'dev_stop') {
-      const result = await stopDevEnvironment();
+      const result = await stopDevEnvironment()
       setLastRun({
         name: app.name,
         command: String(result.command || app.command),
         time,
         status: result.running ? 'error' : 'success',
         message: String(result.reason || 'Development environment stopped.'),
-      });
-      await refreshAfterDevAction();
-      return;
+      })
+      await refreshAfterDevAction()
+      return
     }
 
     if (action === 'clear_data') {
-      const result = await clearIRISData();
+      const result = await clearIRISData()
       if (result.approvalRequired) {
         setPendingApproval({
           ...result,
@@ -446,13 +417,13 @@ export function useLauncherPanel(): LauncherPanelState {
           app,
           approvalAction: 'clear_data',
           time,
-        });
+        })
       }
     }
-  };
+  }
 
   const runApp = async (app: LauncherApp, permissionGranted = false): Promise<void> => {
-    const time = new Date().toLocaleTimeString();
+    const time = new Date().toLocaleTimeString()
 
     if (app.disabled) {
       setLastRun({
@@ -461,12 +432,12 @@ export function useLauncherPanel(): LauncherPanelState {
         time,
         status: 'blocked',
         message: String(app.disabledReason || 'This launcher action is unavailable.'),
-      });
-      return;
+      })
+      return
     }
 
     if (app.category === 'url') {
-      const safeUrl = getSafeExternalUrl(app.command);
+      const safeUrl = getSafeExternalUrl(app.command)
       if (!safeUrl) {
         setLastRun({
           name: app.name,
@@ -474,32 +445,32 @@ export function useLauncherPanel(): LauncherPanelState {
           time,
           status: 'blocked',
           message: 'Only HTTP and HTTPS URLs can be opened.',
-        });
-        return;
+        })
+        return
       }
-      window.open(safeUrl, '_blank', 'noopener,noreferrer');
+      window.open(safeUrl, '_blank', 'noopener,noreferrer')
       setLastRun({
         name: app.name,
         command: safeUrl,
         time,
         status: 'success',
         message: 'Opened URL',
-      });
-      return;
+      })
+      return
     }
 
     if (!settings.permissions_terminal && !permissionGranted) {
-      setPendingPermissionApp(app);
-      setLastRun(null);
-      return;
+      setPendingPermissionApp(app)
+      setLastRun(null)
+      return
     }
 
-    setPendingPermissionApp(null);
+    setPendingPermissionApp(null)
 
     try {
       if (app.action && app.action !== 'launch') {
-        await runManagedAction(app, app.action, time);
-        return;
+        await runManagedAction(app, app.action, time)
+        return
       }
 
       const request: BridgeLaunchRequest = {
@@ -507,8 +478,8 @@ export function useLauncherPanel(): LauncherPanelState {
         category: app.category,
         cwd: app.cwd || workingDirectory || sessionCwd,
         ...(app.executable ? { executable: app.executable, args: app.args || [] } : {}),
-      };
-      const result = await launchLocalCommand(request);
+      }
+      const result = await launchLocalCommand(request)
       if (result.approvalRequired) {
         setPendingApproval({
           ...result,
@@ -520,76 +491,74 @@ export function useLauncherPanel(): LauncherPanelState {
           request,
           approvalAction: 'launch',
           time,
-        });
-        return;
+        })
+        return
       }
-      recordLaunchResult(app, result, time);
+      recordLaunchResult(app, result, time)
     } catch (error) {
-      recordFailure(app, error, time);
+      recordFailure(app, error, time)
     }
-  };
+  }
 
   const approvePendingLaunch = async (): Promise<void> => {
-    if (!pendingApproval || approvalBusy) return;
-    setApprovalBusy(true);
+    if (!pendingApproval || approvalBusy) return
+    setApprovalBusy(true)
     try {
       if (pendingApproval.approvalAction === 'clear_data') {
-        const result = await clearIRISData(pendingApproval.approvalId);
+        const result = await clearIRISData(pendingApproval.approvalId)
         if (result.cleared) {
-          window.location.reload();
-          return;
+          window.location.reload()
+          return
         }
-        throw new Error('IRIS data was not cleared.');
+        throw new Error('IRIS data was not cleared.')
       }
 
       const result = await launchLocalCommand({
         ...(pendingApproval.request || {}),
         approvalId: pendingApproval.approvalId,
-      });
-      recordLaunchResult(pendingApproval.app, result, new Date().toLocaleTimeString());
-      setPendingApproval(null);
+      })
+      recordLaunchResult(pendingApproval.app, result, new Date().toLocaleTimeString())
+      setPendingApproval(null)
     } catch (error) {
-      recordFailure(pendingApproval.app, error, new Date().toLocaleTimeString());
-      setPendingApproval(null);
+      recordFailure(pendingApproval.app, error, new Date().toLocaleTimeString())
+      setPendingApproval(null)
     } finally {
-      setApprovalBusy(false);
+      setApprovalBusy(false)
     }
-  };
+  }
 
-  const cancelPendingLaunch = (): void => setPendingApproval(null);
+  const cancelPendingLaunch = (): void => setPendingApproval(null)
 
   const addShortcut = (): void => {
-    if (!newShortcut.name || !newShortcut.command) return;
-    setShortcuts((previous) => [...previous, { ...newShortcut, id: Date.now(), pinned: false }]);
-    setNewShortcut(EMPTY_SHORTCUT);
-    setShowAddForm(false);
-  };
+    if (!newShortcut.name || !newShortcut.command) return
+    setShortcuts((previous) => [...previous, { ...newShortcut, id: Date.now(), pinned: false }])
+    setNewShortcut(EMPTY_SHORTCUT)
+    setShowAddForm(false)
+  }
 
   const removeShortcut = (id: LauncherId): void => {
-    setShortcuts((previous) => previous.filter((shortcut) => shortcut.id !== id));
-  };
+    setShortcuts((previous) => previous.filter((shortcut) => shortcut.id !== id))
+  }
 
   const togglePin = (id: LauncherId): void => {
     setShortcuts((previous) =>
-      previous.map((shortcut) =>
-        shortcut.id === id ? { ...shortcut, pinned: !shortcut.pinned } : shortcut,
-      ),
-    );
-  };
+      previous.map((shortcut) => (shortcut.id === id ? { ...shortcut, pinned: !shortcut.pinned } : shortcut)),
+    )
+  }
 
   const retryPendingPermission = async (): Promise<void> => {
-    const app = pendingPermissionApp;
-    if (!app) return;
-    await runApp(app, true);
-  };
+    const app = pendingPermissionApp
+    if (!app) return
+    await runApp(app, true)
+  }
 
   const dismissPendingPermission = (): void => {
-    setPendingPermissionApp(null);
-  };
+    setPendingPermissionApp(null)
+  }
 
   const semanticPromptOpen = Boolean(
     semanticStatus?.ollamaAvailable && !semanticStatus.modelInstalled && !semanticPromptDismissed,
-  );
+  )
   const semanticStatusMessage = semanticInstallBusy
     ? `Downloading ${semanticStatus?.model || 'semantic search model'} through Ollama...`
     : semanticStatus?.indexStatus === 'building'
@@ -600,12 +569,12 @@ export function useLauncherPanel(): LauncherPanelState {
         }`
       : semanticStatus?.indexStatus === 'ready'
         ? `Semantic search ready · ${semanticStatus.applicationCount} applications indexed`
-        : semanticError;
+        : semanticError
   const semanticStatusKind: 'info' | 'success' | 'error' = semanticError
     ? 'error'
     : semanticStatus?.indexStatus === 'ready'
       ? 'success'
-      : 'info';
+      : 'info'
 
   return {
     search,
@@ -639,5 +608,5 @@ export function useLauncherPanel(): LauncherPanelState {
     addShortcut,
     removeShortcut,
     togglePin,
-  };
+  }
 }

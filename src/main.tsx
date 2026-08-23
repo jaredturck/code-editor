@@ -28,9 +28,7 @@ async function start_renderer() {
     await hydrateDurableStore()
   } catch (error) {
     render_fatal_startup(
-      error instanceof Error
-        ? error.message
-        : 'The encrypted local AI platform could not initialize.',
+      error instanceof Error ? error.message : 'The encrypted local AI platform could not initialize.',
     )
     return
   }

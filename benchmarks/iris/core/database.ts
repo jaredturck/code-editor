@@ -1,110 +1,110 @@
 /** Persists benchmark history beside IRIS's production database without mixing application data. */
 
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { randomBytes, randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
-import type { Database as SqliteDatabase } from 'sqlite3';
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { randomBytes, randomUUID } from 'node:crypto'
+import { createRequire } from 'node:module'
+import type { Database as SqliteDatabase } from 'sqlite3'
 import {
   closeEncryptedDatabase,
   initializeEncryptedDatabase,
-} from '../../../backend/desktopBridge/storage/encryptedDatabase.js';
+} from '../../../backend/desktopBridge/storage/encryptedDatabase.js'
 import type {
   BenchmarkDefinition,
   BenchmarkModelInfo,
   BenchmarkResult,
   BenchmarkSystemInfo,
   HistoricalBenchmarkResult,
-} from './types.js';
+} from './types.js'
 
-const require = createRequire(import.meta.url);
+const require = createRequire(import.meta.url)
 
 interface SqliteRuntime {
-  Database: new (filename: string) => SqliteDatabase;
-  verbose: () => SqliteRuntime;
+  Database: new (filename: string) => SqliteDatabase
+  verbose: () => SqliteRuntime
 }
 
 interface RunResult {
-  lastID: number;
-  changes: number;
+  lastID: number
+  changes: number
 }
 
 interface KeyRow {
-  value: string;
+  value: string
 }
 
-const BENCHMARK_SCHEMA_VERSION = '2';
-const BENCHMARK_DATABASE_FILENAME = 'iris-benchmark.sqlite3';
+const BENCHMARK_SCHEMA_VERSION = '2'
+const BENCHMARK_DATABASE_FILENAME = 'iris-benchmark.sqlite3'
 
 /** Returns the persistent benchmark database path in IRIS's normal application directory. */
 export function benchmarkDatabasePath(): string {
-  return path.join(os.homedir(), '.iris-ai', BENCHMARK_DATABASE_FILENAME);
+  return path.join(os.homedir(), '.iris-ai', BENCHMARK_DATABASE_FILENAME)
 }
 
 /** Returns the persistent fixture directory reused by successive benchmark runs. */
 export function benchmarkFixtureRoot(): string {
-  return path.join(os.homedir(), '.iris-ai', 'benchmark-fixtures');
+  return path.join(os.homedir(), '.iris-ai', 'benchmark-fixtures')
 }
 
 /** Wraps the callback-based sqlite3 package for benchmark history and export queries. */
 class BenchmarkSqlite {
-  readonly db: SqliteDatabase;
+  readonly db: SqliteDatabase
 
   /** Opens the raw sqlite3 connection used for benchmark history and export queries. */
   constructor(databasePath: string) {
-    const sqlite = (require('sqlite3') as SqliteRuntime).verbose();
-    this.db = new sqlite.Database(databasePath);
+    const sqlite = (require('sqlite3') as SqliteRuntime).verbose()
+    this.db = new sqlite.Database(databasePath)
   }
 
   /** Executes one mutating SQL statement and returns its row-change metadata. */
   run(sql: string, params: unknown[] = []): Promise<RunResult> {
     return new Promise((resolve, reject) => {
       this.db.run(sql, params, function onRun(error) {
-        if (error) reject(error);
-        else resolve({ lastID: this.lastID, changes: this.changes });
-      });
-    });
+        if (error) reject(error)
+        else resolve({ lastID: this.lastID, changes: this.changes })
+      })
+    })
   }
 
   /** Reads at most one typed row from the benchmark database. */
   get<T>(sql: string, params: unknown[] = []): Promise<T | undefined> {
     return new Promise((resolve, reject) => {
       this.db.get(sql, params, (error, row) => {
-        if (error) reject(error);
-        else resolve(row as T | undefined);
-      });
-    });
+        if (error) reject(error)
+        else resolve(row as T | undefined)
+      })
+    })
   }
 
   /** Reads all matching typed rows from the benchmark database. */
   all<T>(sql: string, params: unknown[] = []): Promise<T[]> {
     return new Promise((resolve, reject) => {
       this.db.all(sql, params, (error, rows) => {
-        if (error) reject(error);
-        else resolve((rows || []) as T[]);
-      });
-    });
+        if (error) reject(error)
+        else resolve((rows || []) as T[])
+      })
+    })
   }
 
   /** Executes a schema, transaction, or multi-statement SQL script. */
   exec(sql: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.exec(sql, (error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+        if (error) reject(error)
+        else resolve()
+      })
+    })
   }
 
   /** Closes the raw benchmark-history connection after all writes are complete. */
   close(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+        if (error) reject(error)
+        else resolve()
+      })
+    })
   }
 }
 
@@ -366,102 +366,88 @@ const BENCHMARK_SCHEMA_SQL = `
     SELECT MAX(run_id) FROM benchmark_runs
     WHERE status IN ('completed', 'completed_with_failures')
   );
-`;
+`
 
 /** Owns one persistent benchmark database and its retained history. */
 export class BenchmarkDatabase {
-  private readonly sql: BenchmarkSqlite;
-  readonly databasePath: string;
-  readonly fixtureRoot: string;
-  readonly masterKey: Buffer;
+  private readonly sql: BenchmarkSqlite
+  readonly databasePath: string
+  readonly fixtureRoot: string
+  readonly masterKey: Buffer
 
   /** Retains the production database path, fixture root, history connection, and benchmark key. */
-  private constructor(
-    databasePath: string,
-    fixtureRoot: string,
-    sql: BenchmarkSqlite,
-    masterKey: Buffer,
-  ) {
-    this.databasePath = databasePath;
-    this.fixtureRoot = fixtureRoot;
-    this.sql = sql;
-    this.masterKey = masterKey;
+  private constructor(databasePath: string, fixtureRoot: string, sql: BenchmarkSqlite, masterKey: Buffer) {
+    this.databasePath = databasePath
+    this.fixtureRoot = fixtureRoot
+    this.sql = sql
+    this.masterKey = masterKey
   }
 
   /** Opens the persistent benchmark database, applies both schemas, and retains one benchmark key. */
-  static async open(
-    options: { databasePath?: string; fixtureRoot?: string } = {},
-  ): Promise<BenchmarkDatabase> {
-    const databasePath = options.databasePath || benchmarkDatabasePath();
-    const fixtureRoot = options.fixtureRoot || benchmarkFixtureRoot();
+  static async open(options: { databasePath?: string; fixtureRoot?: string } = {}): Promise<BenchmarkDatabase> {
+    const databasePath = options.databasePath || benchmarkDatabasePath()
+    const fixtureRoot = options.fixtureRoot || benchmarkFixtureRoot()
     await fs.mkdir(path.dirname(databasePath), {
       recursive: true,
       mode: 0o700,
-    });
-    await fs.mkdir(fixtureRoot, { recursive: true, mode: 0o700 });
-    const sql = new BenchmarkSqlite(databasePath);
-    await sql.exec(BENCHMARK_SCHEMA_SQL);
-    const now = new Date().toISOString();
+    })
+    await fs.mkdir(fixtureRoot, { recursive: true, mode: 0o700 })
+    const sql = new BenchmarkSqlite(databasePath)
+    await sql.exec(BENCHMARK_SCHEMA_SQL)
+    const now = new Date().toISOString()
     await sql.run(
       `INSERT INTO benchmark_schema_meta(key, value, updated_at)
        VALUES('benchmark_schema_version', ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       [BENCHMARK_SCHEMA_VERSION, now],
-    );
+    )
     let keyRow = await sql.get<KeyRow>(
       "SELECT value FROM benchmark_schema_meta WHERE key = 'benchmark_master_key_base64'",
-    );
+    )
     if (!keyRow?.value) {
-      const value = randomBytes(32).toString('base64');
+      const value = randomBytes(32).toString('base64')
       await sql.run(`INSERT INTO benchmark_schema_meta(key, value, updated_at) VALUES(?, ?, ?)`, [
         'benchmark_master_key_base64',
         value,
         now,
-      ]);
-      keyRow = { value };
+      ])
+      keyRow = { value }
     }
-    const masterKey = Buffer.from(keyRow.value, 'base64');
-    if (masterKey.length !== 32) throw new Error('Benchmark database key is malformed');
-    await initializeEncryptedDatabase({ databasePath, masterKey });
+    const masterKey = Buffer.from(keyRow.value, 'base64')
+    if (masterKey.length !== 32) throw new Error('Benchmark database key is malformed')
+    await initializeEncryptedDatabase({ databasePath, masterKey })
     try {
-      await fs.chmod(databasePath, 0o600);
+      await fs.chmod(databasePath, 0o600)
     } catch {
       // Non-POSIX filesystems may not expose chmod semantics.
     }
-    return new BenchmarkDatabase(databasePath, fixtureRoot, sql, masterKey);
+    return new BenchmarkDatabase(databasePath, fixtureRoot, sql, masterKey)
   }
 
   /** Creates one retained run and command-log row before any workload data is written. */
   async beginRun(options: {
-    startedAt: string;
-    appVersion: string;
-    gitCommit: string;
-    gitBranch: string;
-    command: string;
-    workingDirectory: string;
+    startedAt: string
+    appVersion: string
+    gitCommit: string
+    gitBranch: string
+    command: string
+    workingDirectory: string
   }): Promise<{ runId: number; runKey: string }> {
-    const runKey = randomUUID();
+    const runKey = randomUUID()
     const run = await this.sql.run(
       `INSERT INTO benchmark_runs(
          run_key, started_at, status, app_version, git_commit, git_branch,
          benchmark_version, cleanup_status
        ) VALUES(?, ?, 'running', ?, ?, ?, ?, 'not_started')`,
-      [
-        runKey,
-        options.startedAt,
-        options.appVersion,
-        options.gitCommit,
-        options.gitBranch,
-        BENCHMARK_SCHEMA_VERSION,
-      ],
-    );
+      [runKey, options.startedAt, options.appVersion, options.gitCommit, options.gitBranch, BENCHMARK_SCHEMA_VERSION],
+    )
     await this.sql.run(
       `INSERT INTO benchmark_command_log(
          run_id, command, working_directory, invoked_at, process_id, result
        ) VALUES(?, ?, ?, ?, ?, 'running')`,
       [run.lastID, options.command, options.workingDirectory, options.startedAt, process.pid],
-    );
-    return { runId: run.lastID, runKey };
+    )
+    return { runId: run.lastID, runKey }
   }
 
   /** Stores the machine and runtime details needed for honest historical comparisons. */
@@ -491,16 +477,16 @@ export class BenchmarkDatabase {
         system.ollamaVersion,
         JSON.stringify(system),
       ],
-    );
+    )
   }
 
   /** Registers stable benchmark case metadata independently from individual runs. */
   async registerCases(definitions: BenchmarkDefinition<any>[]): Promise<void> {
-    const now = new Date().toISOString();
-    await this.sql.exec('BEGIN IMMEDIATE');
+    const now = new Date().toISOString()
+    await this.sql.exec('BEGIN IMMEDIATE')
     try {
       for (const definition of definitions) {
-        const tags = new Set(definition.tags || []);
+        const tags = new Set(definition.tags || [])
         await this.sql.run(
           `INSERT INTO benchmark_cases(
              case_id, suite, name, description, category, benchmark_version,
@@ -528,39 +514,34 @@ export class BenchmarkDatabase {
             tags.has('filesystem') ? 1 : 0,
             now,
           ],
-        );
+        )
       }
-      await this.sql.exec('COMMIT');
+      await this.sql.exec('COMMIT')
     } catch (error) {
-      await this.sql.exec('ROLLBACK').catch(() => undefined);
-      throw error;
+      await this.sql.exec('ROLLBACK').catch(() => undefined)
+      throw error
     }
   }
 
   /** Marks production-style benchmark tables as dirty until cleanup has completed. */
   async markWorkloadDirty(runId: number): Promise<void> {
-    const now = new Date().toISOString();
+    const now = new Date().toISOString()
     await this.sql.run(
       `UPDATE benchmark_workload_state
        SET active_run_id = ?, dirty = 1, workload_started_at = ?,
            cleanup_started_at = NULL, cleanup_completed_at = NULL, last_cleanup_error = NULL
        WHERE singleton_id = 1`,
       [runId, now],
-    );
+    )
   }
 
   /** Deletes benchmark workload rows while preserving schema, history, and the database file itself. */
   async cleanupWorkloadData(runId?: number): Promise<void> {
-    const startedAt = new Date().toISOString();
+    const startedAt = new Date().toISOString()
     if (runId) {
-      await this.sql.run(`UPDATE benchmark_runs SET cleanup_status = 'running' WHERE run_id = ?`, [
-        runId,
-      ]);
+      await this.sql.run(`UPDATE benchmark_runs SET cleanup_status = 'running' WHERE run_id = ?`, [runId])
     }
-    await this.sql.run(
-      `UPDATE benchmark_workload_state SET cleanup_started_at = ? WHERE singleton_id = 1`,
-      [startedAt],
-    );
+    await this.sql.run(`UPDATE benchmark_workload_state SET cleanup_started_at = ? WHERE singleton_id = 1`, [startedAt])
     try {
       await this.sql.exec(`
         BEGIN IMMEDIATE;
@@ -582,39 +563,31 @@ export class BenchmarkDatabase {
         DELETE FROM file_embedding_profile;
         DELETE FROM encrypted_store;
         COMMIT;
-      `);
-      const completedAt = new Date().toISOString();
+      `)
+      const completedAt = new Date().toISOString()
       await this.sql.run(
         `UPDATE benchmark_workload_state
          SET active_run_id = NULL, dirty = 0, cleanup_completed_at = ?, last_cleanup_error = NULL
          WHERE singleton_id = 1`,
         [completedAt],
-      );
+      )
       if (runId) {
-        await this.sql.run(
-          `UPDATE benchmark_runs SET cleanup_status = 'completed' WHERE run_id = ?`,
-          [runId],
-        );
+        await this.sql.run(`UPDATE benchmark_runs SET cleanup_status = 'completed' WHERE run_id = ?`, [runId])
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await this.sql.run(
-        `UPDATE benchmark_workload_state SET last_cleanup_error = ? WHERE singleton_id = 1`,
-        [message],
-      );
+      const message = error instanceof Error ? error.message : String(error)
+      await this.sql.run(`UPDATE benchmark_workload_state SET last_cleanup_error = ? WHERE singleton_id = 1`, [message])
       if (runId) {
-        await this.sql.run(`UPDATE benchmark_runs SET cleanup_status = 'failed' WHERE run_id = ?`, [
-          runId,
-        ]);
+        await this.sql.run(`UPDATE benchmark_runs SET cleanup_status = 'failed' WHERE run_id = ?`, [runId])
       }
-      throw error;
+      throw error
     }
   }
 
   /** Persists one aggregate result and the measured samples used to derive its percentiles. */
   async recordResult(runId: number, result: BenchmarkResult): Promise<number> {
-    const statistics = result.statistics;
-    const notes = result.skipReason || '';
+    const statistics = result.statistics
+    const notes = result.skipReason || ''
     const insertion = await this.sql.run(
       `INSERT INTO benchmark_results(
          run_id, case_id, variant_key, parameters_json, status,
@@ -646,9 +619,7 @@ export class BenchmarkDatabase {
         result.operationsPerSecond ?? null,
         result.operationsPerSecond ? 'operations/second' : null,
         result.operationsPerIteration * result.iterations,
-        result.bytesPerOperation
-          ? result.bytesPerOperation * result.operationsPerIteration * result.iterations
-          : null,
+        result.bytesPerOperation ? result.bytesPerOperation * result.operationsPerIteration * result.iterations : null,
         result.peakRssBytes ?? null,
         result.peakHeapUsedBytes ?? null,
         result.peakExternalBytes ?? null,
@@ -658,9 +629,9 @@ export class BenchmarkDatabase {
         notes,
         result.error ?? null,
       ],
-    );
+    )
     if (result.samplesMs.length) {
-      await this.sql.exec('BEGIN IMMEDIATE');
+      await this.sql.exec('BEGIN IMMEDIATE')
       try {
         for (let index = 0; index < result.samplesMs.length; index += 1) {
           await this.sql.run(
@@ -672,19 +643,17 @@ export class BenchmarkDatabase {
               index,
               result.samplesMs[index],
               result.operationsPerIteration,
-              result.bytesPerOperation
-                ? result.bytesPerOperation * result.operationsPerIteration
-                : null,
+              result.bytesPerOperation ? result.bytesPerOperation * result.operationsPerIteration : null,
             ],
-          );
+          )
         }
-        await this.sql.exec('COMMIT');
+        await this.sql.exec('COMMIT')
       } catch (error) {
-        await this.sql.exec('ROLLBACK').catch(() => undefined);
-        throw error;
+        await this.sql.exec('ROLLBACK').catch(() => undefined)
+        throw error
       }
     }
-    return insertion.lastID;
+    return insertion.lastID
   }
 
   /** Stores local model setup, backend, and download details for the current run. */
@@ -714,7 +683,7 @@ export class BenchmarkDatabase {
         model.errorMessage || null,
         JSON.stringify(model.details || {}),
       ],
-    );
+    )
   }
 
   /** Appends a concise lifecycle event without retaining noisy stdout or sensitive payloads. */
@@ -731,39 +700,26 @@ export class BenchmarkDatabase {
       `INSERT INTO benchmark_events(
          run_id, result_id, occurred_at, level, phase, event_type, message, details_json
        ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        runId,
-        resultId ?? null,
-        new Date().toISOString(),
-        level,
-        phase,
-        eventType,
-        message,
-        JSON.stringify(details),
-      ],
-    );
+      [runId, resultId ?? null, new Date().toISOString(), level, phase, eventType, message, JSON.stringify(details)],
+    )
   }
 
   /** Finalizes retained run and command rows with one concise command result. */
   async finishRun(options: {
-    runId: number;
-    finishedAt: string;
-    durationMs: number;
-    results: BenchmarkResult[];
-    modelsDownloaded: number;
-    remoteNetworkAttemptsBlocked: number;
-    fatalError?: string;
+    runId: number
+    finishedAt: string
+    durationMs: number
+    results: BenchmarkResult[]
+    modelsDownloaded: number
+    remoteNetworkAttemptsBlocked: number
+    fatalError?: string
   }): Promise<void> {
-    const passed = options.results.filter((result) => result.status === 'passed').length;
-    const failed = options.results.filter((result) => result.status === 'failed').length;
-    const skipped = options.results.filter((result) => result.status === 'skipped').length;
-    const status = options.fatalError
-      ? 'failed'
-      : failed || skipped
-        ? 'completed_with_failures'
-        : 'completed';
-    const commandResult = options.fatalError ? 'failed' : failed || skipped ? 'partial' : 'success';
-    const summary = `${passed} passed, ${failed} failed, ${skipped} skipped`;
+    const passed = options.results.filter((result) => result.status === 'passed').length
+    const failed = options.results.filter((result) => result.status === 'failed').length
+    const skipped = options.results.filter((result) => result.status === 'skipped').length
+    const status = options.fatalError ? 'failed' : failed || skipped ? 'completed_with_failures' : 'completed'
+    const commandResult = options.fatalError ? 'failed' : failed || skipped ? 'partial' : 'success'
+    const summary = `${passed} passed, ${failed} failed, ${skipped} skipped`
     await this.sql.run(
       `UPDATE benchmark_runs SET
          finished_at = ?, status = ?, total_duration_ms = ?, total_cases = ?,
@@ -784,7 +740,7 @@ export class BenchmarkDatabase {
         options.fatalError || null,
         options.runId,
       ],
-    );
+    )
     await this.sql.run(
       `UPDATE benchmark_command_log SET
          completed_at = ?, exit_code = ?, result = ?, duration_ms = ?,
@@ -803,7 +759,7 @@ export class BenchmarkDatabase {
         options.fatalError || null,
         options.runId,
       ],
-    );
+    )
   }
 
   /** Reads the preceding completed run for percentage comparisons in the Markdown report. */
@@ -813,19 +769,19 @@ export class BenchmarkDatabase {
        WHERE run_id < ? AND status IN ('completed', 'completed_with_failures')
        ORDER BY run_id DESC LIMIT 1`,
       [runId],
-    );
-    if (!previousRun) return new Map();
+    )
+    if (!previousRun) return new Map()
     const rows = await this.sql.all<{
-      case_id: string;
-      variant_key: string;
-      median_ms: number | null;
-      p95_ms: number | null;
-      throughput_value: number | null;
+      case_id: string
+      variant_key: string
+      median_ms: number | null
+      p95_ms: number | null
+      throughput_value: number | null
     }>(
       `SELECT case_id, variant_key, median_ms, p95_ms, throughput_value
        FROM benchmark_results WHERE run_id = ?`,
       [previousRun.run_id],
-    );
+    )
     return new Map(
       rows.map((row) => [
         `${row.case_id}\u0000${row.variant_key}`,
@@ -837,21 +793,21 @@ export class BenchmarkDatabase {
           operationsPerSecond: row.throughput_value,
         },
       ]),
-    );
+    )
   }
 
   /** Exports the latest completed result view as flat records for CSV generation. */
   async latestResultRows(): Promise<Record<string, unknown>[]> {
     return this.sql.all<Record<string, unknown>>(
       `SELECT * FROM benchmark_latest_results ORDER BY suite, case_id, variant_key`,
-    );
+    )
   }
 
   /** Checkpoints and closes both database connections while retaining the database itself. */
   async close(): Promise<void> {
-    await closeEncryptedDatabase();
-    await this.sql.exec('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined);
-    await this.sql.close();
-    this.masterKey.fill(0);
+    await closeEncryptedDatabase()
+    await this.sql.exec('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined)
+    await this.sql.close()
+    this.masterKey.fill(0)
   }
 }

@@ -6,68 +6,60 @@
  * timeouts, sub-agents, and UI presentation.
  */
 
-export type PermissionTier = 0 | 1 | 2 | 3;
-export type ToolModule =
-  | 'Files'
-  | 'Terminal'
-  | 'Notes'
-  | 'System'
-  | 'Search'
-  | 'Screen'
-  | 'Launch'
-  | 'Agent';
-export type ToolArgumentDescriptions = Record<string, string>;
+export type PermissionTier = 0 | 1 | 2 | 3
+export type ToolModule = 'Files' | 'Terminal' | 'Notes' | 'System' | 'Search' | 'Screen' | 'Launch' | 'Agent'
+export type ToolArgumentDescriptions = Record<string, string>
 
 export interface ToolDefinition {
-  name: string;
-  module: ToolModule;
-  description: string;
-  args: ToolArgumentDescriptions;
-  internal?: boolean;
+  name: string
+  module: ToolModule
+  description: string
+  args: ToolArgumentDescriptions
+  internal?: boolean
 }
 
-export type ToolPresentationKind = 'command' | 'edit' | 'read' | 'search' | 'other';
+export type ToolPresentationKind = 'command' | 'edit' | 'read' | 'search' | 'other'
 
 export interface ToolPresentation {
-  kind: ToolPresentationKind;
-  icon: string;
-  moduleIcon: string;
-  language: string;
-  actionVerb?: string;
+  kind: ToolPresentationKind
+  icon: string
+  moduleIcon: string
+  language: string
+  actionVerb?: string
 }
 
 export interface ToolCatalogEntry extends ToolDefinition {
-  aliases: string[];
-  timeoutMs: number;
-  risky: boolean;
-  permissionKey: string | null;
-  lean: boolean;
-  subAgentMinTier: number | null;
-  subAgentNative: boolean;
-  presentation: ToolPresentation;
+  aliases: string[]
+  timeoutMs: number
+  risky: boolean
+  permissionKey: string | null
+  lean: boolean
+  subAgentMinTier: number | null
+  subAgentNative: boolean
+  presentation: ToolPresentation
 }
 
 export interface CatalogToolResolution {
-  requested: string;
-  resolved: string;
-  matchedBy: 'none' | 'exact' | 'case_insensitive' | 'alias';
+  requested: string
+  resolved: string
+  matchedBy: 'none' | 'exact' | 'case_insensitive' | 'alias'
 }
 
 export interface SubAgentToolDefinition {
-  name: string;
-  description: string;
-  args: ToolArgumentDescriptions;
+  name: string
+  description: string
+  args: ToolArgumentDescriptions
 }
 
-export const DEFAULT_AGENT_READ_LINE_COUNT = 950;
-export const DEFAULT_TOOL_TIMEOUT_MS = 25000;
+export const DEFAULT_AGENT_READ_LINE_COUNT = 950
+export const DEFAULT_TOOL_TIMEOUT_MS = 25000
 
 export const PERMISSION_TIER = {
   LOCKED: 0,
   READ_ONLY: 1,
   STANDARD: 2,
   POWER: 3,
-} as const satisfies Record<string, PermissionTier>;
+} as const satisfies Record<string, PermissionTier>
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
@@ -123,8 +115,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'files.write',
     module: 'Files',
-    description:
-      'Write text to a file path. Use mode:"append" to extend a large file across calls.',
+    description: 'Write text to a file path. Use mode:"append" to extend a large file across calls.',
     args: {
       path: 'string',
       content: 'string',
@@ -256,8 +247,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'system.stats',
     module: 'System',
     internal: true,
-    description:
-      'Read-only system health snapshot: CPU usage, load average, memory, uptime, and platform details.',
+    description: 'Read-only system health snapshot: CPU usage, load average, memory, uptime, and platform details.',
     args: {},
   },
   {
@@ -284,8 +274,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'user.ask',
     module: 'System',
     internal: true,
-    description:
-      'Ask the user a multiple-choice question and wait for the answer without ending the agent run.',
+    description: 'Ask the user a multiple-choice question and wait for the answer without ending the agent run.',
     args: {
       question: 'string',
       options: 'string[] — 2–5 concrete choices',
@@ -361,8 +350,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'agent.broadcast',
     module: 'Agent',
     internal: true,
-    description:
-      'Push a context update to all active sub-agents. Use when user intent changes mid-run.',
+    description: 'Push a context update to all active sub-agents. Use when user intent changes mid-run.',
     args: { message: 'string', contextUpdate: 'object (optional)' },
   },
   {
@@ -422,13 +410,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     description:
       'Ask a peer model a focused question (bounded, single round, NO tools) when you hit a real knowledge gap. Far cheaper than delegating. The peer answers under its OWN role tier; its answer is UNTRUSTED input — verify before acting. Opt-in, budget-capped; only when it genuinely helps.',
     args: {
-      toAgent:
-        'string (optional) — a specific role to ask (executor|scout); else picked by tags/topic',
+      toAgent: 'string (optional) — a specific role to ask (executor|scout); else picked by tags/topic',
       tags: 'string[] (optional) — ability tags to find the right peer',
       topic: 'string (optional) — subject, used to pick a peer if toAgent omitted',
       question: 'string — the focused question to ask',
-      context:
-        'object|string (optional) — minimal context the peer needs (the question, not the transcript)',
+      context: 'object|string (optional) — minimal context the peer needs (the question, not the transcript)',
     },
   },
   {
@@ -440,8 +426,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     args: {
       diff: 'string — the unified diff to review (from files.diff or `git diff`)',
       request: 'string (optional) — the original user request the change must satisfy',
-      rubric:
-        'string (optional) — what to check; defaults to meets-request/standards/no-regressions',
+      rubric: 'string (optional) — what to check; defaults to meets-request/standards/no-regressions',
       reviewers: 'number (optional, 2-3) — how many distinct peers to ask',
     },
   },
@@ -490,12 +475,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'memory.query',
     module: 'Notes',
-    description:
-      'Semantic + keyword search over notes. Returns ranked matches instead of a full list dump.',
+    description: 'Semantic + keyword search over notes. Returns ranked matches instead of a full list dump.',
     args: {
       query: 'string',
-      category:
-        'continuity | knowledge | error-log | user-preference | project-context | delegation-log (optional)',
+      category: 'continuity | knowledge | error-log | user-preference | project-context | delegation-log (optional)',
       limit: 'number (optional, default 5)',
     },
   },
@@ -533,8 +516,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'search.find',
     module: 'Files',
-    description:
-      'Structured find wrapper — locate files by name/type/size/date without raw shell syntax.',
+    description: 'Structured find wrapper — locate files by name/type/size/date without raw shell syntax.',
     args: {
       path: 'string',
       name: 'string (optional, glob e.g. "*.config.js")',
@@ -551,8 +533,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'search.fd',
     module: 'Files',
-    description:
-      'Fast modern find alternative (fd-find). Falls back to search.find if fd not installed.',
+    description: 'Fast modern find alternative (fd-find). Falls back to search.find if fd not installed.',
     args: {
       pattern: 'string (regex)',
       path: 'string (optional)',
@@ -643,8 +624,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'skills.search',
     module: 'System',
     internal: true,
-    description:
-      'Fuzzy search over all skills in the library. Use to discover and load relevant skills mid-run.',
+    description: 'Fuzzy search over all skills in the library. Use to discover and load relevant skills mid-run.',
     args: {
       query: 'string',
       agentTarget: 'claude | deepseek | local | all (optional)',
@@ -686,17 +666,17 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       cwd: 'string (optional)',
     },
   },
-];
+]
 
 const TOOL_BY_NAME_LOWER = TOOL_DEFINITIONS.reduce<Record<string, string>>((map, tool) => {
-  map[String(tool.name).toLowerCase()] = tool.name;
-  return map;
-}, {});
+  map[String(tool.name).toLowerCase()] = tool.name
+  return map
+}, {})
 
 export const TOOL_BY_NAME = TOOL_DEFINITIONS.reduce<Record<string, ToolDefinition>>((map, tool) => {
-  map[tool.name] = tool;
-  return map;
-}, {});
+  map[tool.name] = tool
+  return map
+}, {})
 
 const TOOL_ALIAS_MAP: Record<string, string> = {
   read_file: 'files.read',
@@ -766,7 +746,7 @@ const TOOL_ALIAS_MAP: Record<string, string> = {
   request_approval: 'approval.request',
   approval_request: 'approval.request',
   ask_permission: 'approval.request',
-};
+}
 
 const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
   'terminal.exec': 90000,
@@ -789,7 +769,7 @@ const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
   'artifact.create': 30000,
   'system.stats': 15000,
   'system.processes': 15000,
-};
+}
 
 const RISKY_TOOL_NAMES = new Set<string>([
   'files.write',
@@ -798,7 +778,7 @@ const RISKY_TOOL_NAMES = new Set<string>([
   'terminal.exec',
   'launch.run',
   'notes.delete',
-]);
+])
 
 const TOOL_PERMISSION_KEYS: Record<string, string> = {
   'files.list': 'file_read',
@@ -811,7 +791,7 @@ const TOOL_PERMISSION_KEYS: Record<string, string> = {
   'files.edit': 'file_write',
   'terminal.exec': 'terminal_exec',
   'launch.run': 'terminal_exec',
-};
+}
 
 const LEAN_TOOL_NAMES = new Set<string>([
   'terminal.exec',
@@ -861,7 +841,7 @@ const LEAN_TOOL_NAMES = new Set<string>([
   'trace.log',
   'resources.list',
   'context.summarize',
-]);
+])
 
 const SUB_AGENT_MIN_TIER: Record<string, number> = {
   'notes.list': PERMISSION_TIER.LOCKED,
@@ -890,7 +870,7 @@ const SUB_AGENT_MIN_TIER: Record<string, number> = {
   'agent.find': PERMISSION_TIER.LOCKED,
   'agent.consult': PERMISSION_TIER.LOCKED,
   'agent.review': PERMISSION_TIER.LOCKED,
-};
+}
 
 const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   'files.list': {
@@ -912,8 +892,7 @@ const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   },
   'rag.retrieve': {
     name: 'rag.retrieve',
-    description:
-      'Retrieve top filesystem passages with semantic search and temporary query-time chunking.',
+    description: 'Retrieve top filesystem passages with semantic search and temporary query-time chunking.',
     args: {
       query: 'string',
       maxFiles: 'number (optional)',
@@ -1019,8 +998,7 @@ const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   // of relying only on the statically pre-baked block. Advisory only: no files/terminal.
   'skills.search': {
     name: 'skills.search',
-    description:
-      'Fuzzy search over all skills in the library. Use to discover and load relevant skills mid-run.',
+    description: 'Fuzzy search over all skills in the library. Use to discover and load relevant skills mid-run.',
     args: {
       query: 'string',
       type: 'procedure | domain | guard | reflex | delegate (optional)',
@@ -1037,8 +1015,7 @@ const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   },
   'skills.offload': {
     name: 'skills.offload',
-    description:
-      'Drop one or more active skills you have decided are no longer relevant, freeing prompt budget.',
+    description: 'Drop one or more active skills you have decided are no longer relevant, freeing prompt budget.',
     args: {
       ids: 'string[] (skill ids to offload)',
       reason: 'string (optional)',
@@ -1048,8 +1025,7 @@ const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   // at dispatch). Advisory only: no files/terminal.
   'agent.find': {
     name: 'agent.find',
-    description:
-      'Find a peer model that knows more about a subject (tag/topic match; no model call).',
+    description: 'Find a peer model that knows more about a subject (tag/topic match; no model call).',
     args: { tags: 'string[] (optional)', topic: 'string (optional)' },
   },
   'agent.consult': {
@@ -1066,11 +1042,10 @@ const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = {
   },
   'agent.review': {
     name: 'agent.review',
-    description:
-      'Get a multi-model review of a code diff (2–3 different peers). Use after writing non-trivial code.',
+    description: 'Get a multi-model review of a code diff (2–3 different peers). Use after writing non-trivial code.',
     args: { diff: 'string', request: 'string (optional)' },
   },
-};
+}
 
 const TOOL_PRESENTATION: Record<string, Omit<ToolPresentation, 'moduleIcon'>> = {
   'cloud.consult': {
@@ -1137,7 +1112,7 @@ const TOOL_PRESENTATION: Record<string, Omit<ToolPresentation, 'moduleIcon'>> = 
     language: 'json',
     actionVerb: 'Listed',
   },
-};
+}
 
 const MODULE_PRESENTATION: Record<string, { icon: string }> = {
   files: { icon: 'files' },
@@ -1148,35 +1123,32 @@ const MODULE_PRESENTATION: Record<string, { icon: string }> = {
   launch: { icon: 'launch' },
   todo: { icon: 'todo' },
   trace: { icon: 'trace' },
-};
+}
 
-export const TOOL_CATALOG = TOOL_DEFINITIONS.reduce<Record<string, ToolCatalogEntry>>(
-  (map, definition) => {
-    const name = definition.name;
-    map[name] = {
-      ...definition,
-      aliases: Object.keys(TOOL_ALIAS_MAP).filter((alias) => TOOL_ALIAS_MAP[alias] === name),
-      timeoutMs: getToolTimeoutMs(name),
-      risky: RISKY_TOOL_NAMES.has(name),
-      permissionKey: TOOL_PERMISSION_KEYS[name] || null,
-      lean: LEAN_TOOL_NAMES.has(name),
-      subAgentMinTier: SUB_AGENT_MIN_TIER[name] ?? null,
-      subAgentNative: Boolean(SUB_AGENT_NATIVE_DEFINITIONS[name]),
-      presentation: getToolPresentation(name),
-    };
-    return map;
-  },
-  {},
-);
+export const TOOL_CATALOG = TOOL_DEFINITIONS.reduce<Record<string, ToolCatalogEntry>>((map, definition) => {
+  const name = definition.name
+  map[name] = {
+    ...definition,
+    aliases: Object.keys(TOOL_ALIAS_MAP).filter((alias) => TOOL_ALIAS_MAP[alias] === name),
+    timeoutMs: getToolTimeoutMs(name),
+    risky: RISKY_TOOL_NAMES.has(name),
+    permissionKey: TOOL_PERMISSION_KEYS[name] || null,
+    lean: LEAN_TOOL_NAMES.has(name),
+    subAgentMinTier: SUB_AGENT_MIN_TIER[name] ?? null,
+    subAgentNative: Boolean(SUB_AGENT_NATIVE_DEFINITIONS[name]),
+    presentation: getToolPresentation(name),
+  }
+  return map
+}, {})
 
 // Returns tool definitions without requiring callers to know where or how it is stored.
 export function getToolDefinitions(): ToolDefinition[] {
-  return TOOL_DEFINITIONS.slice();
+  return TOOL_DEFINITIONS.slice()
 }
 
 // Returns tool catalog entry without requiring callers to know where or how it is stored.
 export function getToolCatalogEntry(toolName: unknown): ToolCatalogEntry | null {
-  return TOOL_CATALOG[String(toolName || '').trim()] || null;
+  return TOOL_CATALOG[String(toolName || '').trim()] || null
 }
 
 // Converts tool alias key into the canonical representation expected by later code.
@@ -1185,7 +1157,7 @@ export function normalizeToolAliasKey(value: unknown): string {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9.]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+    .replace(/^_+|_+$/g, '')
 }
 
 /**
@@ -1194,65 +1166,62 @@ export function normalizeToolAliasKey(value: unknown): string {
  */
 
 export function resolveCatalogToolRequest(value: unknown): CatalogToolResolution {
-  const requested = String(value || '').trim();
-  if (!requested) return { requested, resolved: '', matchedBy: 'none' };
+  const requested = String(value || '').trim()
+  if (!requested) return { requested, resolved: '', matchedBy: 'none' }
 
   if (TOOL_BY_NAME[requested]) {
-    return { requested, resolved: requested, matchedBy: 'exact' };
+    return { requested, resolved: requested, matchedBy: 'exact' }
   }
 
-  const caseInsensitive = TOOL_BY_NAME_LOWER[requested.toLowerCase()];
+  const caseInsensitive = TOOL_BY_NAME_LOWER[requested.toLowerCase()]
   if (caseInsensitive) {
     return {
       requested,
       resolved: caseInsensitive,
       matchedBy: 'case_insensitive',
-    };
+    }
   }
 
-  const alias = TOOL_ALIAS_MAP[normalizeToolAliasKey(requested)];
+  const alias = TOOL_ALIAS_MAP[normalizeToolAliasKey(requested)]
   if (alias && TOOL_BY_NAME[alias]) {
-    return { requested, resolved: alias, matchedBy: 'alias' };
+    return { requested, resolved: alias, matchedBy: 'alias' }
   }
 
-  return { requested, resolved: '', matchedBy: 'none' };
+  return { requested, resolved: '', matchedBy: 'none' }
 }
 
 // Returns tool timeout ms without requiring callers to know where or how it is stored.
 export function getToolTimeoutMs(toolName: unknown): number {
-  const key = String(toolName || '').trim();
-  if (!key) return DEFAULT_TOOL_TIMEOUT_MS;
+  const key = String(toolName || '').trim()
+  if (!key) return DEFAULT_TOOL_TIMEOUT_MS
 
-  const exact = TOOL_TIMEOUT_MS_BY_NAME[key];
-  if (Number.isFinite(Number(exact)) && Number(exact) > 0) return Number(exact);
-  if (key.startsWith('files.')) return 30000;
-  if (key.startsWith('notes.')) return 15000;
-  if (key.startsWith('skills.')) return 20000;
-  return DEFAULT_TOOL_TIMEOUT_MS;
+  const exact = TOOL_TIMEOUT_MS_BY_NAME[key]
+  if (Number.isFinite(Number(exact)) && Number(exact) > 0) return Number(exact)
+  if (key.startsWith('files.')) return 30000
+  if (key.startsWith('notes.')) return 15000
+  if (key.startsWith('skills.')) return 20000
+  return DEFAULT_TOOL_TIMEOUT_MS
 }
 
 // Returns tool permission key without requiring callers to know where or how it is stored.
 export function getToolPermissionKey(toolName: unknown): string | null {
-  return TOOL_PERMISSION_KEYS[String(toolName || '').trim()] || null;
+  return TOOL_PERMISSION_KEYS[String(toolName || '').trim()] || null
 }
 
 // Evaluates whether is tool risky for the supplied value and current runtime state.
 export function isToolRisky(toolName: unknown): boolean {
-  return RISKY_TOOL_NAMES.has(String(toolName || '').trim());
+  return RISKY_TOOL_NAMES.has(String(toolName || '').trim())
 }
 
 // Evaluates whether is lean tool for the supplied value and current runtime state.
 export function isLeanTool(toolName: unknown): boolean {
-  return LEAN_TOOL_NAMES.has(String(toolName || '').trim());
+  return LEAN_TOOL_NAMES.has(String(toolName || '').trim())
 }
 
 // Returns sub agent min tier without requiring callers to know where or how it is stored.
-export function getSubAgentMinTier(
-  toolName: unknown,
-  fallback: number = PERMISSION_TIER.STANDARD,
-): number {
-  const value = SUB_AGENT_MIN_TIER[String(toolName || '').trim()];
-  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+export function getSubAgentMinTier(toolName: unknown, fallback: number = PERMISSION_TIER.STANDARD): number {
+  const value = SUB_AGENT_MIN_TIER[String(toolName || '').trim()]
+  return Number.isFinite(Number(value)) ? Number(value) : fallback
 }
 
 // Returns sub agent native tool definitions without requiring callers to know where or how it is
@@ -1261,33 +1230,32 @@ export function getSubAgentNativeToolDefinitions(
   availableNames: readonly unknown[],
   forbiddenNames: readonly unknown[] = [],
 ): SubAgentToolDefinition[] {
-  const available = Array.isArray(availableNames) ? availableNames : [];
+  const available = Array.isArray(availableNames) ? availableNames : []
   const forbidden = new Set<string>(
     (Array.isArray(forbiddenNames) ? forbiddenNames : []).map((name) => String(name || '').trim()),
-  );
+  )
   return available
     .map((name) => SUB_AGENT_NATIVE_DEFINITIONS[String(name || '').trim()])
     .filter(
-      (definition): definition is SubAgentToolDefinition =>
-        Boolean(definition) && !forbidden.has(definition.name),
-    );
+      (definition): definition is SubAgentToolDefinition => Boolean(definition) && !forbidden.has(definition.name),
+    )
 }
 
 // Every tool a delegated sub-agent can natively call. Used to default the advertised tool set when
 // a delegation leaves stp.tools.available empty (empty whitelist = all permitted, subject to tier).
 export function listSubAgentNativeToolNames(): string[] {
-  return Object.keys(SUB_AGENT_NATIVE_DEFINITIONS);
+  return Object.keys(SUB_AGENT_NATIVE_DEFINITIONS)
 }
 
 // Returns tool presentation without requiring callers to know where or how it is stored.
 export function getToolPresentation(toolName: unknown): ToolPresentation {
-  const name = String(toolName || '').trim();
-  const moduleName = name.split('.')[0].toLowerCase();
+  const name = String(toolName || '').trim()
+  const moduleName = name.split('.')[0].toLowerCase()
   const modulePresentation = MODULE_PRESENTATION[moduleName] || {
     icon: 'tool',
-  };
-  const exact = TOOL_PRESENTATION[name];
-  if (exact) return { moduleIcon: modulePresentation.icon, ...exact };
+  }
+  const exact = TOOL_PRESENTATION[name]
+  if (exact) return { moduleIcon: modulePresentation.icon, ...exact }
 
   if (name === 'power.script' || name.startsWith('terminal.')) {
     return {
@@ -1295,7 +1263,7 @@ export function getToolPresentation(toolName: unknown): ToolPresentation {
       icon: 'command',
       moduleIcon: 'terminal',
       language: 'bash',
-    };
+    }
   }
   if (name.startsWith('search.') || name === 'web.fetch') {
     return {
@@ -1303,7 +1271,7 @@ export function getToolPresentation(toolName: unknown): ToolPresentation {
       icon: 'search',
       moduleIcon: modulePresentation.icon,
       language: 'json',
-    };
+    }
   }
 
   return {
@@ -1311,5 +1279,5 @@ export function getToolPresentation(toolName: unknown): ToolPresentation {
     icon: modulePresentation.icon,
     moduleIcon: modulePresentation.icon,
     language: 'json',
-  };
+  }
 }

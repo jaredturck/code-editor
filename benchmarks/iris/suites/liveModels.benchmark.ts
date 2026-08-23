@@ -1,6 +1,6 @@
 /** Benchmarks IRIS's real local CLIP and Ollama models through production code paths. */
 
-import { callLocalLLM } from '../../../src/platform/providers/localProvider.js';
+import { callLocalLLM } from '../../../src/platform/providers/localProvider.js'
 import {
   createClipRawImages,
   embedClipPreparedImages,
@@ -8,84 +8,75 @@ import {
   prepareClipPreparedVisionInputs,
   prepareClipVisionInputs,
   runClipVisionModel,
-} from '../../../backend/desktopBridge/services/fileClipService.js';
+} from '../../../backend/desktopBridge/services/fileClipService.js'
 import {
   FILE_ANALYSIS_MODEL,
   FILE_EMBEDDING_MODEL,
   FILE_OLLAMA_URL,
-} from '../../../backend/desktopBridge/services/fileSemanticService.js';
+} from '../../../backend/desktopBridge/services/fileSemanticService.js'
 import {
   LAUNCHER_EMBEDDING_MODEL,
   LAUNCHER_OLLAMA_URL,
-} from '../../../backend/desktopBridge/services/launcherSemanticService.js';
-import { prepareBenchmarkModels, preparedModelAvailable } from '../core/localModels.js';
-import type { BenchmarkDefinition, BenchmarkSkip } from '../core/types.js';
+} from '../../../backend/desktopBridge/services/launcherSemanticService.js'
+import { prepareBenchmarkModels, preparedModelAvailable } from '../core/localModels.js'
+import type { BenchmarkDefinition, BenchmarkSkip } from '../core/types.js'
 
 interface ClipContext {
-  runtime: Awaited<ReturnType<typeof getClipRuntime>>;
+  runtime: Awaited<ReturnType<typeof getClipRuntime>>
   prepared: Array<{
-    data: Uint8Array;
-    width: number;
-    height: number;
-    channels: 3;
-  }>;
-  rawImages: unknown[];
-  inputs?: unknown;
+    data: Uint8Array
+    width: number
+    height: number
+    channels: 3
+  }>
+  rawImages: unknown[]
+  inputs?: unknown
 }
 
 interface OllamaContext {
-  model: string;
-  input: string[];
+  model: string
+  input: string[]
 }
 
 /** Creates one deterministic RGB batch after model preparation has completed outside timing. */
-async function clipContext(
-  batchSize: number,
-  prepareInputs: boolean,
-): Promise<ClipContext | BenchmarkSkip> {
-  const models = await prepareBenchmarkModels();
+async function clipContext(batchSize: number, prepareInputs: boolean): Promise<ClipContext | BenchmarkSkip> {
+  const models = await prepareBenchmarkModels()
   if (!preparedModelAvailable(models, 'Xenova/clip-vit-base-patch32')) {
-    const model = models.find((entry) => entry.modelId === 'Xenova/clip-vit-base-patch32');
+    const model = models.find((entry) => entry.modelId === 'Xenova/clip-vit-base-patch32')
     return {
       skip: true,
       reason: model?.errorMessage || 'CLIP is unavailable.',
-    };
+    }
   }
-  const runtime = await getClipRuntime();
+  const runtime = await getClipRuntime()
   const prepared = Array.from({ length: batchSize }, (_, index) => ({
     data: new Uint8Array(224 * 224 * 3).fill((index * 17) % 251),
     width: 224,
     height: 224,
     channels: 3 as const,
-  }));
-  const rawImages = createClipRawImages(prepared, runtime.RawImage);
-  const inputs = prepareInputs
-    ? await prepareClipPreparedVisionInputs(prepared, runtime)
-    : undefined;
-  return { runtime, prepared, rawImages, inputs };
+  }))
+  const rawImages = createClipRawImages(prepared, runtime.RawImage)
+  const inputs = prepareInputs ? await prepareClipPreparedVisionInputs(prepared, runtime) : undefined
+  return { runtime, prepared, rawImages, inputs }
 }
 
 /** Creates a local Ollama batch or returns a visible unavailable-model result. */
-async function ollamaContext(
-  model: string,
-  batchSize: number,
-): Promise<OllamaContext | BenchmarkSkip> {
-  const models = await prepareBenchmarkModels();
+async function ollamaContext(model: string, batchSize: number): Promise<OllamaContext | BenchmarkSkip> {
+  const models = await prepareBenchmarkModels()
   if (!preparedModelAvailable(models, model)) {
-    const record = models.find((entry) => entry.modelId === model);
+    const record = models.find((entry) => entry.modelId === model)
     return {
       skip: true,
       reason: record?.errorMessage || `Local model ${model} is unavailable.`,
-    };
+    }
   }
   return {
     model,
     input: Array.from(
       { length: batchSize },
-      (_, index) =>
-        `IRIS local benchmark input ${index}. ${'semantic filesystem content '.repeat(18)}`,
+      (_, index) => `IRIS local benchmark input ${index}. ${'semantic filesystem content '.repeat(18)}`,
     ),
-  };
+  }
 }
 
 /** Sends one real embedding batch to the local Ollama service. */
@@ -100,14 +91,14 @@ async function embedWithOllama(context: OllamaContext): Promise<unknown> {
       keep_alive: '10m',
     }),
     signal: AbortSignal.timeout(10 * 60 * 1000),
-  });
-  if (!response.ok) throw new Error(`Ollama embedding returned HTTP ${response.status}`);
-  return response.json();
+  })
+  if (!response.ok) throw new Error(`Ollama embedding returned HTTP ${response.status}`)
+  return response.json()
 }
 
 /** Builds the production-relevant CLIP processor, inference, and end-to-end batch matrix. */
 function clipBenchmarks(): BenchmarkDefinition<any>[] {
-  const definitions: BenchmarkDefinition<any>[] = [];
+  const definitions: BenchmarkDefinition<any>[] = []
   for (const batchSize of [32, 128, 256, 512]) {
     definitions.push(
       {
@@ -155,7 +146,7 @@ function clipBenchmarks(): BenchmarkDefinition<any>[] {
         setup: () => clipContext(batchSize, true),
         run: (context) => runClipVisionModel(context.inputs, context.runtime.visionModel),
       },
-    );
+    )
   }
   for (const batchSize of [32, 128, 256, 512]) {
     definitions.push({
@@ -172,37 +163,34 @@ function clipBenchmarks(): BenchmarkDefinition<any>[] {
       tags: ['local-model'],
       setup: () => clipContext(batchSize, false),
       run: (context) => embedClipPreparedImages(context.prepared),
-    });
+    })
   }
-  return definitions;
+  return definitions
 }
 
 /** Measures only local models; no cloud-provider transport is present in this suite. */
 export const liveModelBenchmarks: BenchmarkDefinition<any>[] = [
   ...clipBenchmarks(),
-  ...[1, 32, 128].map(
-    (batchSize): BenchmarkDefinition<any> => ({
-      id: `models.ollama.minilm.${batchSize}`,
-      suite: 'Real local models',
-      name: `Ollama MiniLM embedding · batch ${batchSize}`,
-      description:
-        'Measures the complete loopback HTTP and real Ollama embedding path used by text, document, and PDF indexing.',
-      variantKey: `batch=${batchSize}`,
-      parameters: { batchSize, model: FILE_EMBEDDING_MODEL },
-      iterations: batchSize >= 128 ? 4 : 6,
-      warmupIterations: 1,
-      operationsPerIteration: batchSize,
-      tags: ['local-model'],
-      setup: () => ollamaContext(FILE_EMBEDDING_MODEL, batchSize),
-      run: embedWithOllama,
-    }),
-  ),
+  ...[1, 32, 128].map((batchSize): BenchmarkDefinition<any> => ({
+    id: `models.ollama.minilm.${batchSize}`,
+    suite: 'Real local models',
+    name: `Ollama MiniLM embedding · batch ${batchSize}`,
+    description:
+      'Measures the complete loopback HTTP and real Ollama embedding path used by text, document, and PDF indexing.',
+    variantKey: `batch=${batchSize}`,
+    parameters: { batchSize, model: FILE_EMBEDDING_MODEL },
+    iterations: batchSize >= 128 ? 4 : 6,
+    warmupIterations: 1,
+    operationsPerIteration: batchSize,
+    tags: ['local-model'],
+    setup: () => ollamaContext(FILE_EMBEDDING_MODEL, batchSize),
+    run: embedWithOllama,
+  })),
   {
     id: 'models.ollama.launcher-embedding.32',
     suite: 'Real local models',
     name: 'Ollama launcher embedding · batch 32',
-    description:
-      'Measures the real local Qwen launcher embedding model through the loopback Ollama endpoint.',
+    description: 'Measures the real local Qwen launcher embedding model through the loopback Ollama endpoint.',
     variantKey: 'batch=32',
     parameters: { batchSize: 32, model: LAUNCHER_EMBEDDING_MODEL },
     iterations: 5,
@@ -221,10 +209,9 @@ export const liveModelBenchmarks: BenchmarkDefinition<any>[] = [
           keep_alive: '10m',
         }),
         signal: AbortSignal.timeout(10 * 60 * 1000),
-      });
-      if (!response.ok)
-        throw new Error(`Ollama launcher embedding returned HTTP ${response.status}`);
-      return response.json();
+      })
+      if (!response.ok) throw new Error(`Ollama launcher embedding returned HTTP ${response.status}`)
+      return response.json()
     },
   },
   {
@@ -255,9 +242,9 @@ export const liveModelBenchmarks: BenchmarkDefinition<any>[] = [
           keep_alive: '10m',
         }),
         signal: AbortSignal.timeout(10 * 60 * 1000),
-      });
-      if (!response.ok) throw new Error(`Ollama local chat returned HTTP ${response.status}`);
-      return response.json();
+      })
+      if (!response.ok) throw new Error(`Ollama local chat returned HTTP ${response.status}`)
+      return response.json()
     },
   },
   {
@@ -284,4 +271,4 @@ export const liveModelBenchmarks: BenchmarkDefinition<any>[] = [
         fetch,
       ),
   },
-];
+]
