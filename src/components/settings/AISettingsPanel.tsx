@@ -274,7 +274,7 @@ function AISettingsPanel({
     set_provider_messages((current) => ({ ...current, [slot]: 'Credential removed.' }))
     set_extra_key_slots((current) => ({
       ...current,
-      [provider_id]: (current[provider.id] || []).filter((value) => value !== key_id),
+      [provider_id]: (current[provider_id] || []).filter((value) => value !== key_id),
     }))
     set_credential_revision((value) => value + 1)
   }
