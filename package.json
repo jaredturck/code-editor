@@ -58,7 +58,7 @@
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
     "yaml": "^2.9.0",
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "3.8.1",
     "@mozilla/readability": "^0.6.0",
     "clsx": "^2.1.1",
     "duck-duck-scrape": "^2.2.7",
@@ -66,7 +66,7 @@
     "fuse.js": "^7.5.0",
     "jsdom": "^30.0.1",
     "saxes": "^6.0.0",
-    "sharp": "npm:@janhapke/sharp-electron@0.35.3-electron.1",
+    "sharp": "0.34.5",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^3.0.2",
     "yauzl": "^2.10.0",
@@ -81,7 +81,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
     "concurrently": "^10.0.3",
-    "electron": "^43.4.0",
+    "electron": "^31.0.2",
     "oxlint": "^1.69.0",
     "prettier": "3.9.4",
     "vite": "^8.2.2",
@@ -93,10 +93,6 @@
   },
   "main": "dist-electron/main.cjs",
   "overrides": {
-    "onnxruntime-node": "1.27.0",
-    "sharp": {
-      ".": "$sharp",
-      "sharp": "0.35.3"
-    }
+    "onnxruntime-node": "1.21.0"
   }
 }
