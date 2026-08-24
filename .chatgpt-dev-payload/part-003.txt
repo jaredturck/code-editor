@@ -1,0 +1,192 @@
+@@ -77,6 +82,8 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+   root_path_ref.current = root_path
+   nodes_ref.current = nodes
+   expanded_paths_ref.current = expanded_paths
++  selected_path_ref.current = selected_path
++  selected_paths_ref.current = selected_paths
+   on_notice_ref.current = onNotice
+ 
+   const load_directory = async (directory_path: string) => {
+@@ -220,7 +227,10 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     set_root_path(folder_path)
+     set_nodes(next_nodes)
+     set_expanded_paths(new Set([folder_path]))
++    selected_path_ref.current = folder_path
+     set_selected_path(folder_path)
++    selected_paths_ref.current = new Set([folder_path])
++    set_selected_paths(new Set([folder_path]))
+     set_clipboard(null)
+     set_pending_conflict(null)
+     directory_versions_ref.current.clear()
+@@ -253,26 +263,6 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     }
+   }
+ 
+-  const close_workspace = () => {
+-    window.editor_api.workspace.unwatch()
+-
+-    if (refresh_timeout_ref.current !== null) {
+-      window.clearTimeout(refresh_timeout_ref.current)
+-      refresh_timeout_ref.current = null
+-    }
+-    root_path_ref.current = null
+-    nodes_ref.current = new Map()
+-    expanded_paths_ref.current = new Set()
+-    set_root_path(null)
+-    set_nodes(new Map())
+-    set_expanded_paths(new Set())
+-    set_selected_path(null)
+-    set_clipboard(null)
+-    set_pending_conflict(null)
+-    directory_versions_ref.current.clear()
+-    pending_refresh_paths_ref.current.clear()
+-  }
+-
+   const toggle_folder = async (folder_path: string) => {
+     const node = nodes_ref.current.get(folder_path)
+ 
+@@ -309,6 +299,76 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     set_expanded_paths(next_expanded_paths)
+   }
+ 
++  const set_selection = (paths: Iterable<string>, focused_path: string | null) => {
++    selection_version_ref.current += 1
++    const next_selected_paths = new Set(paths)
++    selected_path_ref.current = focused_path
++    selected_paths_ref.current = next_selected_paths
++    set_selected_paths(next_selected_paths)
++    set_selected_path(focused_path)
++  }
++
++  const select_path = (target_path: string) => {
++    set_selection([target_path], target_path)
++  }
++
++  const select_paths = (target_paths: Iterable<string>, focused_path: string) => {
++    set_selection(target_paths, focused_path)
++  }
++
++  const toggle_path_selection = (target_path: string) => {
++    const next_selected_paths = new Set(selected_paths_ref.current)
++
++    if (next_selected_paths.has(target_path)) {
++      next_selected_paths.delete(target_path)
++    } else {
++      next_selected_paths.add(target_path)
++    }
++
++    set_selection(next_selected_paths, target_path)
++  }
++
++  const select_subtree = async (target_path: string) => {
++    const current_root_path = root_path_ref.current
++    const target_node = nodes_ref.current.get(target_path)
++
++    if (!current_root_path || !target_node || target_node.kind !== 'directory') {
++      return
++    }
++
++    set_selection([target_path], target_path)
++    const selection_version = selection_version_ref.current
++    const next_selected_paths = new Set([target_path])
++    const pending_directories = [target_path]
++
++    try {
++      while (pending_directories.length > 0) {
++        const directory_batch = pending_directories.splice(0, 8)
++        const entry_batches = await Promise.all(
++          directory_batch.map((directory_path) =>
++            window.editor_api.workspace.read_directory(current_root_path, directory_path),
++          ),
++        )
++
++        for (const entries of entry_batches) {
++          for (const entry of entries) {
++            next_selected_paths.add(entry.path)
++
++            if (entry.kind === 'directory' && !entry.is_symlink) {
++              pending_directories.push(entry.path)
++            }
++          }
++        }
++      }
++
++      if (selection_version === selection_version_ref.current) {
++        set_selection(next_selected_paths, target_path)
++      }
++    } catch (error) {
++      onNotice(error instanceof Error ? error.message : `Unable to select everything inside ${target_node.name}.`)
++    }
++  }
++
+   const get_target_directory = (target_path: string | null) => {
+     const current_root_path = root_path_ref.current
+ 
+@@ -333,7 +393,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+       expanded_paths_ref.current = next_expanded_paths
+       set_expanded_paths(next_expanded_paths)
+       await load_directory(parent_path)
+-      set_selected_path(created_entry.path)
++      set_selection([created_entry.path], created_entry.path)
+ 
+       if (kind === 'file') {
+         onOpenFile(created_entry.path)
+@@ -359,10 +419,14 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+       const next_nodes = remap_workspace_path(nodes_ref.current, source_path, renamed_entry.path)
+       const next_expanded_paths = remap_workspace_path_set(expanded_paths_ref.current, source_path, renamed_entry.path)
+ 
++      const next_selected_paths = remap_workspace_path_set(selected_paths_ref.current, source_path, renamed_entry.path)
+       nodes_ref.current = next_nodes
+       expanded_paths_ref.current = next_expanded_paths
++      selected_paths_ref.current = next_selected_paths
+       set_nodes(next_nodes)
+       set_expanded_paths(next_expanded_paths)
++      set_selected_paths(next_selected_paths)
++      selected_path_ref.current = renamed_entry.path
+       set_selected_path(renamed_entry.path)
+       onPathMoved(source_path, renamed_entry.path, source_node.kind === 'directory')
+       await load_directory(renamed_entry.parent_path ?? current_root_path)
+@@ -373,40 +437,67 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     }
+   }
+ 
+-  const delete_entry = async (target_path: string) => {
++  const delete_entries = async (target_paths: Iterable<string>) => {
+     const current_root_path = root_path_ref.current
+-    const target_node = nodes_ref.current.get(target_path)
+ 
+-    if (!current_root_path || !target_node || target_path === current_root_path) {
++    if (!current_root_path) {
++      return false
++    }
++
++    const delete_paths = get_workspace_top_level_paths(target_paths).filter((target_path) => target_path !== current_root_path)
++
++    if (delete_paths.length === 0) {
+       return false
+     }
+ 
++    const parent_paths = new Set<string>()
++
+     try {
+-      await window.editor_api.workspace.trash_entry(current_root_path, target_path)
+-      const next_nodes = remove_workspace_node(nodes_ref.current, target_path)
+-      const next_expanded_paths = new Set(
+-        [...expanded_paths_ref.current].filter(
+-          (expanded_path) => !workspace_path_is_same_or_child(target_path, expanded_path),
+-        ),
+-      )
+-      nodes_ref.current = next_nodes
+-      expanded_paths_ref.current = next_expanded_paths
+-      set_nodes(next_nodes)
+-      set_expanded_paths(next_expanded_paths)
+-      set_selected_path(target_node.parent_path)
+-      onPathDeleted(target_path, target_node.kind === 'directory')
++      for (const target_path of delete_paths) {
++        const deleted_entry = await window.editor_api.workspace.trash_entry(current_root_path, target_path)
++        const next_nodes = remove_workspace_node(nodes_ref.current, target_path)
++        const next_expanded_paths = new Set(
++          [...expanded_paths_ref.current].filter(
++            (expanded_path) => !workspace_path_is_same_or_child(target_path, expanded_path),
++          ),
++        )

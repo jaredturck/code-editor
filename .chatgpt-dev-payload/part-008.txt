@@ -1,0 +1,222 @@
++            run_tab_menu_action(() =>
++              onCloseDocuments(documents.filter((document) => document.id !== context_document.id).map((document) => document.id)),
++            )
++          }
++          onCloseSaved={() =>
++            run_tab_menu_action(() =>
++              onCloseDocuments(documents.filter(document_is_saved).map((document) => document.id)),
++            )
++          }
++          onCloseTab={() => run_tab_menu_action(() => onCloseDocument(context_document.id))}
++          onCloseToRight={() =>
++            run_tab_menu_action(() => {
++              const document_index = documents.findIndex((document) => document.id === context_document.id)
++              onCloseDocuments(documents.slice(document_index + 1).map((document) => document.id))
++            })
++          }
++          onCopyBreadcrumbsPath={() =>
++            run_tab_menu_action(() => {
++              if (!context_document_path || !workspaceRoot || !context_path_in_workspace) return
++              const relative_path = get_workspace_relative_path(workspaceRoot, context_document_path)
++              window.editor_api.workspace.copy_text(relative_path.split('/').join(' > '))
++            })
++          }
++          onCopyPath={() =>
++            run_tab_menu_action(() => {
++              if (context_document_path) window.editor_api.workspace.copy_text(context_document_path)
++            })
++          }
++          onCopyRelativePath={() =>
++            run_tab_menu_action(() => {
++              if (!context_document_path || !workspaceRoot || !context_path_in_workspace) return
++              window.editor_api.workspace.copy_text(get_workspace_relative_path(workspaceRoot, context_document_path))
++            })
++          }
++          onOpenContainingFolder={() =>
++            run_tab_menu_action(() => {
++              if (context_document_path) onOpenContainingFolder(context_document_path)
++            })
++          }
++          onRevealInExplorer={() =>
++            run_tab_menu_action(() => {
++              if (context_document_path && context_path_in_workspace) onRevealInExplorer(context_document_path)
++            })
++          }
++          x={Math.max(4, Math.min(tab_menu_state.x, window.innerWidth - 240))}
++          y={Math.max(4, Math.min(tab_menu_state.y, window.innerHeight - 360))}
++        />
++      )}
+     </section>
+   )
+ }
+diff --git a/src/components/EditorTabContextMenu.tsx b/src/components/EditorTabContextMenu.tsx
+new file mode 100644
+index 0000000..347cea8
+--- /dev/null
++++ b/src/components/EditorTabContextMenu.tsx
+@@ -0,0 +1,85 @@
++import { MenuItem, MenuSeparator } from './MenuDropdown'
++
++interface EditorTabContextMenuProps {
++  canCopyPath: boolean
++  canCopyRelativePath: boolean
++  canCloseOthers: boolean
++  canCloseSaved: boolean
++  canCloseToRight: boolean
++  x: number
++  y: number
++  onClose: () => void
++  onCloseAll: () => void
++  onCloseOthers: () => void
++  onCloseSaved: () => void
++  onCloseTab: () => void
++  onCloseToRight: () => void
++  onCopyBreadcrumbsPath: () => void
++  onCopyPath: () => void
++  onCopyRelativePath: () => void
++  onOpenContainingFolder: () => void
++  onRevealInExplorer: () => void
++}
++
++function EditorTabContextMenu({
++  canCopyPath,
++  canCopyRelativePath,
++  canCloseOthers,
++  canCloseSaved,
++  canCloseToRight,
++  x,
++  y,
++  onClose,
++  onCloseAll,
++  onCloseOthers,
++  onCloseSaved,
++  onCloseTab,
++  onCloseToRight,
++  onCopyBreadcrumbsPath,
++  onCopyPath,
++  onCopyRelativePath,
++  onOpenContainingFolder,
++  onRevealInExplorer,
++}: EditorTabContextMenuProps) {
++  return (
++    <>
++      <button aria-label="Close tab menu" className="fixed inset-0 z-[290]" onClick={onClose} type="button" />
++      <div
++        className="fixed z-[300] min-w-56 rounded-md border border-[var(--border)] bg-[var(--menu-bg)] py-1 shadow-2xl"
++        onContextMenu={(event) => event.preventDefault()}
++        style={{ left: x, top: y }}
++      >
++        <MenuItem onClick={onCloseTab}>Close</MenuItem>
++        <MenuItem disabled={!canCloseOthers} onClick={onCloseOthers}>
++          Close Others
++        </MenuItem>
++        <MenuItem disabled={!canCloseToRight} onClick={onCloseToRight}>
++          Close to the Right
++        </MenuItem>
++        <MenuItem disabled={!canCloseSaved} onClick={onCloseSaved}>
++          Close Saved
++        </MenuItem>
++        <MenuItem onClick={onCloseAll}>Close All</MenuItem>
++        <MenuSeparator />
++        <MenuItem disabled={!canCopyPath} onClick={onCopyPath}>
++          Copy Path
++        </MenuItem>
++        <MenuItem disabled={!canCopyRelativePath} onClick={onCopyRelativePath}>
++          Copy Relative Path
++        </MenuItem>
++        <MenuItem disabled={!canCopyRelativePath} onClick={onCopyBreadcrumbsPath}>
++          Copy Breadcrumbs Path
++        </MenuItem>
++        <MenuSeparator />
++        <MenuItem disabled={!canCopyRelativePath} onClick={onOpenContainingFolder}>
++          Open Containing Folder
++        </MenuItem>
++        <MenuItem disabled={!canCopyRelativePath} onClick={onRevealInExplorer}>
++          Reveal in Explorer View
++        </MenuItem>
++      </div>
++    </>
++  )
++}
++
++export default EditorTabContextMenu
+diff --git a/src/index.css b/src/index.css
+index 38f2b59..604e30e 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -581,3 +581,12 @@ button {
+ .xterm .xterm-viewport {
+   background-color: var(--terminal-bg);
+ }
++
++.editor-tabs-scroll {
++  scrollbar-width: none;
++  -ms-overflow-style: none;
++}
++
++.editor-tabs-scroll::-webkit-scrollbar {
++  display: none;
++}
+diff --git a/tests/EditorPanel.test.tsx b/tests/EditorPanel.test.tsx
+new file mode 100644
+index 0000000..0270f6c
+--- /dev/null
++++ b/tests/EditorPanel.test.tsx
+@@ -0,0 +1,161 @@
++import { fireEvent, render, screen } from '@testing-library/react'
++import type { ComponentProps } from 'react'
++import { describe, expect, it, vi } from 'vitest'
++import EditorPanel from '../src/components/EditorPanel'
++import { default_editor_settings } from '../src/editor/editorSettings'
++import type { TextEditorDocument } from '../src/types/editor'
++
++vi.mock('../src/components/CodeEditor', () => ({
++  default: () => <div data-testid="code-editor" />,
++}))
++
++function text_document(id: number, name: string, file_path: string, dirty = false): TextEditorDocument {
++  return {
++    kind: 'text',
++    id,
++    name,
++    content: dirty ? 'changed' : '',
++    saved_content: '',
++    file_path,
++    language: 'TypeScript',
++    indent_style: 'spaces',
++    indent_size: 2,
++    dirty,
++    deleted: false,
++    markdown_view: 'source',
++  }
++}
++
++function render_editor(overrides: Partial<ComponentProps<typeof EditorPanel>> = {}) {
++  const documents = [
++    text_document(1, 'one.ts', '/project/src/one.ts'),
++    text_document(2, 'utils.ts', '/project/src/utils.ts'),
++    text_document(3, 'three.ts', '/project/src/three.ts', true),
++  ]
++  const props: ComponentProps<typeof EditorPanel> = {
++    activeDocumentId: 1,
++    browserVisible: true,
++    diagnostics: [],
++    documents,
++    editorRef: { current: null },
++    settings: default_editor_settings,
++    theme: 'dark' as const,
++    onCloseDocument: vi.fn(),
++    onCloseDocuments: vi.fn(),
++    onEditorCommandStateChange: vi.fn(),
++    onFocusDocument: vi.fn(),
++    onOpenFilePath: vi.fn(),
++    onOpenContainingFolder: vi.fn(),
++    onParserDiagnostics: vi.fn(),
++    onSelectDocument: vi.fn(),
++    onRevealInExplorer: vi.fn(),
++    onToggleMarkdownView: vi.fn(),
++    onUpdateDocument: vi.fn(),
++    workspaceRoot: '/project',
++    ...overrides,
++  }
++

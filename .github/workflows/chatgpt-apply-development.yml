@@ -1,0 +1,32 @@
+name: Apply development patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Apply feature commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .chatgpt-dev-payload/part-000.txt || exit 0
+          transport_sha="$(git rev-parse HEAD)"
+          base_sha="$(git rev-parse HEAD^)"
+          cat .chatgpt-dev-payload/part-*.txt > /tmp/feature-series.patch
+          git config user.name "ChatGPT"
+          git config user.email "noreply@openai.com"
+          git checkout --detach "$base_sha"
+          git am /tmp/feature-series.patch
+          git push --force-with-lease="refs/heads/main:${transport_sha}" origin HEAD:refs/heads/main

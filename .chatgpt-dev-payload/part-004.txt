@@ -1,0 +1,204 @@
++            (expanded_path) => !workspace_path_is_same_or_child(target_path, expanded_path),
++          ),
++        )
++        const next_selected_paths = new Set(
++          [...selected_paths_ref.current].filter(
++            (selected_path) => !workspace_path_is_same_or_child(target_path, selected_path),
++          ),
++        )
+ 
+-      if (clipboard && workspace_path_is_same_or_child(target_path, clipboard.source_path)) {
+-        set_clipboard(null)
++        nodes_ref.current = next_nodes
++        expanded_paths_ref.current = next_expanded_paths
++        selected_paths_ref.current = next_selected_paths
++        set_nodes(next_nodes)
++        set_expanded_paths(next_expanded_paths)
++        set_selected_paths(next_selected_paths)
++        onPathDeleted(deleted_entry.path, deleted_entry.kind === 'directory')
++
++        const parent_path = get_parent_path(target_path)
++
++        if (parent_path) {
++          parent_paths.add(parent_path)
++        }
++
++        if (clipboard && workspace_path_is_same_or_child(target_path, clipboard.source_path)) {
++          set_clipboard(null)
++        }
+       }
+ 
+-      if (target_node.parent_path) {
+-        await load_directory(target_node.parent_path)
++      const next_focus = [...parent_paths][0] ?? current_root_path
++      set_selection([next_focus], next_focus)
++
++      for (const parent_path of parent_paths) {
++        if (nodes_ref.current.has(parent_path)) {
++          await load_directory(parent_path)
++        }
+       }
+ 
+       return true
+     } catch (error) {
+-      onNotice(error instanceof Error ? error.message : `Unable to delete ${target_node.name}.`)
++      onNotice(error instanceof Error ? error.message : 'Unable to delete the selected items.')
+       return false
+     }
+   }
+@@ -462,11 +553,14 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+           const old_parent_path = get_parent_path(result.old_path)
+           const next_nodes = remap_workspace_path(nodes_ref.current, result.old_path, result.path)
+           const next_expanded_paths = remap_workspace_path_set(expanded_paths_ref.current, result.old_path, result.path)
++          const next_selected_paths = remap_workspace_path_set(selected_paths_ref.current, result.old_path, result.path)
+ 
+           nodes_ref.current = next_nodes
+           expanded_paths_ref.current = next_expanded_paths
++          selected_paths_ref.current = next_selected_paths
+           set_nodes(next_nodes)
+           set_expanded_paths(next_expanded_paths)
++          set_selected_paths(next_selected_paths)
+           onPathMoved(result.old_path, result.path, result.kind === 'directory')
+ 
+           if (nodes_ref.current.has(old_parent_path)) {
+@@ -478,7 +572,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+       }
+ 
+       await load_directory(target_directory)
+-      set_selected_path(result.path)
++      set_selection([result.path], result.path)
+       return true
+     } catch (error) {
+       onNotice(error instanceof Error ? error.message : 'Unable to complete the file operation.')
+@@ -536,7 +630,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     }
+   }
+ 
+-  const reveal_path = async (target_path: string) => {
++  const reveal_path = async (target_path: string, replace_selection = false) => {
+     const current_root_path = root_path_ref.current
+ 
+     if (!current_root_path || !workspace_path_is_same_or_child(current_root_path, target_path)) {
+@@ -570,10 +664,20 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+ 
+     expanded_paths_ref.current = next_expanded_paths
+     set_expanded_paths(next_expanded_paths)
+-    set_selected_path(target_path)
++
++    if (replace_selection) {
++      set_selection([target_path], target_path)
++    } else if (selected_path_ref.current === target_path) {
++      return
++    } else if (selected_paths_ref.current.size <= 1) {
++      set_selection([target_path], target_path)
++    } else {
++      selected_path_ref.current = target_path
++      set_selected_path(target_path)
++    }
+   }
+ 
+-  reveal_path_ref.current = reveal_path
++  reveal_path_ref.current = (target_path) => reveal_path(target_path)
+ 
+   useEffect(() => {
+     if (active_file_path) {
+@@ -587,11 +691,10 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+ 
+   return {
+     clipboard,
+-    close_workspace,
+     collapse_all,
+     copy_path,
+     create_entry,
+-    delete_entry,
++    delete_entries,
+     drop_entry,
+     expanded_paths,
+     get_target_directory,
+@@ -605,10 +708,15 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
+     rename_entry,
+     resolve_conflict,
+     reveal_entry,
++    reveal_path: (target_path: string) => reveal_path(target_path, true),
+     root_name: root_path ? get_path_name(root_path) : null,
+     root_path,
+-    select_path: set_selected_path,
++    select_path,
++    select_paths,
++    select_subtree,
+     selected_path,
++    selected_paths,
++    toggle_path_selection,
+     set_file_clipboard,
+     toggle_folder,
+   }
+diff --git a/src/workspace/workspaceTree.ts b/src/workspace/workspaceTree.ts
+index 1e9900c..9d215bf 100644
+--- a/src/workspace/workspaceTree.ts
++++ b/src/workspace/workspaceTree.ts
+@@ -37,6 +37,19 @@ export function workspace_path_is_same_or_child(parent_path: string, target_path
+   return normalized_target === normalized_parent || normalized_target.startsWith(`${normalized_parent}/`)
+ }
+ 
++export function get_workspace_top_level_paths(paths: Iterable<string>) {
++  const unique_paths = [...new Set(paths)].sort((left, right) => left.length - right.length)
++  const top_level_paths: string[] = []
++
++  for (const target_path of unique_paths) {
++    if (!top_level_paths.some((parent_path) => workspace_path_is_same_or_child(parent_path, target_path))) {
++      top_level_paths.push(target_path)
++    }
++  }
++
++  return top_level_paths
++}
++
+ export function get_workspace_relative_path(root_path: string, target_path: string) {
+   const normalized_root = root_path.replace(/\\/g, '/').replace(/\/$/, '')
+   const normalized_target = target_path.replace(/\\/g, '/')
+diff --git a/tests/ExplorerPanel.test.tsx b/tests/ExplorerPanel.test.tsx
+index 18f5318..9165482 100644
+--- a/tests/ExplorerPanel.test.tsx
++++ b/tests/ExplorerPanel.test.tsx
+@@ -1,4 +1,5 @@
+ import { fireEvent, render, screen } from '@testing-library/react'
++import type { ComponentProps } from 'react'
+ import { describe, expect, it, vi } from 'vitest'
+ import ExplorerPanel from '../src/components/ExplorerPanel'
+ import type { WorkspaceNode } from '../src/types/workspace'
+@@ -13,7 +14,13 @@ function create_nodes() {
+         name: 'project',
+         kind: 'directory',
+         is_symlink: false,
+-        children: ['/project/src', '/project/README.md'],
++        children: [
++          '/project/src',
++          '/project/index.html',
++          '/project/package-lock.json',
++          '/project/package.json',
++          '/project/README.md',
++        ],
+         loading: false,
+         error: null,
+       },
+@@ -31,6 +38,45 @@ function create_nodes() {
+         error: null,
+       },
+     ],
++    [
++      '/project/index.html',
++      {
++        path: '/project/index.html',
++        parent_path: '/project',
++        name: 'index.html',
++        kind: 'file',
++        is_symlink: false,
++        children: null,
++        loading: false,
++        error: null,
++      },
++    ],
++    [
++      '/project/package-lock.json',
++      {
++        path: '/project/package-lock.json',
