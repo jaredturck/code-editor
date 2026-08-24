@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AISettingsPanel from './settings/AISettingsPanel'
+import ApplicationThemeSettings from './settings/ApplicationThemeSettings'
 import type { AISettingsSection } from '../settings/aiSettings'
 import { language_options } from '../data/languages'
 import { editor_commands, format_shortcut, get_effective_keybinding } from '../editor/editorCommands'
@@ -36,9 +37,9 @@ const tabs: Array<{ id: SettingsTab; label: string; icon: string }> = [
 const search_items: SearchItem[] = [
   {
     id: 'theme',
-    tab: 'general',
-    label: 'Theme',
-    description: 'Choose light, dark, or system appearance.',
+    tab: 'appearance',
+    label: 'Application theme',
+    description: 'Choose the palette used by the application interface.',
   },
   {
     id: 'preset',
@@ -111,6 +112,12 @@ const search_items: SearchItem[] = [
     tab: 'editor',
     label: 'Word wrap',
     description: 'Wrap long lines to the editor width.',
+  },
+  {
+    id: 'accent-color',
+    tab: 'appearance',
+    label: 'Accent colour',
+    description: 'Choose the interactive highlight colour used by the interface.',
   },
   {
     id: 'syntax-color-scheme',
@@ -356,7 +363,7 @@ const search_items: SearchItem[] = [
 ]
 
 const input_class =
-  'h-9 rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-xs text-[var(--text)] outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/25'
+  'h-9 rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-xs text-[var(--text)] outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]'
 
 function Toggle({
   checked,
@@ -370,8 +377,8 @@ function Toggle({
   return (
     <button
       aria-checked={checked}
-      className={`relative h-6 w-11 shrink-0 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-sky-500/35 ${
-        checked ? 'border-sky-400/60 bg-sky-500' : 'border-[var(--input-border)] bg-[var(--surface-3)]'
+      className={`relative h-6 w-11 shrink-0 rounded-full border transition focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
+        checked ? 'border-[var(--accent)] bg-[var(--accent)]' : 'border-[var(--input-border)] bg-[var(--surface-3)]'
       } ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:brightness-110'}`}
       disabled={disabled}
       onClick={() => onChange(!checked)}
@@ -402,7 +409,7 @@ function SettingRow({
     <div
       className={`settings-row flex min-h-16 items-center gap-5 rounded-xl border px-4 py-3 transition ${
         highlighted
-          ? 'border-sky-400 bg-sky-500/10 shadow-[0_0_0_3px_rgba(56,189,248,0.12),0_0_32px_rgba(56,189,248,0.15)]'
+          ? 'border-[var(--accent)] bg-[var(--selected)]'
           : 'border-transparent hover:border-[var(--border)] hover:bg-black/[0.035]'
       }`}
       data-setting-id={id}
@@ -488,7 +495,6 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
     const next = clone_editor_settings(settings)
 
     if (active_tab === 'general') {
-      next.theme_mode = default_editor_settings.theme_mode
       next.default_language = default_editor_settings.default_language
       next.restore_recent_files = default_editor_settings.restore_recent_files
       next.confirm_unsaved_close = default_editor_settings.confirm_unsaved_close
@@ -497,6 +503,8 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
       next.editor = { ...default_editor_settings.editor }
       next.editor_preset = 'custom'
     } else if (active_tab === 'appearance') {
+      next.theme_mode = default_editor_settings.theme_mode
+      next.accent_color = default_editor_settings.accent_color
       next.appearance = { ...default_editor_settings.appearance }
       next.editor_preset = 'custom'
     } else if (active_tab === 'suggestions') {
@@ -546,25 +554,6 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
   const render_general = () => (
     <>
       <Section title="Application">
-        {row(
-          'theme',
-          'Theme',
-          'Choose the application color theme.',
-          <select
-            className={input_class}
-            onChange={(event) =>
-              update({
-                ...settings,
-                theme_mode: event.target.value as EditorSettings['theme_mode'],
-              })
-            }
-            value={settings.theme_mode}
-          >
-            <option value="system">System</option>
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>,
-        )}
         {row(
           'preset',
           'Editor feature preset',
@@ -735,6 +724,7 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
 
   const render_appearance = () => (
     <>
+      <ApplicationThemeSettings onChange={update} settings={settings} />
       <Section title="Syntax colors">
         {row(
           'syntax-color-scheme',
@@ -969,14 +959,14 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
                 diagnostics: {
                   ...settings.diagnostics,
                   delay: Number(event.target.value),
-                },
+                  },
               })
             }
             step={250}
             type="number"
             value={settings.diagnostics.delay}
           />,
-        )}
+      )}
       </Section>
       <Section title="Display">
         {row(
