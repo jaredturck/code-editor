@@ -10,7 +10,8 @@ interface ExplorerTreeRowProps {
   onContextMenu: (event: MouseEvent<HTMLDivElement>, node: WorkspaceNode) => void
   onDropEntry: (source_path: string, target_path: string, operation: 'copy' | 'cut') => void
   onOpen: (node: WorkspaceNode) => void
-  onSelect: (node: WorkspaceNode) => void
+  onRename: (node: WorkspaceNode) => void
+  onSelect: (event: MouseEvent<HTMLDivElement>, node: WorkspaceNode) => void
   onToggle: (node: WorkspaceNode) => void
   children?: React.ReactNode
 }
@@ -24,6 +25,7 @@ function ExplorerTreeRow({
   onContextMenu,
   onDropEntry,
   onOpen,
+  onRename,
   onSelect,
   onToggle,
   children,
@@ -52,8 +54,9 @@ function ExplorerTreeRow({
     <>
       <div
         className={`group flex h-6 min-w-0 items-center pr-1 text-xs ${row_class} ${drop_target ? 'ring-1 ring-inset ring-sky-500' : ''}`}
+        data-workspace-path={node.path}
         draggable={node.path !== node.parent_path}
-        onClick={() => onSelect(node)}
+        onClick={(event) => onSelect(event, node)}
         onContextMenu={(event) => onContextMenu(event, node)}
         onDoubleClick={() => onOpen(node)}
         onDragEnter={(event) => {
@@ -81,6 +84,7 @@ function ExplorerTreeRow({
             event.stopPropagation()
             onToggle(node)
           }}
+          onDoubleClick={(event) => event.stopPropagation()}
           tabIndex={-1}
           type="button"
         >
@@ -92,7 +96,18 @@ function ExplorerTreeRow({
         >
           {node.kind === 'directory' ? '▰' : '▪'}
         </span>
-        <span className={`truncate ${node.is_symlink ? 'italic' : ''}`} title={node.path}>
+        <span
+          className={`truncate ${node.is_symlink ? 'italic' : ''}`}
+          onDoubleClick={(event) => {
+            if (node.kind !== 'directory') {
+              return
+            }
+
+            event.stopPropagation()
+            onRename(node)
+          }}
+          title={node.path}
+        >
           {node.name}
         </span>
         {node.loading && <span className="ml-auto text-[9px] text-[var(--muted)]">…</span>}

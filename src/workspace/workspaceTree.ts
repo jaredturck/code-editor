@@ -37,6 +37,19 @@ export function workspace_path_is_same_or_child(parent_path: string, target_path
   return normalized_target === normalized_parent || normalized_target.startsWith(`${normalized_parent}/`)
 }
 
+export function get_workspace_top_level_paths(paths: Iterable<string>) {
+  const unique_paths = [...new Set(paths)].sort((left, right) => left.length - right.length)
+  const top_level_paths: string[] = []
+
+  for (const target_path of unique_paths) {
+    if (!top_level_paths.some((parent_path) => workspace_path_is_same_or_child(parent_path, target_path))) {
+      top_level_paths.push(target_path)
+    }
+  }
+
+  return top_level_paths
+}
+
 export function get_workspace_relative_path(root_path: string, target_path: string) {
   const normalized_root = root_path.replace(/\\/g, '/').replace(/\/$/, '')
   const normalized_target = target_path.replace(/\\/g, '/')

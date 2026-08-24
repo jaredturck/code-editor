@@ -156,6 +156,8 @@ function useEditorState() {
   const active_document_id_ref = useRef(active_document_id)
   const settings_ref = useRef(settings)
   const shutdown_queue_ref = useRef(shutdown_queue)
+  const document_close_queue_ref = useRef<number[]>([])
+  const bulk_close_in_progress_ref = useRef(false)
   const shutdown_in_progress_ref = useRef(shutdown_in_progress)
   const diagnostic_versions_ref = useRef(new Map<number, number>())
   const opening_paths_ref = useRef(new Set<string>())
@@ -287,6 +289,11 @@ function useEditorState() {
 
   const cancel_close_document = () => {
     set_pending_close_document_id(null)
+
+    if (bulk_close_in_progress_ref.current) {
+      document_close_queue_ref.current = []
+      bulk_close_in_progress_ref.current = false
+    }
 
     if (shutdown_in_progress_ref.current) {
       set_shutdown_queue([])
@@ -578,10 +585,57 @@ function useEditorState() {
 
     if (active_document_id_ref.current === document_id) {
       const replacement_index = Math.min(document_index, remaining_documents.length - 1)
-      set_active_document_id(remaining_documents[replacement_index]?.id ?? null)
+      const replacement_id = remaining_documents[replacement_index]?.id ?? null
+      active_document_id_ref.current = replacement_id
+      set_active_document_id(replacement_id)
     }
 
+    documents_ref.current = remaining_documents
     set_documents(remaining_documents)
+  }
+
+  const advance_document_close_queue = () => {
+    while (document_close_queue_ref.current.length > 0) {
+      const [document_id, ...remaining_queue] = document_close_queue_ref.current
+      document_close_queue_ref.current = remaining_queue
+      const document = documents_ref.current.find((item) => item.id === document_id)
+
+      if (!document) {
+        continue
+      }
+
+      if (document.kind === 'text' && document.dirty && settings_ref.current.confirm_unsaved_close) {
+        set_pending_close_document_id(document_id)
+        active_document_id_ref.current = document_id
+        set_active_document_id(document_id)
+        close_overlays()
+        return
+      }
+
+      close_document_immediately(document_id)
+    }
+
+    bulk_close_in_progress_ref.current = false
+    set_pending_close_document_id(null)
+  }
+
+  const close_documents = (document_ids: number[]) => {
+    const current_ids = new Set(documents_ref.current.map((document) => document.id))
+    const next_queue = document_ids.filter((document_id, index) => current_ids.has(document_id) && document_ids.indexOf(document_id) === index)
+
+    if (next_queue.length === 0) {
+      return
+    }
+
+    const dirty_ids = next_queue.filter((document_id) => {
+      const document = documents_ref.current.find((item) => item.id === document_id)
+      return document?.kind === 'text' && document.dirty && settings_ref.current.confirm_unsaved_close
+    })
+    const clean_ids = next_queue.filter((document_id) => !dirty_ids.includes(document_id))
+
+    document_close_queue_ref.current = [...dirty_ids, ...clean_ids]
+    bulk_close_in_progress_ref.current = true
+    advance_document_close_queue()
   }
 
   const close_document = (document_id: number) => {
@@ -897,6 +951,10 @@ function useEditorState() {
 
     set_pending_close_document_id(null)
     close_document_immediately(document_id)
+
+    if (bulk_close_in_progress_ref.current) {
+      advance_document_close_queue()
+    }
   }
 
   const confirm_close_discard = () => {
@@ -913,6 +971,10 @@ function useEditorState() {
 
     set_pending_close_document_id(null)
     close_document_immediately(document_id)
+
+    if (bulk_close_in_progress_ref.current) {
+      advance_document_close_queue()
+    }
   }
 
   useEffect(() => {
@@ -1325,6 +1387,7 @@ function useEditorState() {
     cancel_close_document,
     close_bottom_panel,
     close_document,
+    close_documents,
     close_overlays,
     confirm_close_discard,
     confirm_close_save,

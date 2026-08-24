@@ -581,3 +581,12 @@ button {
 .xterm .xterm-viewport {
   background-color: var(--terminal-bg);
 }
+
+.editor-tabs-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.editor-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
