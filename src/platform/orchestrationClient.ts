@@ -276,7 +276,10 @@ export async function handleAgentRecall(args: RecallArgs): Promise<RecallResult>
   }
 }
 
-export function handleAgentStatus(args: StatusArgs): { taskId: string; status: SubAgentTaskResult['status'] | 'unknown' } {
+export function handleAgentStatus(args: StatusArgs): {
+  taskId: string
+  status: SubAgentTaskResult['status'] | 'unknown'
+} {
   const taskId = String(args?.taskId || '').trim()
   if (!taskId) throw new Error('taskId is required for agent.status')
   return { taskId, status: getTaskStatus(taskId) }
@@ -466,7 +469,10 @@ export function syncStandbyPool(settings: SubAgentSettings): StandbyPoolState {
   }
 }
 
-export function inspectStandbyRoster(settings: SubAgentSettings): { connected: RosterMember[]; dropped: DroppedMember[] } {
+export function inspectStandbyRoster(settings: SubAgentSettings): {
+  connected: RosterMember[]
+  dropped: DroppedMember[]
+} {
   if (settings?.agent_multi_enabled !== true) return { connected: [], dropped: [] }
   return standbyRoster(settings)
 }
@@ -474,7 +480,11 @@ export function inspectStandbyRoster(settings: SubAgentSettings): { connected: R
 export function pickDelegateMember(
   target: string,
   settings: SubAgentSettings,
-): { agentId: string; identity: { role: AgentRoleId; provider: string; model: string }; subSettings: SubAgentSettings } {
+): {
+  agentId: string
+  identity: { role: AgentRoleId; provider: string; model: string }
+  subSettings: SubAgentSettings
+} {
   const raw = String(target || '').trim()
   const localOnly = settings?.agent_local_only_enforced === true
   if (raw.includes('#')) {
