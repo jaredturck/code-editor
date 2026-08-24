@@ -287,9 +287,9 @@ export function sanitize_settings(value: unknown): AppSettings {
     appearance.syntax_color_scheme === 'high-contrast' ||
     appearance.syntax_color_scheme === 'modern' ||
     appearance.syntax_color_scheme === 'soft' ||
-    appearance.syntax_color_schem === 'classic'
+    appearance.syntax_color_scheme === 'classic'
       ? appearance.syntax_color_scheme
-      : default_settings.appearance.syntax_color_schem
+      : default_settings.appearance.syntax_color_scheme
   const render_whitespace =
     appearance.render_whitespace === 'all' || appearance.render_whitespace === 'off'
       ? appearance.render_whitespace
