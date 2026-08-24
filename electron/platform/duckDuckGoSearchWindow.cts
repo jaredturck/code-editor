@@ -9,11 +9,9 @@ import { BrowserWindow, type Session } from 'electron'
 import {
   buildDuckDuckGoSearchUrl,
   extractDuckDuckGoPage,
-  resolveDuckDuckGoSearchMode,
   type DuckDuckGoBrowserProgressEvent,
   type DuckDuckGoBrowserSearchRequest,
   type DuckDuckGoBrowserSearchResult,
-  type DuckDuckGoSearchMode,
   type ExtractedDuckDuckGoPage,
 } from './duckDuckGoPageParser.cjs'
 
