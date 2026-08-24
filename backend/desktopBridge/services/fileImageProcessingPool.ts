@@ -1,3 +1,4 @@
+import { fork, type ChildProcess } from 'node:child_process'
 import os from 'node:os'
 import { Worker } from 'node:worker_threads'
 import { FileImageQueue } from './fileImageQueue.js'
@@ -18,8 +19,12 @@ interface PendingJob {
   timer?: NodeJS.Timeout
 }
 
+type ImageProcessor =
+  | { kind: 'thread'; process: Worker }
+  | { kind: 'child'; process: ChildProcess }
+
 interface WorkerSlot {
-  worker: Worker
+  processor: ImageProcessor
   job: PendingJob | null
   closing: boolean
 }
@@ -36,6 +41,53 @@ function workerCount(): number {
 
 function errorMessage(value: unknown): string {
   return value instanceof Error ? value.message : String(value || 'Image preprocessing failed')
+}
+
+function shouldUseChildProcesses(): boolean {
+  return process.platform === 'linux' && Boolean(process.versions.electron)
+}
+
+function createProcessor(): ImageProcessor {
+  if (shouldUseChildProcesses()) {
+    const execPath = String(process.env.npm_node_execpath || process.env.NODE || 'node')
+    return {
+      kind: 'child',
+      process: fork(new URL('./fileImageProcessingChild.js', import.meta.url), [], {
+        execPath,
+        execArgv: [],
+        stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
+        serialization: 'advanced',
+      }),
+    }
+  }
+
+  return {
+    kind: 'thread',
+    process: new Worker(new URL('./fileImageProcessingWorker.js', import.meta.url), {
+      execArgv: [],
+    }),
+  }
+}
+
+function sendRequest(processor: ImageProcessor, request: FileImageProcessingWorkerRequest): void {
+  if (processor.kind === 'thread') {
+    processor.process.postMessage(request)
+    return
+  }
+  processor.process.send?.(request)
+}
+
+function terminateProcessor(processor: ImageProcessor): Promise<number> {
+  if (processor.kind === 'thread') return processor.process.terminate()
+  return new Promise((resolve) => {
+    const child = processor.process
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve(child.exitCode ?? 0)
+      return
+    }
+    child.once('exit', (code) => resolve(code ?? 0))
+    child.kill()
+  })
 }
 
 export function createFileImageProcessingPool(): FileImageProcessingPool {
@@ -62,19 +114,17 @@ export function createFileImageProcessingPool(): FileImageProcessingPool {
         id: job.id,
         filePath: job.filePath,
       }
-      slot.worker.postMessage(request)
+      sendRequest(slot.processor, request)
     }
   }
 
   const createSlot = (): WorkerSlot => {
     const slot: WorkerSlot = {
-      worker: new Worker(new URL('./fileImageProcessingWorker.js', import.meta.url), {
-        execArgv: [],
-      }),
+      processor: createProcessor(),
       job: null,
       closing: false,
     }
-    slot.worker.on('message', (response: FileImageProcessingWorkerResponse) => {
+    const onMessage = (response: FileImageProcessingWorkerResponse) => {
       const job = slot.job
       if (!job || response.id !== job.id) return
       slot.job = null
@@ -82,29 +132,39 @@ export function createFileImageProcessingPool(): FileImageProcessingPool {
       if (response.image) job.resolve(response.image)
       else job.reject(new Error(response.error || 'Image preprocessing failed'))
       dispatch()
-    })
-    slot.worker.on('error', (error) => {
+    }
+    const onError = (error: Error) => {
       const job = slot.job
       slot.job = null
       if (job?.timer) clearTimeout(job.timer)
       job?.reject(new Error(errorMessage(error)))
       if (!closed && !slot.closing) void replaceSlot(slot)
-    })
-    slot.worker.on('exit', (code) => {
+    }
+    const onExit = (code: number | null) => {
       if (closed || slot.closing || code === 0) return
       const job = slot.job
       slot.job = null
       if (job?.timer) clearTimeout(job.timer)
-      job?.reject(new Error(`Image preprocessing worker exited with code ${code}`))
+      job?.reject(new Error(`Image preprocessing worker exited with code ${code ?? 'unknown'}`))
       void replaceSlot(slot)
-    })
+    }
+
+    if (slot.processor.kind === 'thread') {
+      slot.processor.process.on('message', onMessage)
+      slot.processor.process.on('error', onError)
+      slot.processor.process.on('exit', onExit)
+    } else {
+      slot.processor.process.on('message', (response) => onMessage(response as FileImageProcessingWorkerResponse))
+      slot.processor.process.on('error', onError)
+      slot.processor.process.on('exit', onExit)
+    }
     return slot
   }
 
   const replaceSlot = async (slot: WorkerSlot) => {
     if (closed || slot.closing) return
     slot.closing = true
-    await slot.worker.terminate().catch(() => undefined)
+    await terminateProcessor(slot.processor).catch(() => 0)
     const index = slots.indexOf(slot)
     if (index >= 0 && !closed) slots[index] = createSlot()
     dispatch()
@@ -132,7 +192,7 @@ export function createFileImageProcessingPool(): FileImageProcessingPool {
         slot.job?.reject(error)
         slot.job = null
       }
-      await Promise.all(slots.map((slot) => slot.worker.terminate().catch(() => 0)))
+      await Promise.all(slots.map((slot) => terminateProcessor(slot.processor).catch(() => 0)))
     },
   }
 }
