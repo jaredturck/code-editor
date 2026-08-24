@@ -309,7 +309,7 @@ export function createTraceTool(timeline, onEvent, getTodosSnapshot) {
         type: 'tool_call',
         tool,
         module: moduleName,
-        argsPreview: toPreview(args, 500),
+        argsPreview: toPreview(args, 16000),
         step: Number.isFinite(Number(meta.step)) ? Number(meta.step) : undefined,
         timeoutMs: Number.isFinite(Number(meta.timeoutMs)) ? Number(meta.timeoutMs) : undefined,
       })

@@ -7,6 +7,7 @@ import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
 import AgentChatVoiceControls from './AgentChatVoiceControls'
 import AgentRuntimePanel from './AgentRuntimePanel'
+import AgentActivityTimeline from './AgentActivityTimeline'
 
 interface AIChatPanelProps {
   chat: ReturnType<typeof useAIChat>
@@ -340,23 +341,7 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                 )}
 
                 {message.role === 'assistant' && message.activity && message.activity.length > 0 && (
-                  <details className="mb-2 rounded border border-[var(--border)] bg-black/[0.05] px-2 py-1.5">
-                    <summary className="cursor-pointer select-none text-[9px] font-medium text-[var(--muted)]">
-                      Agent activity · {message.activity.length} action{message.activity.length === 1 ? '' : 's'}
-                    </summary>
-                    <div className="mt-2 space-y-1.5">
-                      {message.activity.map((activity) => (
-                        <div className="border-l border-[var(--border)] pl-2" key={activity.id}>
-                          <div className="text-[9px] font-medium text-[var(--text)]">{activity.label}</div>
-                          {activity.detail && (
-                            <div className="mt-0.5 whitespace-pre-wrap break-words text-[9px] leading-relaxed text-[var(--muted)]">
-                              {activity.detail}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
+                  <AgentActivityTimeline activity={message.activity} />
                 )}
 
                 {message.role === 'assistant' ? (

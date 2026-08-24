@@ -261,12 +261,12 @@ function clean_text(value: unknown, max_characters: number) {
 }
 
 function activity_detail(event: Record<string, unknown>) {
-  if (event.detail) return clean_text(event.detail, 800)
+  if (event.detail) return clean_text(event.detail, 16000)
   const type = String(event.type || '')
-  if (type === 'tool_call') return clean_text(event.argsPreview, 600)
-  if (type === 'tool_result') return clean_text(event.summary || event.status, 300)
-  if (type === 'todo') return clean_text(`${event.op || 'update'}: ${event.text || ''}`, 500)
-  return clean_text(event.summary || event.body || event.reason || event.text, 700)
+  if (type === 'tool_call') return clean_text(event.argsPreview, 16000)
+  if (type === 'tool_result') return clean_text(event.summary || event.status, 1000)
+  if (type === 'todo') return clean_text(`${event.op || 'update'}: ${event.text || ''}`, 1000)
+  return clean_text(event.summary || event.body || event.reason || event.text, 4000)
 }
 
 function activity_label(event: Record<string, unknown>) {
