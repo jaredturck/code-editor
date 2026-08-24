@@ -24,13 +24,27 @@ import { assertAllowedTool, assertSafePath } from '@/platform/agent/runtime/safe
 import { inspectBrowserRuntime } from '@/platform/browserInspectionBridge'
 import { analyzeWorkspaceFile } from '@/platform/workspaceDiagnosticsBridge'
 import { createModuleBroker as createLegacyModuleBroker } from '@/platform/agent/runtime/toolBrokerLegacy'
-import { isReadOnlyWorkspaceCommand } from '@/platform/agent/runtime/readOnlyTerminalPolicy'
+import {
+  isHardBlockedTerminalCommand,
+  isWorkspaceAutonomousCommand,
+  isWorkspacePath,
+  terminalCommandEscapesWorkspace,
+} from '@/platform/agent/runtime/readOnlyTerminalPolicy'
 
 const editorNativeTools = new Set([
   'browser.inspect',
   'diagnostics.check',
   'verification.require',
   'verification.record',
+])
+
+const workspaceFileTools = new Set([
+  'files.list',
+  'files.find',
+  'files.read',
+  'files.write',
+  'files.edit',
+  'files.patch',
 ])
 
 type LegacyBrokerOptions = Parameters<typeof createLegacyModuleBroker>[0]
@@ -90,13 +104,65 @@ function assertEditorNativeAccess(toolName: string, options: LegacyBrokerOptions
   }
 }
 
+function approvalGranted(response: unknown) {
+  if (!response || typeof response !== 'object' || Array.isArray(response)) return false
+  const result = response as Record<string, unknown>
+  if (result.approved === true) return true
+  return ['approve', 'approved', 'allow', 'allow_once', 'continue', 'yes'].includes(
+    String(result.decision || result.choice || '').toLowerCase(),
+  )
+}
+
+async function requestWorkspaceEscapeApproval(
+  options: LegacyBrokerOptions,
+  toolName: string,
+  description: string,
+) {
+  if (typeof options?.onApprovalRequest !== 'function') return false
+  const response = await options.onApprovalRequest({
+    requestType: 'approval',
+    reason: `${toolName} is attempting to access outside the open project workspace.`,
+    requestedAction: description,
+    tool: toolName,
+    recommendedDecision: 'deny',
+    options: [
+      {
+        id: 'approve',
+        label: 'Approve',
+        description: 'Allow this one workspace-boundary exception.',
+        recommended: false,
+      },
+      {
+        id: 'deny',
+        label: 'Deny',
+        description: 'Keep the agent inside the current project.',
+        recommended: true,
+      },
+    ],
+  })
+  return approvalGranted(response)
+}
+
 export function createModuleBroker(options: LegacyBrokerOptions) {
   const legacy = createLegacyModuleBroker(options)
-  const readOnlyTerminalLegacy = createLegacyModuleBroker({
+  const workspaceRoot = String(options?.settings?.agent_working_dir || '').trim()
+  const approvalState = options?.approvalState || {}
+  const workspaceAutonomousLegacy = createLegacyModuleBroker({
     ...options,
+    settings: {
+      ...(options?.settings || {}),
+      agent_package_install_guard: false,
+      agent_require_explicit_approval: false,
+    },
     approvalState: {
-      ...(options?.approvalState || {}),
+      ...approvalState,
       granted: true,
+      sessionPermissionOverrides: {
+        ...(approvalState.sessionPermissionOverrides || {}),
+        file_read: true,
+        file_write: true,
+        terminal_exec: true,
+      },
     },
   })
 
@@ -104,10 +170,60 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
     ...legacy,
     async execute(toolName: string, args: Record<string, unknown> = {}) {
       const state = verificationState(options)
+      const automaticMode = String(options?.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
+
+      if (toolName === 'user.ask' && automaticMode) {
+        return {
+          answered: false,
+          decision: 'autonomous',
+          answer: '',
+          instruction:
+            'Automatic mode does not interrupt the user for implementation preferences. Choose the best reasonable option yourself and continue.',
+        }
+      }
 
       if (!editorNativeTools.has(toolName)) {
-        const broker =
-          toolName === 'terminal.exec' && isReadOnlyWorkspaceCommand(args.command) ? readOnlyTerminalLegacy : legacy
+        let broker = legacy
+
+        if (workspaceRoot && workspaceFileTools.has(toolName)) {
+          const targetPath = String(args.path || '.')
+          if (isWorkspacePath(targetPath, workspaceRoot)) {
+            broker = workspaceAutonomousLegacy
+          } else {
+            const approved = await requestWorkspaceEscapeApproval(options, toolName, `${toolName} ${targetPath}`)
+            if (!approved) {
+              return {
+                error: 'Workspace boundary access was denied. Continue using files inside the open project.',
+                denied: true,
+              }
+            }
+            broker = workspaceAutonomousLegacy
+          }
+        }
+
+        if (toolName === 'terminal.exec') {
+          if (isHardBlockedTerminalCommand(args.command)) {
+            throw new Error('Command blocked by safety policy and cannot be approved.')
+          }
+
+          if (workspaceRoot && terminalCommandEscapesWorkspace(args.command, workspaceRoot, args.cwd)) {
+            const approved = await requestWorkspaceEscapeApproval(
+              options,
+              toolName,
+              String(args.command || 'terminal command'),
+            )
+            if (!approved) {
+              return {
+                error: 'Workspace boundary command was denied. Continue with a project-scoped alternative.',
+                denied: true,
+              }
+            }
+            broker = workspaceAutonomousLegacy
+          } else if (workspaceRoot && isWorkspaceAutonomousCommand(args.command, workspaceRoot, args.cwd)) {
+            broker = workspaceAutonomousLegacy
+          }
+        }
+
         const result = await broker.execute(toolName, args)
         updateMutationEpoch(state, toolName, args, result)
         return attachVerificationCandidate(state, toolName, args, result)

@@ -1,5 +1,6 @@
 const simpleCommands = new Set(['pwd', 'ls', 'cat', 'head', 'tail', 'stat', 'file', 'wc', 'tree', 'which', 'grep'])
-
+const workspaceMutationCommands = new Set(['mkdir', 'touch', 'cp', 'mv'])
+const directProjectCommands = new Set(['vite', 'tsc', 'eslint', 'prettier', 'vitest', 'jest', 'pytest', 'ruff'])
 const safeGitSubcommands = new Set(['status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'grep', 'blame'])
 
 const unsafeFindOptions = new Set([
@@ -25,6 +26,17 @@ const unsafeGitOptions = new Set([
   '--textconv',
   '--no-index',
 ])
+
+const hardBlockedPatterns = [
+  /(?:^|\s)rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\s+(?:\/|\*|~)(?:\s|$)/i,
+  /\b(?:mkfs(?:\.[a-z0-9]+)?|fdisk|parted|wipefs)\b/i,
+  /\bdd\b[^\n]*\bof=\/dev\//i,
+  /\b(?:shutdown|reboot|poweroff|halt)\b/i,
+  /:\(\)\s*\{\s*:\|:\s*&\s*\}\s*;/,
+  /(?:^|[\s"'])~?\/\.ssh(?:\/|\s|$)/i,
+  /(?:^|[\s"'])~?\/\.gnupg(?:\/|\s|$)/i,
+  /(?:^|[\s"'])\/etc\/(?:shadow|gshadow)(?:\s|$)/i,
+]
 
 function splitWords(command: string) {
   const words: string[] = []
@@ -70,24 +82,36 @@ function hasAny(words: string[], blocked: Set<string>) {
   return words.some((word) => blocked.has(word) || [...blocked].some((item) => word.startsWith(`${item}=`)))
 }
 
-function pathValueEscapesWorkspace(value: string) {
-  const normalized = value.replace(/\\/g, '/')
-  return (
-    normalized.startsWith('/') ||
-    normalized.startsWith('~/') ||
-    /^[A-Za-z]:\//.test(normalized) ||
-    normalized === '..' ||
-    normalized.startsWith('../') ||
-    normalized.includes('/../')
-  )
+function normalizePath(value: string) {
+  return value.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
-function escapesWorkspace(words: string[]) {
-  return words.slice(1).some((word) => {
-    if (!word) return false
-    const value = word.startsWith('-') && word.includes('=') ? word.slice(word.indexOf('=') + 1) : word
-    return pathValueEscapesWorkspace(value)
-  })
+export function isWorkspacePath(value: unknown, workspaceRoot: unknown) {
+  const root = normalizePath(String(workspaceRoot || '').trim())
+  const raw = String(value || '').trim()
+  if (!root) return false
+  if (!raw || raw === '.' || raw === './') return true
+
+  const normalized = normalizePath(raw)
+  if (normalized.startsWith('~/')) return false
+  if (normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) return false
+
+  const absolute = normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)
+  if (!absolute) return true
+  return normalized === root || normalized.startsWith(`${root}/`)
+}
+
+function argumentEscapesWorkspace(value: string, workspaceRoot: string) {
+  if (!value) return false
+  const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  if (!candidate || candidate === '--') return false
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
+  if (candidate.startsWith('-') && !candidate.includes('=')) return false
+  return !isWorkspacePath(candidate, workspaceRoot)
+}
+
+function commandArgumentsEscapeWorkspace(words: string[], workspaceRoot: string) {
+  return words.slice(1).some((word) => argumentEscapesWorkspace(word, workspaceRoot))
 }
 
 function commandName(value: string) {
@@ -111,21 +135,80 @@ function safeGit(words: string[]) {
   return true
 }
 
-/**
- * Conservative classifier for terminal commands that only inspect the current project.
- * False negatives merely keep the normal approval prompt; false positives would weaken safety,
- * so shell composition, redirection, execution hooks, network/package tools and interpreters are
- * intentionally outside this allowlist.
- */
-export function isReadOnlyWorkspaceCommand(command: unknown) {
-  const text = String(command || '').trim()
-  if (!text || text.length > 4000) return false
-  if (/[\r\n;|<>`]/.test(text) || /&&|\|\||\$\(/.test(text)) return false
+function safePackageManager(name: string, words: string[]) {
+  const subcommand = String(words[1] || '').toLowerCase()
+  if (words.some((word) => word === '-g' || word === '--global' || word === '--system')) return false
 
-  const words = splitWords(text)
+  if (name === 'npm') {
+    return ['run', 'test', 'start', 'install', 'i', 'ci', 'create', 'init'].includes(subcommand)
+  }
+  if (name === 'pnpm') {
+    return ['run', 'test', 'start', 'install', 'i', 'add', 'create', 'dlx'].includes(subcommand)
+  }
+  if (name === 'yarn') {
+    return ['run', 'test', 'start', 'install', 'add', 'create'].includes(subcommand)
+  }
+  if (name === 'bun') {
+    return ['run', 'test', 'install', 'add', 'create', 'x'].includes(subcommand)
+  }
+  return false
+}
+
+function safeNpx(words: string[]) {
+  const target = String(words[1] || '').toLowerCase()
+  return /^(?:create-[a-z0-9@._-]+|vite(?:@[^\s]+)?|tsc|eslint|prettier|vitest|jest)$/.test(target)
+}
+
+function safePython(name: string, words: string[]) {
+  if (name !== 'python' && name !== 'python3' && name !== 'py') return false
+  if (words.some((word) => ['-c', '--command'].includes(word))) return false
+  if (words[1] === '-m') return ['pytest', 'venv', 'compileall'].includes(String(words[2] || ''))
+  return Boolean(words[1]) && !String(words[1]).startsWith('-')
+}
+
+function safeProjectCommand(name: string, words: string[]) {
+  if (directProjectCommands.has(name)) return true
+  if (workspaceMutationCommands.has(name)) return words.length >= 2
+  if (['npm', 'pnpm', 'yarn', 'bun'].includes(name)) return safePackageManager(name, words)
+  if (name === 'npx') return safeNpx(words)
+  if (safePython(name, words)) return true
+  if (name === 'uv') return ['run', 'sync', 'add', 'remove', 'lock', 'venv'].includes(String(words[1] || ''))
+  if (name === 'cargo') return ['build', 'check', 'test', 'run', 'fmt', 'clippy', 'add', 'remove'].includes(String(words[1] || ''))
+  if (name === 'go') return ['build', 'test', 'run', 'fmt', 'vet', 'get', 'mod'].includes(String(words[1] || ''))
+  if (name === 'node') {
+    return !words.some((word) => ['-e', '--eval', '-p', '--print'].includes(word)) && words.length >= 2
+  }
+  return false
+}
+
+function validSimpleCommand(command: unknown) {
+  const text = String(command || '').trim()
+  if (!text || text.length > 4000) return null
+  if (/[\r\n;|<>`]/.test(text) || /&&|\|\||\$\(/.test(text)) return null
+  return splitWords(text)
+}
+
+export function isHardBlockedTerminalCommand(command: unknown) {
+  const text = String(command || '').trim()
+  return hardBlockedPatterns.some((pattern) => pattern.test(text))
+}
+
+export function terminalCommandEscapesWorkspace(command: unknown, workspaceRoot: unknown, cwd: unknown = '') {
+  const root = String(workspaceRoot || '').trim()
+  if (!root) return false
+  const requestedCwd = String(cwd || '').trim()
+  if (requestedCwd && !isWorkspacePath(requestedCwd, root)) return true
+  const words = splitWords(String(command || '').trim())
   if (!words?.length) return false
+  return commandArgumentsEscapeWorkspace(words, root)
+}
+
+export function isReadOnlyWorkspaceCommand(command: unknown, workspaceRoot: unknown = '', cwd: unknown = '') {
+  const words = validSimpleCommand(command)
+  if (!words?.length) return false
+  const root = String(workspaceRoot || '').trim()
+  if (root && terminalCommandEscapesWorkspace(command, root, cwd)) return false
   const name = commandName(words[0])
-  if (escapesWorkspace(words)) return false
 
   if (simpleCommands.has(name)) return true
   if (name === 'command') return words.length >= 3 && words[1] === '-v'
@@ -133,6 +216,16 @@ export function isReadOnlyWorkspaceCommand(command: unknown) {
   if (name === 'fd') return !hasAny(words.slice(1), unsafeFdOptions)
   if (name === 'find') return !hasAny(words.slice(1), unsafeFindOptions)
   if (name === 'git') return safeGit(words)
-
   return false
+}
+
+export function isWorkspaceAutonomousCommand(command: unknown, workspaceRoot: unknown, cwd: unknown = '') {
+  if (isHardBlockedTerminalCommand(command)) return false
+  if (isReadOnlyWorkspaceCommand(command, workspaceRoot, cwd)) return true
+
+  const words = validSimpleCommand(command)
+  if (!words?.length) return false
+  const root = String(workspaceRoot || '').trim()
+  if (!root || terminalCommandEscapesWorkspace(command, root, cwd)) return false
+  return safeProjectCommand(commandName(words[0]), words)
 }
