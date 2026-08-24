@@ -1,0 +1,289 @@
+/* Application palettes adapted from the original IRIS appearance system. The palette values keep
+   IRIS' identity while mapping onto this editor's existing semantic surface variables. */
+
+.theme-dark,
+.theme-light {
+  --accent: #38bdf8;
+  --accent-soft: #7dd3fc;
+  --accent-rgb: 56, 189, 248;
+  --accent-secondary: #6c9eff;
+}
+
+.theme-iris-dark,
+.theme-iris-light,
+.theme-slate,
+.theme-rose,
+.theme-ocean,
+.theme-ember,
+.theme-dracula,
+.theme-one-dark,
+.theme-monokai,
+.theme-nord,
+.theme-tokyo-night,
+.theme-night-owl,
+.theme-solarized-dark,
+.theme-github-dark {
+  --surface-3: color-mix(in srgb, var(--surface-2) 72%, var(--app-bg));
+  --menu-bg: color-mix(in srgb, var(--surface-1) 94%, var(--app-bg));
+  --input-bg: color-mix(in srgb, var(--surface-2) 82%, var(--app-bg));
+  --input-border: color-mix(in srgb, var(--accent) 18%, var(--window-border));
+  --modal-start: color-mix(in srgb, var(--surface-1) 96%, transparent);
+  --modal-end: color-mix(in srgb, var(--app-bg) 96%, transparent);
+  --border: color-mix(in srgb, var(--text) 12%, transparent);
+  --window-border: color-mix(in srgb, var(--text) 22%, transparent);
+  --hover: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  --selected: color-mix(in srgb, var(--accent) 17%, var(--surface-2));
+  --terminal-active: color-mix(in srgb, var(--accent) 4%, transparent);
+  --terminal-bg: var(--surface-2);
+  --terminal-text: var(--text);
+  --terminal-prompt: var(--muted);
+}
+
+.theme-iris-dark {
+  color-scheme: dark;
+  --app-bg: #070817;
+  --editor-bg: #070817;
+  --surface-1: #0d0d1a;
+  --surface-2: rgba(20, 22, 42, 0.92);
+  --text: rgba(224, 235, 255, 0.94);
+  --muted: rgba(169, 190, 225, 0.72);
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-iris-light {
+  color-scheme: light;
+  --app-bg: #dce4ef;
+  --editor-bg: #f0f4fa;
+  --surface-1: #e6ecf5;
+  --surface-2: rgba(240, 244, 250, 0.98);
+  --text: rgba(24, 35, 52, 0.94);
+  --muted: rgba(56, 72, 98, 0.78);
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(0);
+  --icon-filter: invert(0);
+}
+
+.theme-slate {
+  color-scheme: dark;
+  --app-bg: #1f1f1d;
+  --editor-bg: #1f1f1d;
+  --surface-1: #242422;
+  --surface-2: rgba(42, 42, 39, 0.94);
+  --text: rgba(236, 230, 219, 0.92);
+  --muted: rgba(214, 205, 190, 0.68);
+  --accent: #f59e0b;
+  --accent-soft: #fbbf24;
+  --accent-rgb: 245, 158, 11;
+  --accent-secondary: #fb7185;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-rose {
+  color-scheme: light;
+  --app-bg: #ead6e1;
+  --editor-bg: #f7e8f0;
+  --surface-1: #f1dfe8;
+  --surface-2: rgba(247, 232, 240, 0.98);
+  --text: rgba(55, 29, 44, 0.94);
+  --muted: rgba(92, 50, 73, 0.8);
+  --accent: #f472b6;
+  --accent-soft: #f9a8d4;
+  --accent-rgb: 244, 114, 182;
+  --accent-secondary: #a855f7;
+  --logo-filter: invert(0);
+  --icon-filter: invert(0);
+}
+
+.theme-ocean {
+  color-scheme: dark;
+  --app-bg: #091725;
+  --editor-bg: #091725;
+  --surface-1: #0f2238;
+  --surface-2: rgba(17, 42, 68, 0.94);
+  --text: rgba(222, 240, 252, 0.92);
+  --muted: rgba(170, 207, 232, 0.7);
+  --accent: #22d3ee;
+  --accent-soft: #67e8f9;
+  --accent-rgb: 34, 211, 238;
+  --accent-secondary: #6c9eff;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-ember {
+  color-scheme: dark;
+  --app-bg: #1f1e1d;
+  --editor-bg: #1f1e1d;
+  --surface-1: #262624;
+  --surface-2: #33322f;
+  --text: #faf9f5;
+  --muted: #b7b5ac;
+  --accent: #c96442;
+  --accent-soft: #d98368;
+  --accent-rgb: 201, 100, 66;
+  --accent-secondary: #d9a066;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-dracula {
+  color-scheme: dark;
+  --app-bg: #282a36;
+  --editor-bg: #282a36;
+  --surface-1: #2e303e;
+  --surface-2: #3c3f52;
+  --text: #f8f8f2;
+  --muted: #bdc0d6;
+  --accent: #a855f7;
+  --accent-soft: #c084fc;
+  --accent-rgb: 168, 85, 247;
+  --accent-secondary: #6c9eff;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-one-dark {
+  color-scheme: dark;
+  --app-bg: #282c34;
+  --editor-bg: #282c34;
+  --surface-1: #2c313a;
+  --surface-2: #3a3f4b;
+  --text: #abb2bf;
+  --muted: #9da5b4;
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-monokai {
+  color-scheme: dark;
+  --app-bg: #272822;
+  --editor-bg: #272822;
+  --surface-1: #2e2f27;
+  --surface-2: #3a3b33;
+  --text: #f8f8f2;
+  --muted: #bcbba8;
+  --accent: #34d399;
+  --accent-soft: #6ee7b7;
+  --accent-rgb: 52, 211, 153;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-nord {
+  color-scheme: dark;
+  --app-bg: #2e3440;
+  --editor-bg: #2e3440;
+  --surface-1: #333a47;
+  --surface-2: #434c5e;
+  --text: #d8dee9;
+  --muted: #b5bece;
+  --accent: #22d3ee;
+  --accent-soft: #67e8f9;
+  --accent-rgb: 34, 211, 238;
+  --accent-secondary: #6c9eff;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-tokyo-night {
+  color-scheme: dark;
+  --app-bg: #1a1b26;
+  --editor-bg: #1a1b26;
+  --surface-1: #1f2030;
+  --surface-2: #2a2e42;
+  --text: #a9b1d6;
+  --muted: #9aa2c8;
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-night-owl {
+  color-scheme: dark;
+  --app-bg: #011627;
+  --editor-bg: #011627;
+  --surface-1: #04253b;
+  --surface-2: #122d44;
+  --text: #d6deeb;
+  --muted: #a7b6cc;
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-solarized-dark {
+  color-scheme: dark;
+  --app-bg: #002b36;
+  --editor-bg: #002b36;
+  --surface-1: #073642;
+  --surface-2: #0e4350;
+  --text: #93a1a1;
+  --muted: #839496;
+  --accent: #22d3ee;
+  --accent-soft: #67e8f9;
+  --accent-rgb: 34, 211, 238;
+  --accent-secondary: #6c9eff;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+.theme-github-dark {
+  color-scheme: dark;
+  --app-bg: #0d1117;
+  --editor-bg: #0d1117;
+  --surface-1: #161b22;
+  --surface-2: #21262d;
+  --text: #c9d1d9;
+  --muted: #a8b2bd;
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+  --logo-filter: invert(1);
+  --icon-filter: invert(1);
+}
+
+/* Explicit accents override a theme's coordinated default. Auto intentionally has no declarations. */
+.accent-blue { --accent: #6c9eff; --accent-soft: #8db4ff; --accent-rgb: 108, 158, 255; --accent-secondary: #22d3ee; }
+.accent-purple { --accent: #a855f7; --accent-soft: #c084fc; --accent-rgb: 168, 85, 247; --accent-secondary: #6c9eff; }
+.accent-cyan { --accent: #22d3ee; --accent-soft: #67e8f9; --accent-rgb: 34, 211, 238; --accent-secondary: #6c9eff; }
+.accent-green { --accent: #34d399; --accent-soft: #6ee7b7; --accent-rgb: 52, 211, 153; --accent-secondary: #22d3ee; }
+.accent-rose { --accent: #f472b6; --accent-soft: #f9a8d4; --accent-rgb: 244, 114, 182; --accent-secondary: #a855f7; }
+.accent-amber { --accent: #f59e0b; --accent-soft: #fbbf24; --accent-rgb: 245, 158, 11; --accent-secondary: #fb7185; }
+.accent-clay { --accent: #c96442; --accent-soft: #d98368; --accent-rgb: 201, 100, 66; --accent-secondary: #d9a066; }
+.accent-red { --accent: #ef4444; --accent-soft: #f87171; --accent-rgb: 239, 68, 68; --accent-secondary: #fb923c; }
+.accent-orange { --accent: #fb923c; --accent-soft: #fdba74; --accent-rgb: 251, 146, 60; --accent-secondary: #f59e0b; }
+.accent-yellow { --accent: #facc15; --accent-soft: #fde047; --accent-rgb: 250, 204, 21; --accent-secondary: #fb923c; }
+.accent-lime { --accent: #a6e22e; --accent-soft: #c6f25e; --accent-rgb: 166, 226, 46; --accent-secondary: #34d399; }
+.accent-emerald { --accent: #10b981; --accent-soft: #34d399; --accent-rgb: 16, 185, 129; --accent-secondary: #22d3ee; }
+.accent-teal { --accent: #2dd4bf; --accent-soft: #5eead4; --accent-rgb: 45, 212, 191; --accent-secondary: #22d3ee; }
+.accent-sky { --accent: #38bdf8; --accent-soft: #7dd3fc; --accent-rgb: 56, 189, 248; --accent-secondary: #6c9eff; }
+.accent-indigo { --accent: #6366f1; --accent-soft: #818cf8; --accent-rgb: 99, 102, 241; --accent-secondary: #a855f7; }
+.accent-violet { --accent: #8b5cf6; --accent-soft: #a78bfa; --accent-rgb: 139, 92, 246; --accent-secondary: #6c9eff; }
+.accent-fuchsia { --accent: #d946ef; --accent-soft: #e879f9; --accent-rgb: 217, 70, 239; --accent-secondary: #f472b6; }
+.accent-magenta { --accent: #ec4899; --accent-soft: #f472b6; --accent-rgb: 236, 72, 153; --accent-secondary: #a855f7; }
+.accent-slate { --accent: #94a3b8; --accent-soft: #cbd5e1; --accent-rgb: 148, 163, 184; --accent-secondary: #64748b; }
+
+[class*='accent-']:not(.accent-auto) {
+  --selected: color-mix(in srgb, var(--accent) 17%, var(--surface-2));
+}

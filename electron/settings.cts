@@ -2,7 +2,45 @@ import { app } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-type ThemeMode = 'light' | 'dark' | 'system'
+type ThemeMode =
+  | 'light'
+  | 'dark'
+  | 'system'
+  | 'iris-dark'
+  | 'iris-light'
+  | 'slate'
+  | 'rose'
+  | 'ocean'
+  | 'ember'
+  | 'dracula'
+  | 'one-dark'
+  | 'monokai'
+  | 'nord'
+  | 'tokyo-night'
+  | 'night-owl'
+  | 'solarized-dark'
+  | 'github-dark'
+type AccentColor =
+  | 'auto'
+  | 'blue'
+  | 'purple'
+  | 'cyan'
+  | 'green'
+  | 'rose'
+  | 'amber'
+  | 'clay'
+  | 'red'
+  | 'orange'
+  | 'yellow'
+  | 'lime'
+  | 'emerald'
+  | 'teal'
+  | 'sky'
+  | 'indigo'
+  | 'violet'
+  | 'fuchsia'
+  | 'magenta'
+  | 'slate'
 type SyntaxColorScheme = 'default' | 'high-contrast' | 'modern' | 'soft' | 'classic'
 type EditorFeaturePreset = 'minimal' | 'balanced' | 'full' | 'custom'
 type SuggestionMode = 'off' | 'manual' | 'typing'
@@ -12,6 +50,7 @@ type DiagnosticsMode = 'off' | 'save' | 'typing'
 
 export interface AppSettings {
   theme_mode: ThemeMode
+  accent_color: AccentColor
   recent_files: string[]
   restore_recent_files: boolean
   confirm_unsaved_close: boolean
@@ -72,6 +111,7 @@ export interface AppSettings {
 
 export const default_settings: AppSettings = {
   theme_mode: 'dark',
+  accent_color: 'auto',
   recent_files: [],
   restore_recent_files: true,
   confirm_unsaved_close: true,
@@ -176,10 +216,53 @@ export function sanitize_settings(value: unknown): AppSettings {
     }
   }
 
-  const theme_mode =
-    value.theme_mode === 'light' || value.theme_mode === 'dark' || value.theme_mode === 'system'
-      ? value.theme_mode
-      : default_settings.theme_mode
+  const theme_modes = new Set<ThemeMode>([
+    'light',
+    'dark',
+    'system',
+    'iris-dark',
+    'iris-light',
+    'slate',
+    'rose',
+    'ocean',
+    'ember',
+    'dracula',
+    'one-dark',
+    'monokai',
+    'nord',
+    'tokyo-night',
+    'night-owl',
+    'solarized-dark',
+    'github-dark',
+  ])
+  const accent_colors = new Set<AccentColor>([
+    'auto',
+    'blue',
+    'purple',
+    'cyan',
+    'green',
+    'rose',
+    'amber',
+    'clay',
+    'red',
+    'orange',
+    'yellow',
+    'lime',
+    'emerald',
+    'teal',
+    'sky',
+    'indigo',
+    'violet',
+    'fuchsia',
+    'magenta',
+    'slate',
+  ])
+  const theme_mode = theme_modes.has(value.theme_mode as ThemeMode)
+    ? (value.theme_mode as ThemeMode)
+    : default_settings.theme_mode
+  const accent_color = accent_colors.has(value.accent_color as AccentColor)
+    ? (value.accent_color as AccentColor)
+    : default_settings.accent_color
   const recent_files = Array.isArray(value.recent_files)
     ? value.recent_files.filter((file_path): file_path is string => typeof file_path === 'string').slice(0, 5)
     : []
@@ -204,9 +287,9 @@ export function sanitize_settings(value: unknown): AppSettings {
     appearance.syntax_color_scheme === 'high-contrast' ||
     appearance.syntax_color_scheme === 'modern' ||
     appearance.syntax_color_scheme === 'soft' ||
-    appearance.syntax_color_scheme === 'classic'
+    appearance.syntax_color_schem === 'classic'
       ? appearance.syntax_color_scheme
-      : default_settings.appearance.syntax_color_scheme
+      : default_settings.appearance.syntax_color_schem
   const render_whitespace =
     appearance.render_whitespace === 'all' || appearance.render_whitespace === 'off'
       ? appearance.render_whitespace
@@ -230,6 +313,7 @@ export function sanitize_settings(value: unknown): AppSettings {
 
   return {
     theme_mode,
+    accent_color,
     recent_files: restore_recent_files ? recent_files : [],
     restore_recent_files,
     confirm_unsaved_close: boolean_setting(value.confirm_unsaved_close, default_settings.confirm_unsaved_close),

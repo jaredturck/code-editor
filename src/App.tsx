@@ -145,6 +145,7 @@ function App() {
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
+  const code_editor_theme = ['light', 'iris-light', 'rose'].includes(editor.resolved_theme) ? 'light' : 'dark'
   const editor_grid_style = {
     gridTemplateRows: `minmax(0, 1fr) ${editor.bottom_panel_open ? panels.bottom_panel_height : 0}px`,
   }
@@ -161,7 +162,7 @@ function App() {
 
   return (
     <div
-      className={`theme-${editor.resolved_theme} ${window_shape_class} relative flex min-h-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text)] shadow-2xl`}
+      className={`theme-${editor.resolved_theme} accent-${editor.settings.accent_color} ${window_shape_class} relative flex min-h-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text)] shadow-2xl`}
     >
       {editor.open_menu !== null && (
         <button
@@ -289,7 +290,7 @@ function App() {
             onToggleMarkdownView={editor.toggle_markdown_view}
             onUpdateDocument={editor.update_document}
             settings={editor.settings}
-            theme={editor.resolved_theme}
+            theme={code_editor_theme}
             workspaceRoot={workspace.root_path}
           />
 

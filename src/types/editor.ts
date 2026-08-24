@@ -1,6 +1,44 @@
 export type ActivitySection = 'explorer' | 'search' | 'source-control'
 export type BottomPanelTab = 'problems' | 'terminal'
-export type ThemeMode = 'light' | 'dark' | 'system'
+export type ThemeMode =
+  | 'light'
+  | 'dark'
+  | 'system'
+  | 'iris-dark'
+  | 'iris-light'
+  | 'slate'
+  | 'rose'
+  | 'ocean'
+  | 'ember'
+  | 'dracula'
+  | 'one-dark'
+  | 'monokai'
+  | 'nord'
+  | 'tokyo-night'
+  | 'night-owl'
+  | 'solarized-dark'
+  | 'github-dark'
+export type AccentColor =
+  | 'auto'
+  | 'blue'
+  | 'purple'
+  | 'cyan'
+  | 'green'
+  | 'rose'
+  | 'amber'
+  | 'clay'
+  | 'red'
+  | 'orange'
+  | 'yellow'
+  | 'lime'
+  | 'emerald'
+  | 'teal'
+  | 'sky'
+  | 'indigo'
+  | 'violet'
+  | 'fuchsia'
+  | 'magenta'
+  | 'slate'
 export type SyntaxColorScheme = 'default' | 'high-contrast' | 'modern' | 'soft' | 'classic'
 export type TopMenu = 'file' | 'edit' | 'go' | 'view' | 'terminal' | null
 export type IndentStyle = 'spaces' | 'tabs'
@@ -109,6 +147,7 @@ export interface AISettings {
 
 export interface EditorSettings {
   theme_mode: ThemeMode
+  accent_color: AccentColor
   recent_files: string[]
   restore_recent_files: boolean
   confirm_unsaved_close: boolean

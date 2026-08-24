@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import { hydrateDurableStore } from '@/platform/localStorageStore'
 import './index.css'
+import './themes.css'
 
 function render_fatal_startup(message: string) {
   const root = document.getElementById('root')

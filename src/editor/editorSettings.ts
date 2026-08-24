@@ -2,6 +2,7 @@ import type { EditorFeaturePreset, EditorSettings } from '../types/editor'
 
 export const default_editor_settings: EditorSettings = {
   theme_mode: 'dark',
+  accent_color: 'auto',
   recent_files: [],
   restore_recent_files: true,
   confirm_unsaved_close: true,
