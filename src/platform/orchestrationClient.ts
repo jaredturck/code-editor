@@ -44,7 +44,6 @@ import type {
 } from '@/platform/agent/subAgentTypes'
 import {
   postTask,
-  postTaskBatch,
   waitForTask,
   waitForAllTasks,
   pollTaskResult,
@@ -142,7 +141,6 @@ export function evaluateDelegationResult(
     return { satisfied: false, reason: 'timeout' }
   }
 
-  // Output schema validation
   if (task?.output?.schema && Object.keys(task.output.schema).length > 0) {
     const schema = task.output.schema
     const res = result.result
@@ -157,7 +155,6 @@ export function evaluateDelegationResult(
     }
   }
 
-  // Empty result check
   if (!result.result || (typeof result.result === 'object' && Object.keys(result.result).length === 0)) {
     return { satisfied: false, reason: 'empty_result' }
   }
@@ -165,26 +162,10 @@ export function evaluateDelegationResult(
   return { satisfied: true, reason: 'ok' }
 }
 
-// ── Delegation target resolution ──────────────────────────────────────────────
-
-/**
- * Resolve a delegation target into a stable role-based agent id plus the settings that sub-agent
- * should run with (its OWN provider/model/key from the flat `agent_models` mesh, via
- * resolveAgentRoleSettings). This keeps the agent id the orchestrator delegates to aligned with the
- * loops started at session bootstrap, and guarantees each role uses its assigned model rather than
- * inheriting the orchestrator's. (pickDelegateMember layers per-key distribution on top of this.)
- *
- * @param {string} toAgent  - role name or provider alias the model asked for
- * @param {object} settings - orchestrator settings (the flat agent_models list backs the binding)
- * @returns {{ agentId: 'executor'|'scout'|'orchestrator', role: string, provider: string, model: string, identity: object, subSettings: object }}
- */
 export function resolveDelegateTarget(toAgent: unknown, settings: SubAgentSettings): DelegateTarget {
   const role = normalizeAgentRole(toAgent)
   const resolved = resolveAgentRoleSettings(role, settings)
 
-  // subSettings carries the role's provider/model AND its own API key — the key
-  // binding lives in applyAgentIdentityToSettings (agentIdentity.ts) so both this
-  // path and the sessionRunner bootstrap resolve it identically.
   return {
     agentId: role,
     role,
@@ -195,21 +176,7 @@ export function resolveDelegateTarget(toAgent: unknown, settings: SubAgentSettin
   }
 }
 
-// ── Agent tool implementations ────────────────────────────────────────────────
-// These are called by agentRuntime's tool broker when Claude uses agent.* tools.
-
-/**
- * agent.delegate — Post a task to a sub-agent.
- * Non-blocking by default; returns taskId for later recall.
- *
- * @param {object} args
- * @param {object} settings  - Current AI settings (for resolving caller identity)
- * @returns {Promise<object>}
- */
 export async function handleAgentDelegate(args: DelegateArgs, settings: SubAgentSettings): Promise<DelegateResult> {
-  // Spread delegated work across the role's keyed standby members (round-robin) so it doesn't all
-  // hit Key 1 — or target a specific member id (e.g. a teamwork part owner). Falls back to the role
-  // primary when no distinct members are pooled.
   const { agentId: toAgent, identity, subSettings } = pickDelegateMember(String(args?.toAgent || 'executor'), settings)
   const type = String(args?.type || 'execute')
   const instructions = String(args?.instructions || args?.goal || '').trim()
@@ -217,9 +184,6 @@ export async function handleAgentDelegate(args: DelegateArgs, settings: SubAgent
     ? Math.max(5000, Math.min(300000, Number(args.timeoutMs)))
     : DEFAULT_DELEGATE_TIMEOUT_MS
 
-  // Load the sub-agent's OWN skill profile (model-family scoped) so it executes
-  // with its role's advanced skills. Use the "simple" variant for small/local
-  // models. The orchestrator may override via args.skills.
   const subProfile = buildSkillProfile(subSettings?.ai_provider, subSettings?.ai_model)
   const subModel = String(subSettings?.ai_model || '').toLowerCase()
   const weakFamilies = ['gemma', 'phi', 'llama', 'mistral', 'mixtral', 'qwen']
@@ -254,21 +218,13 @@ export async function handleAgentDelegate(args: DelegateArgs, settings: SubAgent
     agentIdentity: identity,
   })
 
-  // Ensure the target agent loop is running with ITS role's provider/model
-  // (idempotent — a no-op if bootstrap already started it).
   ensureSubAgentLoop(toAgent, subSettings)
-
-  // Optionally wait for agent availability before posting
-  if (args?.waitForIdle !== false) {
-    await awaitAgentAvailable(toAgent, 3000) // Short wait; fall through either way
-  }
-
+  if (args?.waitForIdle !== false) await awaitAgentAvailable(toAgent, 3000)
   const taskId = postTask(stp)
 
   return {
     taskId,
     toAgent,
-    // The actual model behind the resolved member, so the UI can show "executor#2".
     model: String(identity?.model || subSettings?.ai_model || ''),
     summary: summariseSTP(stp),
     status: 'posted',
@@ -276,19 +232,10 @@ export async function handleAgentDelegate(args: DelegateArgs, settings: SubAgent
   }
 }
 
-/**
- * agent.recall — Retrieve result for a delegated task.
- * If waitMs is set, polls until done or timeout.
- *
- * @param {object} args - { taskId, waitMs }
- * @returns {Promise<object>}
- */
 export async function handleAgentRecall(args: RecallArgs): Promise<RecallResult> {
   const taskId = String(args?.taskId || '').trim()
   if (!taskId) throw new Error('taskId is required for agent.recall')
-
   const waitMsParam = Number.isFinite(Number(args?.waitMs)) ? Number(args.waitMs) : 0
-
   if (waitMsParam > 0) {
     try {
       const result = await waitForTask(taskId, waitMsParam)
@@ -315,8 +262,6 @@ export async function handleAgentRecall(args: RecallArgs): Promise<RecallResult>
       }
     }
   }
-
-  // Non-blocking poll
   const result = pollTaskResult(taskId)
   return {
     taskId,
@@ -331,74 +276,34 @@ export async function handleAgentRecall(args: RecallArgs): Promise<RecallResult>
   }
 }
 
-/**
- * agent.status — Lightweight task status check (no result data).
- *
- * @param {object} args - { taskId }
- * @returns {object}
- */
-export function handleAgentStatus(args: StatusArgs): {
-  taskId: string
-  status: SubAgentTaskResult['status'] | 'unknown'
-} {
+export function handleAgentStatus(args: StatusArgs): { taskId: string; status: SubAgentTaskResult['status'] | 'unknown' } {
   const taskId = String(args?.taskId || '').trim()
   if (!taskId) throw new Error('taskId is required for agent.status')
-
-  const status = getTaskStatus(taskId)
-  return { taskId, status }
+  return { taskId, status: getTaskStatus(taskId) }
 }
 
-/**
- * agent.roster — Return all registered agents and their status.
- *
- * @returns {object}
- */
 export function handleAgentRoster(): { agents: SubAgentRosterEntry[] } {
   return { agents: getAgentRoster() }
 }
 
-/**
- * agent.broadcast — Push a context update to all queued tasks.
- *
- * @param {object} args - { message, contextUpdate }
- * @returns {object}
- */
-export function handleAgentBroadcast(args: BroadcastArgs): {
-  broadcasted: true
-  message: string
-} {
+export function handleAgentBroadcast(args: BroadcastArgs): { broadcasted: true; message: string } {
   const message = String(args?.message || '').trim()
   const contextUpdate =
     args?.contextUpdate && typeof args.contextUpdate === 'object' ? (args.contextUpdate as Record<string, unknown>) : {}
-
   broadcastToAgents(message, contextUpdate)
   return { broadcasted: true, message }
 }
 
-/**
- * agent.verify — Evaluate a sub-agent result against criteria.
- * Returns verdict and optionally queues a fallback action.
- *
- * @param {object} args - { taskId, criteria, fallbackAction }
- * @returns {Promise<object>}
- */
 export async function handleAgentVerify(args: VerifyArgs): Promise<VerifyResult> {
   const taskId = String(args?.taskId || '').trim()
   if (!taskId) throw new Error('taskId is required for agent.verify')
-
   const result = pollTaskResult(taskId)
-  if (!result) {
-    return { taskId, verdict: 'not_ready', message: 'Task result not yet available.' }
-  }
-
+  if (!result) return { taskId, verdict: 'not_ready', message: 'Task result not yet available.' }
   const criteria = String(args?.criteria || '').trim()
-
-  // Simple criteria check — Claude would supply richer logic via the AI loop
   const { satisfied, reason, warning } = evaluateDelegationResult(
     { output: { schema: {} }, budget: { maxSteps: 8 } },
     result,
   )
-
   return {
     taskId,
     verdict: satisfied ? 'pass' : 'fail',
@@ -410,17 +315,6 @@ export async function handleAgentVerify(args: VerifyArgs): Promise<VerifyResult>
   }
 }
 
-// ── Parallel delegation ───────────────────────────────────────────────────────
-
-/**
- * Delegate multiple tasks in parallel and wait for all of them.
- * Claude posts a burst; sub-agents work simultaneously; single resume point.
- *
- * @param {object[]} taskArgsList  - Array of agent.delegate args objects
- * @param {object} settings
- * @param {number} timeoutMs
- * @returns {Promise<object[]>}
- */
 export async function delegateParallel(
   taskArgsList: DelegateArgs[],
   settings: SubAgentSettings,
@@ -430,33 +324,18 @@ export async function delegateParallel(
   if (taskArgsList.length > MAX_PARALLEL_DELEGATIONS) {
     throw new Error(`Parallel delegation exceeds the ${MAX_PARALLEL_DELEGATIONS}-task limit`)
   }
-  // Post all tasks
   const taskIds = await Promise.all(
     taskArgsList.map((args) => handleAgentDelegate(args, settings).then((r) => r.taskId)),
   )
-
-  // Wait for all to complete
-  const results = await waitForAllTasks(taskIds, timeoutMs)
-  return results
+  return waitForAllTasks(taskIds, timeoutMs)
 }
 
-// ── Sub-agent loop lifecycle ──────────────────────────────────────────────────
-
-// Each loop carries the IDENTITY HASH (provider|model|key|tier) of the member it runs, so a
-// settings change can restart a loop whose model/key/tier moved — instead of the old idempotent
-// map keeping a stale one-time snapshot (the "have to restart the app" bug).
 const activeLoops = new Map<string, { handle: SubAgentLoopHandle; hash: string }>()
 
 function memberHash(member: { provider: string; model: string; keyId: string; tier: number }): string {
   return `${member.provider}|${member.model}|${member.keyId}|${member.tier}`
 }
 
-/**
- * Ensure a sub-agent loop is running for the given agent. Idempotent on identity: a loop with the
- * SAME hash is a no-op; if the member's identity changed (model/key/tier) the old loop is stopped
- * and a fresh one starts with the new settings. Passing no hash keeps the legacy "start once"
- * behavior for ad-hoc delegate calls.
- */
 export function ensureSubAgentLoop(agentId: string, settings: SubAgentSettings, hash = ''): void {
   const existing = activeLoops.get(agentId)
   if (existing) {
@@ -464,18 +343,11 @@ export function ensureSubAgentLoop(agentId: string, settings: SubAgentSettings, 
     existing.handle.stop()
     activeLoops.delete(agentId)
   }
-  if (activeLoops.size >= MAX_ACTIVE_SUB_AGENT_LOOPS) {
-    throw new Error('Active sub-agent loop limit reached')
-  }
+  if (activeLoops.size >= MAX_ACTIVE_SUB_AGENT_LOOPS) throw new Error('Active sub-agent loop limit reached')
   const handle = startSubAgentLoop(agentId, settings)
   activeLoops.set(agentId, { handle, hash })
 }
 
-/**
- * Stop a sub-agent loop.
- *
- * @param {string} agentId
- */
 export function stopSubAgentLoop(agentId: string): void {
   const entry = activeLoops.get(agentId)
   if (entry) {
@@ -484,9 +356,6 @@ export function stopSubAgentLoop(agentId: string): void {
   }
 }
 
-/**
- * Stop all running sub-agent loops.
- */
 export function stopAllSubAgentLoops(): void {
   for (const [agentId, entry] of activeLoops) {
     entry.handle.stop()
@@ -495,11 +364,6 @@ export function stopAllSubAgentLoops(): void {
   standbyMembers.clear()
 }
 
-// ── Per-key standby pool (Workstream D / §2) ──────────────────────────────────
-// Every connectable roster member EXCEPT the orchestrator answerer (the main session loop) and
-// the one-shot Overwatcher is kept "on standby" — a worker loop bound to its OWN provider/model/
-// KEY, so concurrent agents never share one provider's rate limit and a delegation can be spread
-// across a role's keyed members. Keyed by member id (executor, executor#2, …).
 const standbyMembers = new Map<string, { member: RosterMember; settings: SubAgentSettings; hash: string }>()
 const roleRoundRobin = new Map<string, number>()
 let standbySubscribed = false
@@ -514,32 +378,17 @@ function resolveMemberSettings(member: RosterMember, settings: SubAgentSettings)
   }) as SubAgentSettings
 }
 
-// A member can go on standby only when it has a model AND a usable key for its slot (local needs
-// none) — otherwise it would delegate straight into an auth failure.
 function isMemberConnectable(member: RosterMember): boolean {
   if (!member.provider || !member.model) return false
   return member.provider === 'local' || Boolean(getKey(member.provider, member.keyId || '1'))
 }
 
-/** Why a configured member could not join the standby pool — surfaced so the drop isn't silent. */
 export interface DroppedMember {
   member: RosterMember
   reason: string
 }
 
-/**
- * Partition the configured roster (excluding the Overwatcher and the primary orchestrator, which
- * is the lead itself) into delegatable members that CAN connect and those that can't — with a
- * human-readable reason for each drop, so a misconfigured key no longer silently removes a model.
- */
-function standbyRoster(settings: SubAgentSettings): {
-  connected: RosterMember[]
-  dropped: DroppedMember[]
-} {
-  // Optional team-role allowlist: when set, only these roles may load onto the team (e.g. keep extra
-  // orchestrators out so the lead isn't consulting other orchestrators). null/empty/non-array = all
-  // delegatable roles allowed (default). Excluded roles are filtered out silently — it's a choice,
-  // not a misconfiguration, so they don't appear as "dropped".
+function standbyRoster(settings: SubAgentSettings): { connected: RosterMember[]; dropped: DroppedMember[] } {
   const rawAllow = (settings as Record<string, unknown> | null)?.agent_team_roles
   const allowList = Array.isArray(rawAllow) && rawAllow.length ? new Set(rawAllow.map((r) => String(r))) : null
   const delegatable = buildAgentRoster(settings as never).filter(
@@ -568,16 +417,6 @@ function standbyRoster(settings: SubAgentSettings): {
   return { connected: connected.slice(0, MAX_ACTIVE_SUB_AGENT_LOOPS), dropped }
 }
 
-function standbyDesired(settings: SubAgentSettings): RosterMember[] {
-  return standbyRoster(settings).connected
-}
-
-/**
- * Reconcile the live standby pool with the configured roster. Starts a loop per desired member
- * (eager mode) or just registers them for on-demand start (lazy mode), restarts any whose identity
- * changed, and stops loops for members that were removed/re-keyed. Subscribes once so future
- * settings writes re-sync WITHOUT an app restart. No-ops (and tears down) when multi-agent is off.
- */
 export interface StandbyPoolState {
   members: string[]
   roles: string[]
@@ -596,40 +435,29 @@ export function syncStandbyPool(settings: SubAgentSettings): StandbyPoolState {
       }
     })
   }
-
   if (settings?.agent_multi_enabled !== true) {
     stopAllSubAgentLoops()
     return { members: [], roles: [], connected: [], dropped: [] }
   }
-
   const eager = String(settings?.agent_standby_mode || 'eager').toLowerCase() !== 'lazy'
   const roster = standbyRoster(settings)
   const desired = roster.connected
   const desiredIds = new Set(desired.map((m) => m.id))
-
-  // Stop loops + registrations for members that no longer exist (removed / re-keyed / re-tiered).
-  for (const id of [...standbyMembers.keys()]) {
-    if (!desiredIds.has(id)) standbyMembers.delete(id)
-  }
-  for (const id of [...activeLoops.keys()]) {
-    if (!desiredIds.has(id)) stopSubAgentLoop(id)
-  }
-
+  for (const id of [...standbyMembers.keys()]) if (!desiredIds.has(id)) standbyMembers.delete(id)
+  for (const id of [...activeLoops.keys()]) if (!desiredIds.has(id)) stopSubAgentLoop(id)
   for (const member of desired) {
     const subSettings = resolveMemberSettings(member, settings)
     const hash = memberHash(member)
     standbyMembers.set(member.id, { member, settings: subSettings, hash })
     const running = activeLoops.get(member.id)
-    // Eager → keep it warm; lazy → only (re)start to apply changed settings to an already-live loop.
     if (eager || (running && running.hash !== hash)) {
       try {
         ensureSubAgentLoop(member.id, subSettings, hash)
       } catch {
-        /* loop cap reached — extra members stay registered for on-demand use */
+        /* loop cap reached */
       }
     }
   }
-
   return {
     members: desired.map((m) => m.id),
     roles: Array.from(new Set(desired.map((m) => m.role))),
@@ -638,34 +466,17 @@ export function syncStandbyPool(settings: SubAgentSettings): StandbyPoolState {
   }
 }
 
-/** Read-only roster partition for callers (e.g. the chat /plan gate) that need the same
- *  connectable / dropped view without starting or tearing down any standby loops. */
-export function inspectStandbyRoster(settings: SubAgentSettings): {
-  connected: RosterMember[]
-  dropped: DroppedMember[]
-} {
+export function inspectStandbyRoster(settings: SubAgentSettings): { connected: RosterMember[]; dropped: DroppedMember[] } {
   if (settings?.agent_multi_enabled !== true) return { connected: [], dropped: [] }
   return standbyRoster(settings)
 }
 
-/**
- * Choose which member of a role a delegation goes to, spreading load across that role's keyed
- * members (prefer an idle one; round-robin otherwise) so heavy delegated work doesn't pile onto
- * Key 1. Falls back to the role's primary binding when no distinct members are pooled. Ensures the
- * chosen member's loop is up (covers lazy mode) before the caller posts.
- */
 export function pickDelegateMember(
   target: string,
   settings: SubAgentSettings,
-): {
-  agentId: string
-  identity: { role: AgentRoleId; provider: string; model: string }
-  subSettings: SubAgentSettings
-} {
+): { agentId: string; identity: { role: AgentRoleId; provider: string; model: string }; subSettings: SubAgentSettings } {
   const raw = String(target || '').trim()
   const localOnly = settings?.agent_local_only_enforced === true
-  // A SPECIFIC member id (e.g. "executor#2", a teamwork part owner) → target it directly rather
-  // than round-robining away from it. Plain role names fall through to load-distribution below.
   if (raw.includes('#')) {
     const exact = standbyMembers.get(raw)
     if (exact && (!localOnly || exact.member.provider === 'local')) {
@@ -676,11 +487,7 @@ export function pickDelegateMember(
       }
       return {
         agentId: exact.member.id,
-        identity: {
-          role: exact.member.role,
-          provider: exact.member.provider,
-          model: exact.member.model,
-        },
+        identity: { role: exact.member.role, provider: exact.member.provider, model: exact.member.model },
         subSettings: exact.settings,
       }
     }
@@ -701,7 +508,7 @@ export function pickDelegateMember(
   try {
     ensureSubAgentLoop(chosen.member.id, chosen.settings, chosen.hash)
   } catch {
-    /* non-fatal — fall through to posting; the loop may already be at cap */
+    /* non-fatal */
   }
   return {
     agentId: chosen.member.id,
@@ -710,12 +517,6 @@ export function pickDelegateMember(
   }
 }
 
-/**
- * Teamwork fallback (§F4): a delegated part failed on `failedMemberId` — mark that member unhealthy
- * and choose a DIFFERENT healthy teammate to take the part over, preferring the same role/tier and
- * then any healthy worker. Returns the new member id (+ model/role) to re-delegate to, or null when
- * no other healthy teammate can take it (the caller then re-plans or has the lead absorb it).
- */
 export function reassignFailedPart(
   failedMemberId: string,
   settings: SubAgentSettings,
@@ -735,7 +536,6 @@ export function reassignFailedPart(
       isModelHealthy(m.member.provider, m.member.model, m.member.keyId),
   )
   if (!healthy.length) return null
-  // Prefer a healthy member of the SAME role/tier; else any healthy worker.
   const pick = healthy.find((m) => m.member.role === failedRole) || healthy[0]
   try {
     ensureSubAgentLoop(pick.member.id, pick.settings, pick.hash)
@@ -747,46 +547,25 @@ export function reassignFailedPart(
 
 export { resolveAgentId, subscribeSubAgentEvents, TASK_STATUS }
 
-/**
- * Detect the current orchestration mode based on which agents are online.
- * Returns 'full' | 'dual' | 'solo'
- * - full: orchestrator + executor + scout all online
- * - dual: orchestrator + one sub-agent online
- * - solo: only orchestrator online (or no multi-agent configured)
- *
- * @returns {Promise<{mode: string, available: string[], offline: string[]}>}
- */
 export async function detectOrchestrationMode(): Promise<OrchestrationModeResult> {
   try {
     const result = handleAgentRoster()
     const roster = Array.isArray(result?.agents) ? result.agents : []
     const onlineRoles = roster
       .filter((a) => a.status !== 'offline' && Date.now() - (a.lastSeen || 0) < 30000)
-      // Loops are keyed by member id (executor, executor#2, …); collapse to the role so a role with
-      // ANY online keyed member counts as connected.
       .map((a) => String(normalizeAgentRole(String(a.role || a.id).split('#')[0])))
-    // The orchestrator is the current (calling) agent — always online.
     if (!onlineRoles.includes('orchestrator')) onlineRoles.push('orchestrator')
     const allRoles = ['orchestrator', 'executor', 'scout']
     const offline = allRoles.filter((r) => !onlineRoles.includes(r))
-
     let mode: OrchestrationModeResult['mode'] = 'solo'
     if (onlineRoles.includes('executor') && onlineRoles.includes('scout')) mode = 'full'
     else if (onlineRoles.includes('executor') || onlineRoles.includes('scout')) mode = 'dual'
-
     return { mode, available: onlineRoles, offline }
   } catch {
     return { mode: 'solo', available: ['orchestrator'], offline: ['executor', 'scout'] }
   }
 }
 
-/**
- * Resolve the current agent's role from settings.
- * Returns 'orchestrator' | 'executor' | 'scout'
- *
- * @param {object} settings
- * @returns {string}
- */
 export function resolveCurrentRole(settings: SubAgentSettings): AgentRoleId {
   return resolveCurrentAgentRole(settings)
 }
