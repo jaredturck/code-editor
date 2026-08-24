@@ -269,21 +269,28 @@ function App() {
             documents={editor.documents}
             editorRef={editor_ref}
             onCloseDocument={editor.close_document}
+            onCloseDocuments={editor.close_documents}
             onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
             onOpenFilePath={(file_path) => {
               mark_manual_editor_focus()
               void editor.open_file_path(file_path)
             }}
+            onOpenContainingFolder={workspace.reveal_entry}
             onParserDiagnostics={editor.update_parser_diagnostics}
             onSelectDocument={(document_id) => {
               mark_manual_editor_focus()
               editor.select_document(document_id)
             }}
+            onRevealInExplorer={(file_path) => {
+              editor.select_activity('explorer')
+              void workspace.reveal_path(file_path)
+            }}
             onToggleMarkdownView={editor.toggle_markdown_view}
             onUpdateDocument={editor.update_document}
             settings={editor.settings}
             theme={editor.resolved_theme}
+            workspaceRoot={workspace.root_path}
           />
 
           <TerminalPanel
