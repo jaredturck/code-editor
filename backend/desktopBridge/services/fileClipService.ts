@@ -188,6 +188,26 @@ export async function availableClipCudaDevices(): Promise<number[]> {
   })
 }
 
+/** Reports the concrete CLIP execution backend selected for this process. */
+function logClipRuntime(runtime: ClipRuntime): void {
+  if (runtime.device === 'cuda') {
+    const devices = runtime.visionLanes
+      .map((lane) => lane.deviceIndex)
+      .filter((deviceIndex): deviceIndex is number => deviceIndex !== null)
+      .join(', ')
+    console.info(
+      `[semantic-index] CLIP image embeddings: CUDA FP16 · ${runtime.visionLanes.length} GPU lane${runtime.visionLanes.length === 1 ? '' : 's'}${devices ? ` · device${runtime.visionLanes.length === 1 ? '' : 's'} ${devices}` : ''}`,
+    )
+  } else {
+    console.warn(
+      `[semantic-index] CLIP image embeddings: CPU Q8 · ${runtime.fallbackError || 'CUDA execution is not active'}`,
+    )
+  }
+  if (runtime.laneErrors?.length) {
+    console.warn(`[semantic-index] CLIP CUDA diagnostics: ${runtime.laneErrors.join('; ')}`)
+  }
+}
+
 /** Creates the shared CLIP runtime, preferring CUDA FP16 before the CPU Q8 fallback. */
 export async function loadClipRuntime(): Promise<ClipRuntime> {
   await fs.mkdir(FILE_CLIP_CACHE_DIR, { recursive: true })
@@ -230,14 +250,14 @@ export async function loadClipRuntime(): Promise<ClipRuntime> {
       }
     }
   } else {
-    fallbackError = laneErrors?.join('; ') || 'CUDA provider unavailable; using the CPU CLIP runtime'
+    fallbackError = laneErrors?.join('; ') || 'CUDA execution provider/device unavailable; using the CPU CLIP runtime'
     device = 'cpu'
     dtype = 'q8'
     models = await loadClipModels(transformers, device, dtype)
     visionLanes = [{ model: models.visionModel, deviceIndex: null }]
   }
 
-  return {
+  const runtime: ClipRuntime = {
     tokenizer,
     processor,
     textModel: models.textModel,
@@ -251,6 +271,8 @@ export async function loadClipRuntime(): Promise<ClipRuntime> {
     fallbackError,
     laneErrors,
   }
+  logClipRuntime(runtime)
+  return runtime
 }
 
 /** Returns the retained CLIP runtime and resets failed initialization for a later retry. */
