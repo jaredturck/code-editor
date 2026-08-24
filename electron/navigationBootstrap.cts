@@ -3,12 +3,14 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { is_trusted_renderer_navigation } from './navigationSecurity.cjs'
 
-declare module 'electron' {
-  interface NavigationHistory {
-    canGoBack(): boolean
-    canGoForward(): boolean
-    goBack(): void
-    goForward(): void
+declare global {
+  namespace Electron {
+    interface NavigationHistory {
+      canGoBack(): boolean
+      canGoForward(): boolean
+      goBack(): void
+      goForward(): void
+    }
   }
 }
 
