@@ -228,7 +228,7 @@ function AISettingsPanel({
   }
 
   const row = (id: string, label: string, description: string, control: React.ReactNode) => (
-    <SettingsRow description={description} highlighted={highlighted_setting === id} id={id} label={label}>
+    <SettingsRow key={id} description={description} highlighted={highlighted_setting === id} id={id} label={label}>
       {control}
     </SettingsRow>
   )

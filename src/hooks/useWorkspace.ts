@@ -70,10 +70,14 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
   const refresh_timeout_ref = useRef<number | null>(null)
   const directory_versions_ref = useRef(new Map<string, number>())
   const pending_refresh_paths_ref = useRef(new Set<string>())
+  const on_notice_ref = useRef(onNotice)
+  const load_directory_ref = useRef<((directory_path: string) => Promise<void>) | null>(null)
+  const reveal_path_ref = useRef<((target_path: string) => Promise<void>) | null>(null)
 
   root_path_ref.current = root_path
   nodes_ref.current = nodes
   expanded_paths_ref.current = expanded_paths
+  on_notice_ref.current = onNotice
 
   const load_directory = async (directory_path: string) => {
     const current_root_path = root_path_ref.current
@@ -126,6 +130,8 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
     }
   }
 
+  load_directory_ref.current = load_directory
+
   const refresh_loaded_directories = async () => {
     const loaded_directories = [...nodes_ref.current.values()]
       .filter((node) => node.kind === 'directory' && node.children !== null && !node.is_symlink)
@@ -137,6 +143,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
   }
 
   useEffect(() => {
+    const pending_refresh_paths = pending_refresh_paths_ref.current
     const remove_change_listener = window.editor_api.workspace.on_change((payload) => {
       const current_root_path = root_path_ref.current
 
@@ -151,7 +158,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
         const candidate_node = nodes_ref.current.get(candidate_path)
 
         if (candidate_node?.kind === 'directory' && candidate_node.children !== null) {
-          pending_refresh_paths_ref.current.add(candidate_path)
+          pending_refresh_paths.add(candidate_path)
           break
         }
 
@@ -168,19 +175,19 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
       refresh_timeout_ref.current = window.setTimeout(() => {
         refresh_timeout_ref.current = null
-        const refresh_paths = [...pending_refresh_paths_ref.current]
-        pending_refresh_paths_ref.current.clear()
+        const refresh_paths = [...pending_refresh_paths]
+        pending_refresh_paths.clear()
 
         void (async () => {
           for (const refresh_path of refresh_paths) {
-            await load_directory(refresh_path)
+            await load_directory_ref.current?.(refresh_path)
           }
         })()
       }, 180)
     })
     const remove_error_listener = window.editor_api.workspace.on_watch_error((payload) => {
       if (payload.root_path === root_path_ref.current) {
-        onNotice(`Workspace watching stopped: ${payload.message}`)
+        on_notice_ref.current(`Workspace watching stopped: ${payload.message}`)
       }
     })
 
@@ -193,7 +200,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
         refresh_timeout_ref.current = null
       }
 
-      pending_refresh_paths_ref.current.clear()
+      pending_refresh_paths.clear()
     }
   }, [])
 
@@ -566,9 +573,11 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
     set_selected_path(target_path)
   }
 
+  reveal_path_ref.current = reveal_path
+
   useEffect(() => {
     if (active_file_path) {
-      void reveal_path(active_file_path)
+      void reveal_path_ref.current?.(active_file_path)
     }
   }, [active_file_path, root_path])
 

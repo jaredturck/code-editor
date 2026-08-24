@@ -294,6 +294,15 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const on_focus_ref = useRef(onFocus)
   const settings_ref = useRef(settings)
   const theme_ref = useRef(theme)
+  const active_document_ref = useRef(activeDocument)
+  const initial_document_ref = useRef(activeDocument)
+  const create_editor_state_ref = useRef<((document: TextEditorDocument) => EditorState) | null>(null)
+  const schedule_parser_diagnostics_ref = useRef<
+    ((view: EditorView, document: TextEditorDocument) => void) | null
+  >(null)
+  const apply_diagnostics_ref = useRef<
+    ((view: EditorView, document_id: number, editor_diagnostics: EditorDiagnostic[]) => void) | null
+  >(null)
   const [context_menu, set_context_menu] = useState<ContextMenuState | null>(null)
   const [context_command_state, set_context_command_state] = useState<EditorCommandState>(() => ({
     can_undo: false,
@@ -312,6 +321,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   settings_ref.current = settings
   on_parser_diagnostics_ref.current = onParserDiagnostics
   theme_ref.current = theme
+  active_document_ref.current = activeDocument
 
   const notify_command_state = (state: EditorState) => {
     const command_state = get_command_state(state)
@@ -688,8 +698,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     })
   }
 
-  const apply_diagnostics = (view: EditorView, editor_diagnostics: EditorDiagnostic[]) => {
-    const signature = get_diagnostics_signature(activeDocument.id, editor_diagnostics)
+  const apply_diagnostics = (view: EditorView, document_id: number, editor_diagnostics: EditorDiagnostic[]) => {
+    const signature = get_diagnostics_signature(document_id, editor_diagnostics)
 
     if (last_diagnostics_signature_ref.current === signature) {
       return
@@ -714,8 +724,12 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
 
     view.dispatch(setDiagnostics(view.state, code_mirror_diagnostics))
     last_diagnostics_signature_ref.current = signature
-    state_cache_ref.current.set(activeDocument.id, view.state)
+    state_cache_ref.current.set(document_id, view.state)
   }
+
+  schedule_parser_diagnostics_ref.current = schedule_parser_diagnostics
+  create_editor_state_ref.current = create_editor_state
+  apply_diagnostics_ref.current = apply_diagnostics
 
   useImperativeHandle(ref, () => ({
     focus: () => editor_view_ref.current?.focus(),
@@ -738,20 +752,22 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   }))
 
   useEffect(() => {
-    if (!container_ref.current) {
+    const initial_document = initial_document_ref.current
+    const create_state = create_editor_state_ref.current
+    if (!container_ref.current || !create_state) {
       return
     }
 
-    const initial_state = create_editor_state(activeDocument)
+    const initial_state = create_state(initial_document)
     const editor_view = new EditorView({
       parent: container_ref.current,
       state: initial_state,
     })
 
     editor_view_ref.current = editor_view
-    active_document_id_ref.current = activeDocument.id
-    state_cache_ref.current.set(activeDocument.id, initial_state)
-    synchronized_content_ref.current.set(activeDocument.id, activeDocument.content)
+    active_document_id_ref.current = initial_document.id
+    state_cache_ref.current.set(initial_document.id, initial_state)
+    synchronized_content_ref.current.set(initial_document.id, initial_document.content)
     notify_command_state(initial_state)
     editor_view.focus()
 
@@ -785,8 +801,10 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
+    const current_document = active_document_ref.current
+    const create_state = create_editor_state_ref.current
 
-    if (!editor_view || active_document_id_ref.current === activeDocument.id) {
+    if (!editor_view || !create_state || active_document_id_ref.current === current_document.id) {
       return
     }
 
@@ -794,11 +812,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       state_cache_ref.current.set(active_document_id_ref.current, editor_view.state)
     }
 
-    const next_state = state_cache_ref.current.get(activeDocument.id) ?? create_editor_state(activeDocument)
+    const next_state = state_cache_ref.current.get(current_document.id) ?? create_state(current_document)
 
-    state_cache_ref.current.set(activeDocument.id, next_state)
-    synchronized_content_ref.current.set(activeDocument.id, next_state.doc.toString())
-    active_document_id_ref.current = activeDocument.id
+    state_cache_ref.current.set(current_document.id, next_state)
+    synchronized_content_ref.current.set(current_document.id, next_state.doc.toString())
+    active_document_id_ref.current = current_document.id
     editor_view.setState(next_state)
     editor_view.dispatch({
       effects: [
@@ -806,11 +824,11 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
         syntax_compartment_ref.current.reconfigure(
           create_syntax_highlighting(settings_ref.current.appearance.syntax_color_scheme, theme_ref.current),
         ),
-        indentation_compartment_ref.current.reconfigure(create_indentation_extensions(activeDocument)),
+        indentation_compartment_ref.current.reconfigure(create_indentation_extensions(current_document)),
         settings_compartment_ref.current.reconfigure(create_settings_extensions(settings_ref.current)),
       ],
     })
-    state_cache_ref.current.set(activeDocument.id, editor_view.state)
+    state_cache_ref.current.set(current_document.id, editor_view.state)
     notify_command_state(editor_view.state)
     set_context_menu(null)
     editor_view.focus()
@@ -858,52 +876,56 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
     }
 
     notify_command_state(editor_view.state)
-    schedule_parser_diagnostics(editor_view, activeDocument)
+    const current_document = active_document_ref.current
+    schedule_parser_diagnostics_ref.current?.(editor_view, current_document)
   }, [activeDocument.id, activeDocument.language, settings])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
+    const document_id = active_document_ref.current.id
 
-    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+    if (!editor_view || active_document_id_ref.current !== document_id) {
       return
     }
 
-    apply_diagnostics(editor_view, diagnostics)
+    apply_diagnostics_ref.current?.(editor_view, document_id, diagnostics)
   }, [activeDocument.id, diagnostics])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
+    const current_document = active_document_ref.current
 
-    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+    if (!editor_view || active_document_id_ref.current !== current_document.id) {
       return
     }
 
     editor_view.dispatch({
-      effects: indentation_compartment_ref.current.reconfigure(create_indentation_extensions(activeDocument)),
+      effects: indentation_compartment_ref.current.reconfigure(create_indentation_extensions(current_document)),
     })
-    state_cache_ref.current.set(activeDocument.id, editor_view.state)
+    state_cache_ref.current.set(current_document.id, editor_view.state)
   }, [activeDocument.id, activeDocument.indent_size, activeDocument.indent_style])
 
   useEffect(() => {
     const editor_view = editor_view_ref.current
+    const current_document = active_document_ref.current
     const request_id = language_request_ref.current + 1
 
     language_request_ref.current = request_id
 
-    if (!editor_view || active_document_id_ref.current !== activeDocument.id) {
+    if (!editor_view || active_document_id_ref.current !== current_document.id) {
       return
     }
 
-    if (activeDocument.language === 'Plain Text') {
+    if (current_document.language === 'Plain Text') {
       editor_view.dispatch({
         effects: language_compartment_ref.current.reconfigure([]),
       })
-      state_cache_ref.current.set(activeDocument.id, editor_view.state)
-      on_parser_diagnostics_ref.current(activeDocument.id, [])
+      state_cache_ref.current.set(current_document.id, editor_view.state)
+      on_parser_diagnostics_ref.current(current_document.id, [])
       return
     }
 
-    const language_description = languages.find((language) => language.name === activeDocument.language)
+    const language_description = languages.find((language) => language.name === current_document.language)
 
     if (!language_description) {
       return
@@ -915,7 +937,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       if (
         request_id !== language_request_ref.current ||
         !current_editor ||
-        active_document_id_ref.current !== activeDocument.id
+        active_document_id_ref.current !== current_document.id
       ) {
         return
       }
@@ -923,9 +945,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
       current_editor.dispatch({
         effects: language_compartment_ref.current.reconfigure(language_support),
       })
-      state_cache_ref.current.set(activeDocument.id, current_editor.state)
+      state_cache_ref.current.set(current_document.id, current_editor.state)
       notify_command_state(current_editor.state)
-      schedule_parser_diagnostics(current_editor, activeDocument)
+      schedule_parser_diagnostics_ref.current?.(current_editor, current_document)
     })
   }, [activeDocument.id, activeDocument.language])
 

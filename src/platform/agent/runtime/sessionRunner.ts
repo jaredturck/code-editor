@@ -9,48 +9,19 @@
 // Transitional extraction: behavior is preserved verbatim while runtime contracts are typed incrementally.
 import { markUntrustedExternalContent, UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
 import { callAIWithMeta } from '@/platform/aiService'
-import { scoreSession, recordReward, recordToolHeatmap, recordDelegationMetrics } from '@/platform/skillRewards'
+import { scoreSession, recordReward, recordToolHeatmap } from '@/platform/skillRewards'
 import {
-  listDirectory,
-  findFiles,
-  readTextFile,
-  writeTextFile,
-  executeTerminalCommand,
-  launchLocalCommand,
-  getAutomationCapabilities,
-  searchWebResearch,
   listSkillDefinitions,
-  powerRipgrep,
-  powerStat,
-  powerFind,
-  powerFd,
-  powerLocate,
-  powerDiff,
-  powerPatch,
-  powerWebFetch,
-  powerEnvInspect,
-  powerClipboardRead,
-  powerClipboardWrite,
-  powerScript,
   chatsReadMemory,
-  chatsWriteMemory,
-  chatsRecall,
-  subagentReadOutput,
   pullLocalOllamaModel,
 } from '@/platform/desktopBridge'
 import {
-  addNote,
-  deleteNote,
-  readNotes,
-  updateNote,
-  queryNotes,
   recallRelevantNotes,
-  pruneNotesByCategory,
   recordUserPreferenceNote,
   clearSessionScopedNotes,
 } from '@/platform/notesStorage'
-import { resolveActiveSkillProfile, inferModelFamily } from '@/platform/skillProfiles'
-import { resolveContextWindow, supportsNativeTools } from '@/platform/modelProfiles'
+import { inferModelFamily } from '@/platform/skillProfiles'
+import { supportsNativeTools } from '@/platform/modelProfiles'
 import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
 import { createToolGuard } from '@/platform/agent/toolGuard'
 import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
@@ -60,17 +31,9 @@ import {
   looksLikeControllerSchemaText,
   recoverDecisionFromSchemaText,
 } from '@/platform/agent/controllerDecision'
-import { estimateTokens, createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
-import { readStorageJson, writeStorageJson } from '@/platform/localStorageStore'
+import { createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
 import { writeOrbSettings } from '@/platform/settingsStorage'
 import {
-  handleAgentDelegate,
-  handleAgentRecall,
-  handleAgentStatus,
-  handleAgentRoster,
-  handleAgentBroadcast,
-  handleAgentVerify,
-  evaluateDelegationResult,
   syncStandbyPool,
   detectOrchestrationMode,
   subscribeSubAgentEvents,
@@ -83,32 +46,13 @@ import {
 import {
   extractJsonObject,
   toPreview,
-  trimMessageContent,
-  sanitizeJsonTextForParsing,
-  tryParseJsonCandidate,
-  collectBalancedJsonObjects,
 } from '@/platform/agent/agentJsonUtils'
 import {
-  extractKeywords,
-  normalizeSkill,
-  scoreSkill,
-  selectSkillsForPrompt,
   checkReflexSkills,
   loadSkillContext,
 } from '@/platform/agent/agentSkillEngine'
 import {
-  DEFAULT_AGENT_READ_LINE_COUNT,
-  DEFAULT_TOOL_TIMEOUT_MS,
-  PERMISSION_TIER,
   TOOL_BY_NAME,
-  TOOL_DEFINITIONS,
-  getToolDefinitions,
-  getToolPermissionKey,
-  getToolTimeoutMs as getCatalogToolTimeoutMs,
-  isLeanTool,
-  isToolRisky,
-  normalizeToolAliasKey,
-  resolveCatalogToolRequest,
 } from '@/platform/agent/toolCatalog'
 
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
@@ -143,113 +87,36 @@ import {
   buildRunSummary,
 } from '@/platform/agent/runtime/finalization'
 const {
-  MAX_PROMPT_MESSAGE_CHARS,
-  MAX_TOOL_RESULT_CHARS,
-  STATEFUL_TOOL_RESULT_CHAR_CAP,
-  DEFAULT_SKILLS_TOKEN_BUDGET,
-  DEFAULT_SKILLS_MAX_ACTIVE,
-  DEFAULT_SKILLS_MIN_RELEVANCE_SCORE,
-  MAX_TERMINAL_COMMAND_LENGTH,
-  MAX_FILE_WRITE_LENGTH,
-  MAX_NOTE_CONTENT_LENGTH,
-  MAX_SKILL_CARD_COUNT,
-  MAX_AGENT_READ_LINE_COUNT,
-  CONTINUITY_NOTE_CHAR_LIMIT,
-  MAX_CONTINUITY_NOTES,
-  SEARCH_WEB_DEFAULT_RESULTS,
-  SEARCH_WEB_MAX_RESULTS,
-  SEARCH_WEB_DEFAULT_SOURCES,
-  SEARCH_WEB_MAX_SOURCES,
   SEARCH_WEB_DEFAULT_CALL_BUDGET,
-  SEARCH_WEB_MAX_CALL_BUDGET,
   SEARCH_WEB_UNLIMITED_CALL_BUDGET,
-  WEB_SEARCH_DEFAULT_PRIMARY_PROVIDER,
-  WEB_SEARCH_DEFAULT_FALLBACK_PROVIDERS,
-  WEB_SEARCH_PAID_PROVIDER_IDS,
   AGENT_SESSION_MINUTES_DEFAULT,
   SEARCH_BUDGET_CONTINUE_INCREMENT,
   SEARCH_BUDGET_EXTEND_INCREMENT,
   TOOL_TIMEOUT_CONTINUE_BOOST_MS,
   TOOL_TIMEOUT_EXTEND_BOOST_MS,
   TOOL_TIMEOUT_UNLIMITED_MS,
-  INSUFFICIENT_ACCESS_REPLY,
   AGENT_STATES,
   CONTEXT_BUDGET_WARN_RATIO,
-  WEB_SEARCH_BUDGET_BY_ROLE,
-  USER_CORRECTION_PATTERNS,
-  TIER_2_BLOCKED_PATTERNS,
-  TIER_3_APPROVAL_PATTERNS,
-  ALLOWED_MODULES,
-  DANGEROUS_COMMAND_PATTERNS,
-  NETWORK_COMMAND_PATTERNS,
-  PIPE_TO_SHELL_PATTERNS,
-  SUDO_COMMAND_PATTERN,
-  FORK_BOMB_PATTERN,
-  PATH_TRAVERSAL_PATTERN,
-  DOCUMENTS_ALIAS_TOKENS,
-  BLOCKED_READ_PATH_PATTERNS,
-  BLOCKED_WRITE_PATH_PATTERNS,
   detectUserCorrection,
   estimateContextTokensUsed,
   resolveModelContextWindow,
   resolveAgentToolset,
   useStatefulLoop: shouldUseStatefulLoop,
   toToolResultContent,
-  normalizeTodoStatus,
-  normalizeTodo,
-  summarizeRequestForTodo,
-  buildSeedTodos,
-  formatDateKey,
-  formatTimeKey,
-  cleanSingleLine,
-  isResumeIntent,
   getContinuityContext,
-  shouldPersistContinuityNote,
-  deriveContinuityTags,
-  buildStepHistoryLabel,
   persistContinuityNote,
   createTodoTool,
   createTraceTool,
-  summarizeTree,
-  clampNumber,
   resolveSafetyConfig,
   hasExplicitUserApproval,
-  inferToolNameFromAliasKey,
   resolveToolRequest,
-  evaluateToolAccess,
   buildCapabilitySnapshot,
   isCapabilityOrPermissionError,
-  isMissingPathError,
   buildInsufficientAccessReply,
-  looksLikeInsufficientAccessReply,
   looksLikeToolAccessLimitationReply,
-  isImperativeActionRequest,
-  extractLaunchTargetFromRequest,
-  escapeSingleQuotedShellArg,
-  buildExecutableProbeCommand,
-  fallbackForcedToolAction,
   inferForcedToolActionForRequest,
-  extractFindQueryFromText,
-  inferFindQuery,
-  shouldUseGlobalPathFallback,
-  extractFirstPathFromSummary,
   buildBestEffortToolSummaryReply,
-  normalizePathForPolicy,
-  normalizePathToken,
-  isLikelyRelativePath,
-  dedupeStrings,
-  normalizeWebSearchQueryKey,
-  normalizeWebProviderId,
-  normalizeWebProviderList,
-  normalizeWebProviderSettings,
-  hasConfiguredProviderCredentials,
-  hasConfiguredPaidFallbackProviders,
-  buildWebSearchProviderPolicy,
-  resolveWebSearchCallBudget,
   createWebSearchSessionState,
-  rememberWebSearchQuery,
-  getWebSearchCache,
-  setWebSearchCache,
   normalizeApprovalDecisionToken,
   normalizeApprovalResponse,
   classifyLimitIssue,
@@ -257,12 +124,6 @@ const {
   resolveToolTimeoutMs,
   runWithTimeout,
   waitMs,
-  buildFindFallbackPaths,
-  resolveAgentRootBase,
-  applyAgentRoot,
-  assertSafePath,
-  assertSafeCommand,
-  assertAllowedTool,
 } = runtimeSupport
 
 // A final answer that is really a CLARIFYING QUESTION the model is asking the user (so the run
@@ -2985,7 +2846,6 @@ export async function runAgentSession({
 
       // Wire tool heatmap tracking
       try {
-        const { inferModelFamily } = await import('@/platform/skillProfiles')
         const family = inferModelFamily(settings?.ai_model || '')
         recordToolHeatmap(family, [toolName])
       } catch {

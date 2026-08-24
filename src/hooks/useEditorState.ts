@@ -330,6 +330,7 @@ function useEditorState() {
     [active_document_id, documents],
   )
   const active_text_document = active_document?.kind === 'text' ? active_document : null
+  const active_text_document_id = active_text_document?.id ?? null
   const active_browser_document = active_document?.kind === 'browser' ? active_document : null
   const active_terminal = useMemo(
     () => terminals.find((terminal) => terminal.id === active_terminal_id) ?? null,
@@ -766,12 +767,12 @@ function useEditorState() {
       return
     }
 
-    if (!active_text_document || settings.diagnostics.mode !== 'typing') {
+    if (active_text_document_id === null || settings.diagnostics.mode !== 'typing') {
       return
     }
 
     const timeout_id = window.setTimeout(
-      () => void analyze_document(active_text_document.id),
+      () => void analyze_document(active_text_document_id),
       Math.max(500, settings.diagnostics.delay),
     )
 
@@ -779,7 +780,7 @@ function useEditorState() {
   }, [
     active_text_document?.content,
     active_text_document?.file_path,
-    active_text_document?.id,
+    active_text_document_id,
     active_text_document?.language,
     settings.diagnostics,
   ])

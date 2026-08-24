@@ -86,6 +86,13 @@ function TerminalPane({
   const container_ref = useRef<HTMLDivElement>(null)
   const terminal_ref = useRef<Terminal | null>(null)
   const fit_ref = useRef<FitAddon | null>(null)
+  const status_change_ref = useRef(onTerminalStatusChange)
+  const terminal_setup_ref = useRef({ id: terminal.id, cwd: terminal.cwd ?? workspaceRoot })
+
+  status_change_ref.current = onTerminalStatusChange
+  if (terminal_setup_ref.current.id !== terminal.id) {
+    terminal_setup_ref.current = { id: terminal.id, cwd: terminal.cwd ?? workspaceRoot }
+  }
 
   useEffect(() => {
     if (!container_ref.current) {
@@ -125,7 +132,7 @@ function TerminalPane({
       }
 
       xterm.write(`\r\n\x1b[90m[Process exited with code ${payload.exit_code}]\x1b[0m\r\n`)
-      onTerminalStatusChange(terminal.id, 'exited', payload.exit_code)
+      status_change_ref.current(terminal.id, 'exited', payload.exit_code)
     })
     const input_disposable = xterm.onData((data) => window.editor_api.terminal.write(terminal.id, data))
     const resize_observer = new ResizeObserver(() => {
@@ -139,9 +146,9 @@ function TerminalPane({
 
     resize_observer.observe(container_ref.current)
     void window.editor_api.terminal
-      .create(terminal.id, terminal.cwd ?? workspaceRoot)
+      .create(terminal.id, terminal_setup_ref.current.cwd)
       .then(() => {
-        onTerminalStatusChange(terminal.id, 'running', null)
+        status_change_ref.current(terminal.id, 'running', null)
         requestAnimationFrame(() => {
           fit.fit()
           window.editor_api.terminal.resize(terminal.id, xterm.cols, xterm.rows)
@@ -150,7 +157,7 @@ function TerminalPane({
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : 'Unable to start the terminal.'
         xterm.writeln(`\x1b[31m${message}\x1b[0m`)
-        onTerminalStatusChange(terminal.id, 'error', null)
+        status_change_ref.current(terminal.id, 'error', null)
       })
 
     return () => {
