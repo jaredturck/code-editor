@@ -125,6 +125,14 @@ describe('autonomous project working context', () => {
     const input = input_fixture()
     input.userInput = 'Create a website.py file with a Flask view'
     input.settings.permissions_file_write = true
+    input.settings.agent_preflight_plan = {
+      taskType: 'implementation',
+      developmentTask: true,
+      workspaceMutationExpected: true,
+      verificationRequired: false,
+      successCriteria: ['website.py exists with the requested Flask view.'],
+      verificationChecks: [],
+    }
 
     await runAgentSession(input)
 

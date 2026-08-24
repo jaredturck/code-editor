@@ -54,7 +54,7 @@ describe('chat and autonomous-run encryption at rest', () => {
     await appendEncryptedChatMessage(chat_id, {
       role: 'user',
       content: `message ${sentinel}`,
-      attachments: [{ name: 'private.txt', content: `attachment ${sentinel}` }],
+      attachments: [{ name: 'private.txt', type: 'text/plain', content: `attachment ${sentinel}` }],
       meta: { privateRunNote: `timeline ${sentinel}` },
     })
     await writeEncryptedChatMemory(chat_id, `memory ${sentinel}`)
