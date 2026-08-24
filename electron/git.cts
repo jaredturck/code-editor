@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { access, lstat, readFile, readdir, realpath, rm, stat } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
 const exec_file = promisify(execFile)
