@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 const activity_bar_width = 48
@@ -68,12 +68,12 @@ function usePanelSizes(ai_chat_open: boolean) {
   const [terminal_list_width, set_terminal_list_width] = useState(176)
   const [ai_chat_width, set_ai_chat_width] = useState(320)
 
-  const get_sidebar_maximum = () => {
+  const get_sidebar_maximum = useCallback(() => {
     const reserved_ai_width = ai_chat_open ? ai_chat_width : 0
     const available_width = window.innerWidth - activity_bar_width - reserved_ai_width - minimum_editor_width
 
     return Math.max(sidebar_min_width, Math.min(sidebar_max_width, available_width))
-  }
+  }, [ai_chat_open, ai_chat_width])
 
   const get_bottom_panel_maximum = () => {
     const available_height = window.innerHeight - top_bar_height - status_bar_height - minimum_editor_height
@@ -85,11 +85,11 @@ function usePanelSizes(ai_chat_open: boolean) {
     return Math.max(terminal_list_min_width, Math.min(terminal_list_max_width, Math.floor(window.innerWidth * 0.4)))
   }
 
-  const get_ai_chat_maximum = () => {
+  const get_ai_chat_maximum = useCallback(() => {
     const available_width = window.innerWidth - activity_bar_width - sidebar_width - minimum_editor_width
 
     return Math.max(ai_chat_min_width, Math.min(ai_chat_max_width, available_width))
-  }
+  }, [sidebar_width])
 
   useEffect(() => {
     const clamp_panel_sizes = () => {
@@ -109,7 +109,7 @@ function usePanelSizes(ai_chat_open: boolean) {
     return () => {
       window.removeEventListener('resize', clamp_panel_sizes)
     }
-  }, [ai_chat_open, ai_chat_width, sidebar_width])
+  }, [ai_chat_open, ai_chat_width, get_ai_chat_maximum, get_sidebar_maximum, sidebar_width])
 
   const start_sidebar_resize = (event: ReactPointerEvent<HTMLElement>) => {
     start_resize(event, sidebar_width, 'x', 1, sidebar_min_width, get_sidebar_maximum, set_sidebar_width)
