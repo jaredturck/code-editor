@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { GlobalWorkerOptions, TextLayer, getDocument, type PDFDocumentProxy } from 'pdfjs-dist'
 import pdf_worker_url from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import type { MediaEditorDocument } from '../../types/editor'
@@ -48,18 +48,21 @@ function PdfViewer({ document }: { document: MediaEditorDocument }) {
     }
   }, [document.url])
 
-  const calculate_fit_zoom = async (mode: Exclude<FitMode, 'none'>) => {
-    if (!pdf || !scroll_container_ref.current) {
-      return
-    }
+  const calculate_fit_zoom = useCallback(
+    async (mode: Exclude<FitMode, 'none'>) => {
+      if (!pdf || !scroll_container_ref.current) {
+        return
+      }
 
-    const page = await pdf.getPage(page_number)
-    const viewport = page.getViewport({ scale: 1, rotation })
-    const container = scroll_container_ref.current
-    const width_scale = Math.max(0.1, (container.clientWidth - 48) / viewport.width)
-    const height_scale = Math.max(0.1, (container.clientHeight - 48) / viewport.height)
-    set_zoom(Math.min(4, mode === 'width' ? width_scale : Math.min(width_scale, height_scale)))
-  }
+      const page = await pdf.getPage(page_number)
+      const viewport = page.getViewport({ scale: 1, rotation })
+      const container = scroll_container_ref.current
+      const width_scale = Math.max(0.1, (container.clientWidth - 48) / viewport.width)
+      const height_scale = Math.max(0.1, (container.clientHeight - 48) / viewport.height)
+      set_zoom(Math.min(4, mode === 'width' ? width_scale : Math.min(width_scale, height_scale)))
+    },
+    [page_number, pdf, rotation],
+  )
 
   const apply_fit = (mode: Exclude<FitMode, 'none'>) => {
     set_fit_mode(mode)
@@ -83,7 +86,7 @@ function PdfViewer({ document }: { document: MediaEditorDocument }) {
     })
     observer.observe(container)
     return () => observer.disconnect()
-  }, [fit_mode, page_number, pdf, rotation])
+  }, [calculate_fit_zoom, fit_mode])
 
   useEffect(() => {
     if (!pdf || !canvas_ref.current || !text_layer_ref.current || !page_container_ref.current) {
