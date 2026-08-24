@@ -145,9 +145,11 @@ function useAIChat(
   const settings_ref = useRef(settings)
   const platform_settings_ref = useRef(platform_settings)
   const approval_controller = useApprovalController(set_run_status)
+  const approval_controller_ref = useRef(approval_controller)
 
   settings_ref.current = settings
   platform_settings_ref.current = platform_settings
+  approval_controller_ref.current = approval_controller
 
   const agent_descriptor = useMemo(() => resolve_agent_chat_descriptor(platform_settings), [platform_settings])
   const connection_status = restoring_chat
@@ -155,15 +157,17 @@ function useAIChat(
     : agent_descriptor.ready
       ? ('connected' as const)
       : ('offline' as const)
+  const project_run_id = project_run?.id
+  const project_run_status = project_run?.status
 
   useEffect(() => subscribeSettingsChanged(set_platform_settings), [])
   useEffect(() => projectRunController.subscribe(set_project_run), [])
 
   useEffect(() => {
-    if (!project_run || !is_active_project_run_status(project_run.status)) return
+    if (!project_run_id || !project_run_status || !is_active_project_run_status(project_run_status)) return
     const timer = window.setInterval(() => set_run_clock((current) => current + 1), 1000)
     return () => window.clearInterval(timer)
-  }, [project_run?.id, project_run?.status])
+  }, [project_run_id, project_run_status])
 
   useEffect(() => {
     let cancelled = false
@@ -221,7 +225,7 @@ function useAIChat(
   useEffect(() => {
     const remove_stop_listener = window.orbitDesktop?.onAgentStopRequest?.(() => {
       projectRunController.request_cancel('Emergency stop requested')
-      approval_controller.clearApprovalRequests({ stopped: true })
+      approval_controller_ref.current.clearApprovalRequests({ stopped: true })
       set_run_status('Emergency stop requested…')
     })
     return () => remove_stop_listener?.()
@@ -233,7 +237,7 @@ function useAIChat(
       if (state && is_active_project_run_status(state.status)) {
         projectRunController.checkpoint({ last_activity: 'Application closing during active run' })
       }
-      approval_controller.clearApprovalRequests({ stopped: true })
+      approval_controller_ref.current.clearApprovalRequests({ stopped: true })
       stop_stream(stream_ref.current)
       if (recording_timer_ref.current !== null) window.clearInterval(recording_timer_ref.current)
     }
