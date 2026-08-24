@@ -16,7 +16,7 @@ export const CONSOLE_TIMELINE_RENDER_CAP = 200
 // New chats start empty — the panel shows a faded prompt until the first message is sent.
 export const DEFAULT_MESSAGES: ChatMessage[] = []
 
-export const APPROVAL_REQUEST_TIMEOUT_MS = 30_000
+export const APPROVAL_REQUEST_TIMEOUT_MS = 10_000
 export const QUESTION_REQUEST_TIMEOUT_MS = 660_000
 export const APPROVAL_FLOAT_EXTRA_WIDTH = 420
 export const CONSOLE_FLOAT_WIDTH = 430

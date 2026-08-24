@@ -38,6 +38,7 @@ export interface ApprovalController {
 
 export function useApprovalController(setStatus: React.Dispatch<React.SetStateAction<string>>): ApprovalController {
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([])
+  const [, setApprovalClock] = useState(0)
   const approvalResolversRef = useRef(new Map<string, ApprovalResolver>())
   const approvalTimeoutsRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const transientPermissionKeysRef = useRef(new Set<PersistentPermissionKey>())
@@ -104,6 +105,17 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     [restorePersistedBridgePermissions],
   )
 
+  const hasExpiringApproval = approvalRequests.some(
+    (request) =>
+      String(request.requestType || '').toLowerCase() !== 'question' && Number(request.expiresAt || 0) > Date.now(),
+  )
+
+  useEffect(() => {
+    if (!hasExpiringApproval) return
+    const timer = window.setInterval(() => setApprovalClock((current) => current + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [hasExpiringApproval])
+
   // Resolves approval request from the available configuration and runtime context.
   const resolveApprovalRequest = async (
     requestId: string,
@@ -150,10 +162,16 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     }
 
     setApprovalRequests((previous) => previous.filter((item) => item.id !== requestId))
-    if (resolver) resolver({ approved: Boolean(approved), decision: approved ? normalizedDecision : 'deny' })
+    if (resolver) {
+      resolver({
+        approved: Boolean(approved),
+        decision: approved ? normalizedDecision : 'deny',
+        ...(timedOut ? { timedOut: true } : {}),
+      })
+    }
 
     if (timedOut) {
-      setStatus('Approval request timed out.')
+      setStatus('Approval timed out and was denied; agent is continuing.')
       return
     }
 
@@ -190,8 +208,24 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     if (options.timedOut) setStatus('Question timed out — the agent will continue with its best judgment.')
   }
 
+  const displayApprovalRequests = approvalRequests.map((request) => {
+    const requestType = String(request.requestType || '').toLowerCase()
+    const expiresAt = Number(request.expiresAt || 0)
+    if (requestType === 'question' || !expiresAt) return request
+
+    const secondsRemaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
+    const description = String(
+      request.requestedAction || request.reason || 'The agent is requesting permission before continuing.',
+    )
+
+    return {
+      ...request,
+      requestedAction: `${description}\nAuto-denies in ${secondsRemaining}s if you do not respond.`,
+    }
+  })
+
   return {
-    approvalRequests,
+    approvalRequests: displayApprovalRequests,
     setApprovalRequests,
     approvalResolversRef,
     approvalTimeoutsRef,
