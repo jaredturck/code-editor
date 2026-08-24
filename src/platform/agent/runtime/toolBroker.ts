@@ -47,6 +47,29 @@ const workspaceFileTools = new Set([
   'files.patch',
 ])
 
+const versionCheckCommands = new Set([
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'node',
+  'npx',
+  'python',
+  'python3',
+  'py',
+  'uv',
+  'cargo',
+  'go',
+  'vite',
+  'tsc',
+  'eslint',
+  'prettier',
+  'vitest',
+  'jest',
+  'pytest',
+  'ruff',
+])
+
 type LegacyBrokerOptions = Parameters<typeof createLegacyModuleBroker>[0]
 
 function verificationState(options: LegacyBrokerOptions) {
@@ -113,6 +136,51 @@ function approvalGranted(response: unknown) {
   )
 }
 
+function stripShellQuotes(value: string) {
+  const trimmed = value.trim()
+  if (trimmed.length >= 2) {
+    const first = trimmed[0]
+    const last = trimmed[trimmed.length - 1]
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+function isVersionCheck(command: unknown) {
+  const match = String(command || '')
+    .trim()
+    .match(/^([^\s]+)\s+(--version|-v|version)$/i)
+  if (!match) return false
+  const name = match[1].replace(/\\/g, '/').split('/').pop()?.toLowerCase() || ''
+  return versionCheckCommands.has(name)
+}
+
+function isWorkspaceAutonomousCommandChain(command: unknown, workspaceRoot: string) {
+  const text = String(command || '').trim()
+  if (!workspaceRoot || !text.includes('&&') || text.length > 4000) return false
+  if (/[\r\n;|<>`]/.test(text) || /\|\||\$\(/.test(text)) return false
+
+  const commands = text
+    .split(/\s*&&\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (commands.length < 2) return false
+
+  for (const part of commands) {
+    const cdMatch = part.match(/^cd\s+(.+)$/i)
+    if (cdMatch) {
+      const target = stripShellQuotes(cdMatch[1])
+      if (!target || /[$`]/.test(target) || !isWorkspacePath(target, workspaceRoot)) return false
+      continue
+    }
+
+    if (isVersionCheck(part)) continue
+    if (!isWorkspaceAutonomousCommand(part, workspaceRoot)) return false
+  }
+
+  return true
+}
+
 async function requestWorkspaceEscapeApproval(
   options: LegacyBrokerOptions,
   toolName: string,
@@ -172,6 +240,15 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
       const state = verificationState(options)
       const automaticMode = String(options?.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
 
+      if (toolName === 'approval.request' && automaticMode) {
+        return {
+          approved: false,
+          decision: 'autonomous',
+          instruction:
+            'Do not ask the user to approve routine project work in Automatic mode. Attempt the intended tool action directly. The runtime safety policy will surface a specific approval only if the real action crosses the workspace boundary or another safety boundary.',
+        }
+      }
+
       if (toolName === 'user.ask' && automaticMode) {
         return {
           answered: false,
@@ -219,7 +296,12 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
               }
             }
             broker = workspaceAutonomousLegacy
-          } else if (workspaceRoot && isWorkspaceAutonomousCommand(args.command, workspaceRoot, args.cwd)) {
+          } else if (
+            workspaceRoot &&
+            (isVersionCheck(args.command) ||
+              isWorkspaceAutonomousCommand(args.command, workspaceRoot, args.cwd) ||
+              isWorkspaceAutonomousCommandChain(args.command, workspaceRoot))
+          ) {
             broker = workspaceAutonomousLegacy
           }
         }
