@@ -5,15 +5,17 @@
 
 import fs from 'node:fs/promises'
 import { execFile } from 'node:child_process'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import type { PreparedClipImage } from './fileImageProcessingWorkerTypes.js'
 
 export const FILE_CLIP_MODEL = 'Xenova/clip-vit-base-patch32'
 export const FILE_CLIP_DIMENSIONS = 512
-export const FILE_CLIP_DEFAULT_BATCH_SIZE = 512
+export const FILE_CLIP_DEFAULT_BATCH_SIZE = 16
 const MAX_CLIP_CUDA_LANES = 2
 const MIN_IMAGES_PER_CLIP_LANE = 64
+const require = createRequire(import.meta.url)
 
 const FILE_CLIP_CACHE_DIR = path.join(os.homedir(), '.iris-ai', 'models', 'clip-vit-base-patch32')
 const FILE_CLIP_MODEL_CACHE_DIR = path.join(FILE_CLIP_CACHE_DIR, ...FILE_CLIP_MODEL.split('/'))
@@ -136,8 +138,26 @@ async function loadClipVisionModel(transformers: any, dtype: 'fp16', deviceIndex
   )
 }
 
-/** Lists CUDA device indices visible to ONNX Runtime without requiring a native dependency. */
+/** Checks whether this install includes the native ONNX CUDA execution provider. */
+async function hasClipCudaProvider(): Promise<boolean> {
+  if (process.platform !== 'linux' || process.arch !== 'x64') return false
+  try {
+    const runtimeEntry = require.resolve('onnxruntime-node')
+    const packageDirectory = path.resolve(path.dirname(runtimeEntry), '..')
+    const nativeDirectory = path.join(packageDirectory, 'bin', 'napi-v6', 'linux', 'x64')
+    await Promise.all([
+      fs.access(path.join(nativeDirectory, 'libonnxruntime_providers_shared.so')),
+      fs.access(path.join(nativeDirectory, 'libonnxruntime_providers_cuda.so')),
+    ])
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Lists CUDA device indices only when ONNX Runtime has a usable CUDA provider. */
 export async function availableClipCudaDevices(): Promise<number[]> {
+  if (!(await hasClipCudaProvider())) return []
   const visibleDevices = String(process.env.CUDA_VISIBLE_DEVICES || '').trim()
   if (visibleDevices === '-1') return []
   if (visibleDevices) {
@@ -147,7 +167,6 @@ export async function availableClipCudaDevices(): Promise<number[]> {
       .filter(Boolean).length
     return Array.from({ length: Math.min(MAX_CLIP_CUDA_LANES, count) }, (_, index) => index)
   }
-  if (process.platform !== 'linux') return [0]
   return new Promise((resolve) => {
     execFile(
       'nvidia-smi',
@@ -155,7 +174,7 @@ export async function availableClipCudaDevices(): Promise<number[]> {
       { timeout: 3000 },
       (error, stdout) => {
         if (error) {
-          resolve([0])
+          resolve([])
           return
         }
         const indices = String(stdout || '')
@@ -163,7 +182,7 @@ export async function availableClipCudaDevices(): Promise<number[]> {
           .map((value) => Number(value.trim()))
           .filter((value) => Number.isInteger(value) && value >= 0)
           .slice(0, MAX_CLIP_CUDA_LANES)
-        resolve(indices.length ? indices : [0])
+        resolve(indices)
       },
     )
   })
@@ -211,7 +230,7 @@ export async function loadClipRuntime(): Promise<ClipRuntime> {
       }
     }
   } else {
-    fallbackError = laneErrors?.join('; ') || 'No CUDA device could load the CLIP runtime'
+    fallbackError = laneErrors?.join('; ') || 'CUDA provider unavailable; using the CPU CLIP runtime'
     device = 'cpu'
     dtype = 'q8'
     models = await loadClipModels(transformers, device, dtype)
