@@ -274,7 +274,7 @@ function AISettingsPanel({
     set_provider_messages((current) => ({ ...current, [slot]: 'Credential removed.' }))
     set_extra_key_slots((current) => ({
       ...current,
-      [provider_id]: (current[provider_id] || []).filter((value) => value !== key_id),
+      [provider_id]: (current[provider.id] || []).filter((value) => value !== key_id),
     }))
     set_credential_revision((value) => value + 1)
   }
@@ -1316,19 +1316,30 @@ function AISettingsPanel({
   )
 
   const render_semantic = () => {
-    const status_label = semantic_status?.indexStatus || 'unknown'
+    const raw_status_label = semantic_status?.indexStatus || 'unknown'
+    const models_ready = Boolean(semantic_status?.embeddingModelInstalled && semantic_status?.imageModelInstalled)
+    const semantic_failure = semantic_error || semantic_status?.error || ''
+    const status_label = raw_status_label === 'missing' && models_ready ? 'not built' : raw_status_label
+    const index_description =
+      semantic_failure ||
+      (raw_status_label === 'missing' && models_ready
+        ? 'Embedding models are installed and ready. Build the semantic index below to start semantic search.'
+        : 'The semantic index is encrypted and remains separate from agent filesystem write authority.')
     const sources_locked = semantic_status?.indexStatus === 'building' || semantic_status?.indexStatus === 'ready'
     const selected_source_ids = new Set(semantic_source_ids)
 
     return (
       <>
         <SettingsSection title="Semantic filesystem index">
+          {semantic_failure ? (
+            <div className="mx-2 my-2 rounded-lg border border-red-500/30 bg-red-500/8 px-3 py-2 text-[10px] leading-4 text-red-300">
+              {semantic_failure}
+            </div>
+          ) : null}
           {row(
             'ai-semantic-status',
             'Index status',
-            semantic_error ||
-              semantic_status?.error ||
-              'The semantic index is encrypted and remains separate from agent filesystem write authority.',
+            index_description,
             <span className="text-xs capitalize text-[var(--text)]">
               {status_label}
               {semantic_status?.fileCount ? ` · ${semantic_status.fileCount.toLocaleString()} files` : ''}
@@ -1337,7 +1348,9 @@ function AISettingsPanel({
           {row(
             'ai-semantic-models',
             'Embedding models',
-            'Semantic text and media models are installed only after an explicit user action.',
+            models_ready
+              ? 'Text and image embedding models are installed and ready.'
+              : 'Semantic text and media models are installed only after an explicit user action.',
             <div className="flex items-center gap-2">
               <span className="max-w-64 truncate text-[10px] text-[var(--muted)]">
                 {semantic_status
@@ -1345,12 +1358,16 @@ function AISettingsPanel({
                   : 'Status unavailable'}
               </span>
               <button
-                className="h-9 rounded-md border border-[var(--border)] px-3 text-xs text-[var(--text)] hover:bg-[var(--hover)] disabled:opacity-40"
-                disabled={Boolean(semantic_busy)}
+                className={`h-9 rounded-md border px-3 text-xs disabled:opacity-70 ${
+                  models_ready
+                    ? 'border-emerald-500/25 bg-emerald-500/5 text-emerald-300'
+                    : 'border-[var(--border)] text-[var(--text)] hover:bg-[var(--hover)]'
+                }`}
+                disabled={Boolean(semantic_busy) || models_ready}
                 onClick={() => void run_semantic_action('install', installFileSemanticModels)}
                 type="button"
               >
-                {semantic_busy === 'install' ? 'Installing…' : 'Install models'}
+                {semantic_busy === 'install' ? 'Installing…' : models_ready ? 'Models installed' : 'Install models'}
               </button>
             </div>,
           )}
