@@ -3,6 +3,8 @@
  * Workers and future benchmarks share this implementation so measured work matches production.
  */
 
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import sharp from 'sharp'
 import type { PreparedClipImage } from './fileImageProcessingWorkerTypes.js'
 
@@ -11,6 +13,20 @@ const MAX_INPUT_PIXELS = 268_402_689
 
 sharp.concurrency(1)
 sharp.cache({ files: 0, items: 16, memory: 32 })
+
+/** Rejects mislabeled JPEG files before they reach the native image decoder. */
+async function validateJpegSignature(filePath: string): Promise<void> {
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension !== '.jpg' && extension !== '.jpeg') return
+
+  const handle = await fs.open(filePath, 'r')
+  const header = Buffer.alloc(3)
+  const { bytesRead } = await handle.read(header, 0, header.length, 0)
+  await handle.close()
+  if (bytesRead !== header.length || header[0] !== 0xff || header[1] !== 0xd8 || header[2] !== 0xff) {
+    throw new Error('Input file contains unsupported JPEG data')
+  }
+}
 
 /** Reuses an exact Sharp buffer allocation, copying only pooled or sliced backing storage. */
 export function createTransferableImageData(data: Buffer): Uint8Array {
@@ -24,6 +40,7 @@ export function createTransferableImageData(data: Buffer): Uint8Array {
 
 /** Decodes, orients, crops, and converts one file into a 224×224 RGB CLIP input. */
 export async function prepareClipImage(filePath: string): Promise<PreparedClipImage> {
+  await validateJpegSignature(filePath)
   const { data, info } = await sharp(filePath, {
     animated: false,
     failOn: 'error',
