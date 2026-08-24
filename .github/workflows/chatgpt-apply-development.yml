@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  issues:
+    types:
+      - opened
 
 permissions:
   contents: write
@@ -15,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 3
 
       - name: Apply feature commits
         shell: bash
@@ -23,7 +26,7 @@ jobs:
           set -euo pipefail
           test -f .chatgpt-dev-payload/part-000.txt || exit 0
           transport_sha="$(git rev-parse HEAD)"
-          base_sha="$(git rev-parse HEAD^)"
+          base_sha="$(git rev-parse HEAD~2)"
           cat .chatgpt-dev-payload/part-*.txt > /tmp/feature-series.patch
           git config user.name "ChatGPT"
           git config user.email "noreply@openai.com"
