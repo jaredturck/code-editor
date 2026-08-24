@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorkspaceNode } from '../src/types/workspace'
 import {
   get_workspace_relative_path,
+  get_workspace_top_level_paths,
   remap_workspace_path,
   remove_workspace_node,
   replace_workspace_children,
@@ -91,6 +92,17 @@ describe('workspace tree utilities', () => {
     expect(next.has('/project/src')).toBe(false)
     expect(next.has('/project/src/App.tsx')).toBe(false)
     expect(next.get('/project')?.children).toEqual(['/project/package.json'])
+  })
+
+  it('reduces nested selections to their top-level delete targets', () => {
+    expect(
+      get_workspace_top_level_paths([
+        '/project/src/App.tsx',
+        '/project/src',
+        '/project/src/assets/logo.png',
+        '/project/package.json',
+      ]),
+    ).toEqual(['/project/src', '/project/package.json'])
   })
 
   it('computes safe workspace-relative paths', () => {

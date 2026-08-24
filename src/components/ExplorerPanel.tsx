@@ -1,10 +1,19 @@
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { WorkspaceClipboardState, WorkspaceNode, WorkspaceNodeKind } from '../types/workspace'
 import ExplorerContextMenu from './explorer/ExplorerContextMenu'
 import ExplorerInlineInput from './explorer/ExplorerInlineInput'
 import ExplorerTreeRow from './explorer/ExplorerTreeRow'
 import SearchPanel from './SearchPanel'
 import SourceControlPanel from './SourceControlPanel'
+import WorkspaceDeleteModal from './WorkspaceDeleteModal'
 import type { ActivitySection } from '../types/editor'
 
 interface ExplorerPanelProps {
@@ -16,11 +25,11 @@ interface ExplorerPanelProps {
   rootName: string | null
   rootPath: string | null
   selectedPath: string | null
-  onCloseWorkspace: () => void
+  selectedPaths: Set<string>
   onCollapseAll: () => void
   onCopyPath: (target_path: string, relative: boolean) => void
   onCreateEntry: (parent_path: string, name: string, kind: WorkspaceNodeKind) => Promise<boolean>
-  onDeleteEntry: (target_path: string) => Promise<boolean>
+  onDeleteEntries: (target_paths: string[]) => Promise<boolean>
   onDropEntry: (source_path: string, target_path: string | null, operation: 'copy' | 'cut') => void
   onOpenFile: (file_path: string) => void
   onOpenFolder: () => void
@@ -30,7 +39,10 @@ interface ExplorerPanelProps {
   onResize: (event: ReactPointerEvent<HTMLElement>) => void
   onRevealEntry: (target_path: string) => void
   onSelectPath: (target_path: string) => void
+  onSelectPaths: (target_paths: string[], focused_path: string) => void
+  onSelectSubtree: (target_path: string) => void
   onSetClipboard: (operation: 'copy' | 'cut', source_path: string) => void
+  onTogglePathSelection: (target_path: string) => void
   onToggleFolder: (folder_path: string) => void
 }
 
@@ -55,13 +67,15 @@ interface ExplorerBranchProps {
   expandedPaths: Set<string>
   node: WorkspaceNode
   nodes: Map<string, WorkspaceNode>
-  selectedPath: string | null
+  selectedPaths: Set<string>
   onCancelEdit: () => void
   onConfirmEdit: (value: string) => Promise<boolean>
   onContextMenu: (event: MouseEvent<HTMLDivElement>, node: WorkspaceNode) => void
   onDropEntry: (source_path: string, target_path: string, operation: 'copy' | 'cut') => void
   onOpenFile: (file_path: string) => void
-  onSelectPath: (target_path: string) => void
+  onRename: (target_path: string) => void
+  onSelectNode: (event: MouseEvent<HTMLDivElement>, node: WorkspaceNode) => void
+  onSelectSubtree: (target_path: string) => void
   onToggleFolder: (folder_path: string) => void
 }
 
@@ -103,13 +117,15 @@ function ExplorerBranch({
   expandedPaths,
   node,
   nodes,
-  selectedPath,
+  selectedPaths,
   onCancelEdit,
   onConfirmEdit,
   onContextMenu,
   onDropEntry,
   onOpenFile,
-  onSelectPath,
+  onRename,
+  onSelectNode,
+  onSelectSubtree,
   onToggleFolder,
 }: ExplorerBranchProps) {
   const expanded = expandedPaths.has(node.path)
@@ -137,20 +153,15 @@ function ExplorerBranch({
           onDropEntry={onDropEntry}
           onOpen={(selected_node) => {
             if (selected_node.kind === 'directory') {
-              onToggleFolder(selected_node.path)
+              onSelectSubtree(selected_node.path)
             } else {
               onOpenFile(selected_node.path)
             }
           }}
-          onSelect={(selected_node) => {
-            onSelectPath(selected_node.path)
-
-            if (selected_node.kind === 'file') {
-              onOpenFile(selected_node.path)
-            }
-          }}
+          onRename={(selected_node) => onRename(selected_node.path)}
+          onSelect={onSelectNode}
           onToggle={(selected_node) => onToggleFolder(selected_node.path)}
-          selected={selectedPath === node.path}
+          selected={selectedPaths.has(node.path)}
         />
       )}
 
@@ -185,9 +196,11 @@ function ExplorerBranch({
                 onContextMenu={onContextMenu}
                 onDropEntry={onDropEntry}
                 onOpenFile={onOpenFile}
-                onSelectPath={onSelectPath}
+                onRename={onRename}
+                onSelectNode={onSelectNode}
+                onSelectSubtree={onSelectSubtree}
                 onToggleFolder={onToggleFolder}
-                selectedPath={selectedPath}
+                selectedPaths={selectedPaths}
               />
             )
           })}
@@ -207,11 +220,11 @@ function ExplorerPanel({
   rootName,
   rootPath,
   selectedPath,
-  onCloseWorkspace,
+  selectedPaths,
   onCollapseAll,
   onCopyPath,
   onCreateEntry,
-  onDeleteEntry,
+  onDeleteEntries,
   onDropEntry,
   onOpenFile,
   onOpenFolder,
@@ -221,16 +234,33 @@ function ExplorerPanel({
   onResize,
   onRevealEntry,
   onSelectPath,
+  onSelectPaths,
+  onSelectSubtree,
   onSetClipboard,
+  onTogglePathSelection,
   onToggleFolder,
 }: ExplorerPanelProps) {
   const [edit_state, set_edit_state] = useState<ExplorerEditState | null>(null)
   const [menu_state, set_menu_state] = useState<ExplorerMenuState | null>(null)
+  const [pending_delete_paths, set_pending_delete_paths] = useState<string[] | null>(null)
+  const selection_anchor_ref = useRef<string | null>(null)
+  const tree_ref = useRef<HTMLDivElement | null>(null)
   const root_node = rootPath ? nodes.get(rootPath) : null
   const visible_nodes = useMemo(
     () => (rootPath ? get_visible_nodes(rootPath, nodes, expandedPaths) : []),
     [expandedPaths, nodes, rootPath],
   )
+
+  useEffect(() => {
+    if (!selectedPath || !tree_ref.current) {
+      return
+    }
+
+    const selected_row = [...tree_ref.current.querySelectorAll<HTMLElement>('[data-workspace-path]')].find(
+      (element) => element.dataset.workspacePath === selectedPath,
+    )
+    selected_row?.scrollIntoView?.({ block: 'nearest' })
+  }, [expandedPaths, nodes, selectedPath])
 
   const start_create = (kind: WorkspaceNodeKind, target_path = menu_state ? menu_state.target_path : selectedPath) => {
     if (!rootPath) {
@@ -287,21 +317,51 @@ function ExplorerPanel({
     return succeeded
   }
 
-  const delete_target = async (target_path = menu_state ? menu_state.target_path : selectedPath) => {
-    const target_node = target_path ? nodes.get(target_path) : null
+  const handle_select_node = (event: MouseEvent<HTMLDivElement>, node: WorkspaceNode) => {
+    const command_key = event.ctrlKey || event.metaKey
+    const selectable_nodes = visible_nodes.filter((visible_node) => visible_node.path !== rootPath)
+
+    if (event.shiftKey && selection_anchor_ref.current) {
+      const anchor_index = selectable_nodes.findIndex((visible_node) => visible_node.path === selection_anchor_ref.current)
+      const target_index = selectable_nodes.findIndex((visible_node) => visible_node.path === node.path)
+
+      if (anchor_index >= 0 && target_index >= 0) {
+        const start_index = Math.min(anchor_index, target_index)
+        const end_index = Math.max(anchor_index, target_index)
+        onSelectPaths(
+          selectable_nodes.slice(start_index, end_index + 1).map((visible_node) => visible_node.path),
+          node.path,
+        )
+      } else {
+        onSelectPath(node.path)
+      }
+    } else if (command_key) {
+      onTogglePathSelection(node.path)
+      selection_anchor_ref.current = node.path
+    } else {
+      onSelectPath(node.path)
+      selection_anchor_ref.current = node.path
+    }
+
+    if (node.kind === 'file') {
+      onOpenFile(node.path)
+    }
+  }
+
+  const request_delete = (target_path = menu_state ? menu_state.target_path : selectedPath) => {
     set_menu_state(null)
 
-    if (!target_node || target_node.path === rootPath) {
+    if (!target_path || target_path === rootPath || (target_path === selectedPath && selectedPaths.size === 0)) {
       return
     }
 
-    const detail = target_node.kind === 'directory' ? ' and everything inside it' : ''
+    const use_current_selection = selectedPaths.size > 0 && (selectedPaths.has(target_path) || target_path === selectedPath)
+    const target_paths = use_current_selection ? [...selectedPaths] : [target_path]
+    const deletable_paths = target_paths.filter((path) => path !== rootPath)
 
-    if (!window.confirm(`Move ${target_node.name}${detail} to Trash?`)) {
-      return
+    if (deletable_paths.length > 0) {
+      set_pending_delete_paths(deletable_paths)
     }
-
-    await onDeleteEntry(target_node.path)
   }
 
   const handle_tree_key = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -330,6 +390,7 @@ function ExplorerPanel({
       const offset = event.key === 'ArrowDown' ? 1 : -1
       const next_index = Math.min(visible_nodes.length - 1, Math.max(0, current_index + offset))
       onSelectPath(visible_nodes[next_index].path)
+      selection_anchor_ref.current = visible_nodes[next_index].path
     } else if (event.key === 'ArrowRight' && current_node.kind === 'directory') {
       event.preventDefault()
 
@@ -337,6 +398,7 @@ function ExplorerPanel({
         onToggleFolder(current_node.path)
       } else if (current_node.children?.[0]) {
         onSelectPath(current_node.children[0])
+        selection_anchor_ref.current = current_node.children[0]
       }
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault()
@@ -345,6 +407,7 @@ function ExplorerPanel({
         onToggleFolder(current_node.path)
       } else if (current_node.parent_path) {
         onSelectPath(current_node.parent_path)
+        selection_anchor_ref.current = current_node.parent_path
       }
     } else if (event.key === 'Enter') {
       event.preventDefault()
@@ -359,7 +422,7 @@ function ExplorerPanel({
       start_rename(current_node.path)
     } else if (event.key === 'Delete') {
       event.preventDefault()
-      void delete_target(current_node.path)
+      request_delete(current_node.path)
     }
   }
 
@@ -430,14 +493,6 @@ function ExplorerPanel({
                 <button className="explorer-action-button" onClick={onCollapseAll} title="Collapse All" type="button">
                   ⇤
                 </button>
-                <button
-                  className="explorer-action-button"
-                  onClick={onCloseWorkspace}
-                  title="Close Folder"
-                  type="button"
-                >
-                  ×
-                </button>
               </div>
               <div
                 className="min-h-0 flex-1 overflow-auto py-1 outline-none"
@@ -462,6 +517,7 @@ function ExplorerPanel({
                   }
                 }}
                 onKeyDown={handle_tree_key}
+                ref={tree_ref}
                 role="tree"
                 tabIndex={0}
               >
@@ -497,7 +553,12 @@ function ExplorerPanel({
                           onContextMenu={(event, node) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            onSelectPath(node.path)
+
+                            if (!selectedPaths.has(node.path)) {
+                              onSelectPath(node.path)
+                              selection_anchor_ref.current = node.path
+                            }
+
                             set_menu_state({
                               target_path: node.path,
                               x: event.clientX,
@@ -506,9 +567,11 @@ function ExplorerPanel({
                           }}
                           onDropEntry={onDropEntry}
                           onOpenFile={onOpenFile}
-                          onSelectPath={onSelectPath}
+                          onRename={start_rename}
+                          onSelectNode={handle_select_node}
+                          onSelectSubtree={(target_path) => void onSelectSubtree(target_path)}
                           onToggleFolder={onToggleFolder}
-                          selectedPath={selectedPath}
+                          selectedPaths={selectedPaths}
                         />
                       )
                     })}
@@ -537,7 +600,7 @@ function ExplorerPanel({
             }
             set_menu_state(null)
           }}
-          onDelete={() => void delete_target()}
+          onDelete={() => request_delete()}
           onPaste={() => {
             onPaste(menu_state.target_path)
             set_menu_state(null)
@@ -551,6 +614,20 @@ function ExplorerPanel({
           target={context_target}
           x={Math.max(4, Math.min(menu_state.x, window.innerWidth - 240))}
           y={Math.max(4, Math.min(menu_state.y, window.innerHeight - 330))}
+        />
+      )}
+
+      {pending_delete_paths && rootPath && (
+        <WorkspaceDeleteModal
+          hasDirectories={pending_delete_paths.some((target_path) => nodes.get(target_path)?.kind === 'directory')}
+          onCancel={() => set_pending_delete_paths(null)}
+          onConfirm={() => {
+            const target_paths = pending_delete_paths
+            set_pending_delete_paths(null)
+            void onDeleteEntries(target_paths)
+          }}
+          paths={pending_delete_paths}
+          rootPath={rootPath}
         />
       )}
 

@@ -142,10 +142,6 @@ function App() {
     }
   }, [workspace.root_path])
 
-  const close_workspace = () => {
-    removeStorageKey(last_workspace_storage_key)
-    workspace.close_workspace()
-  }
   const window_shape_class = editor.is_maximized
     ? 'h-screen w-screen rounded-none border-0'
     : 'm-px h-[calc(100vh-2px)] w-[calc(100vw-2px)] rounded-lg border border-[var(--window-border)]'
@@ -233,11 +229,10 @@ function App() {
           clipboard={workspace.clipboard}
           expandedPaths={workspace.expanded_paths}
           nodes={workspace.nodes}
-          onCloseWorkspace={close_workspace}
           onCollapseAll={workspace.collapse_all}
           onCopyPath={workspace.copy_path}
           onCreateEntry={workspace.create_entry}
-          onDeleteEntry={workspace.delete_entry}
+          onDeleteEntries={workspace.delete_entries}
           onDropEntry={(source_path, target_path, operation) =>
             void workspace.drop_entry(source_path, target_path, operation)
           }
@@ -255,11 +250,15 @@ function App() {
           onResize={panels.start_sidebar_resize}
           onRevealEntry={workspace.reveal_entry}
           onSelectPath={workspace.select_path}
+          onSelectPaths={workspace.select_paths}
+          onSelectSubtree={workspace.select_subtree}
           onSetClipboard={workspace.set_file_clipboard}
+          onTogglePathSelection={workspace.toggle_path_selection}
           onToggleFolder={(folder_path) => void workspace.toggle_folder(folder_path)}
           rootName={workspace.root_name}
           rootPath={workspace.root_path}
           selectedPath={workspace.selected_path}
+          selectedPaths={workspace.selected_paths}
         />
 
         <main className="grid min-h-0" style={editor_grid_style}>
