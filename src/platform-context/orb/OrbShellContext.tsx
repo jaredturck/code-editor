@@ -4,47 +4,9 @@
  * same renderer can still operate in a normal browser.
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isDesktopShellMode } from '@/platform/runtimeMode'
-
-export type OrbState = 'idle' | 'listening' | 'processing' | 'error' | 'connected' | string
-
-export interface OrbPosition {
-  x: number
-  y: number
-}
-
-export interface OrbShellContextValue {
-  orbState: OrbState
-  setOrbState: Dispatch<SetStateAction<OrbState>>
-  isPillsVisible: boolean
-  showPills: () => void
-  hidePills: (delay?: number) => void
-  keepPillsVisible: () => void
-  isMinimized: boolean
-  setIsMinimized: Dispatch<SetStateAction<boolean>>
-  isFullWindow: boolean
-  setIsFullWindow: Dispatch<SetStateAction<boolean>>
-  position: OrbPosition
-  setPosition: Dispatch<SetStateAction<OrbPosition>>
-  isPinned: boolean
-  setIsPinned: Dispatch<SetStateAction<boolean>>
-  /** Internal cross-context action used when opening a panel. */
-  dismissPills: () => void
-}
-
-const OrbShellContext = createContext<OrbShellContextValue | null>(null)
+import { OrbShellContext, type OrbPosition, type OrbShellContextValue, type OrbState } from './useOrbShell'
 
 // Returns initial orb position without requiring callers to know where or how it is stored.
 function getInitialOrbPosition(): OrbPosition {
@@ -136,11 +98,4 @@ export function OrbShellProvider({ children }: OrbShellProviderProps): React.JSX
   )
 
   return <OrbShellContext.Provider value={value}>{children}</OrbShellContext.Provider>
-}
-
-// Coordinates orb shell state and side effects for the React feature that consumes this hook.
-export function useOrbShell(): OrbShellContextValue {
-  const context = useContext(OrbShellContext)
-  if (!context) throw new Error('useOrbShell must be used within OrbProvider')
-  return context
 }
