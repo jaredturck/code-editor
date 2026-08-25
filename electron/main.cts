@@ -24,9 +24,7 @@ import {
   get_speech_model_status,
   install_speech_model,
   list_ollama_models,
-  stream_ollama_chat,
   transcribe_audio,
-  type OllamaMessage,
 } from './ollama.cjs'
 import { read_settings, update_settings, type AppSettings } from './settings.cjs'
 import {
@@ -79,7 +77,6 @@ const credential_store = createCredentialStore({ app, safeStorage })
 registerCredentialIpc({ ipcMain, BrowserWindow, store: credential_store })
 
 const browser_entries = new Map<string, BrowserEntry>()
-const ai_requests = new Map<string, AbortController>()
 const approved_close_windows = new Set<number>()
 let browser_session_ready = false
 let application_quit_requested = false
@@ -575,62 +572,6 @@ ipcMain.handle('ai:model-capabilities', async (_event, base_url: string, model: 
   return get_ollama_model_capabilities(base_url, model)
 })
 
-ipcMain.on(
-  'ai:chat-start',
-  (
-    event,
-    request: {
-      request_id: string
-      base_url: string
-      model: string
-      messages: OllamaMessage[]
-    },
-  ) => {
-    const controller = new AbortController()
-    ai_requests.set(request.request_id, controller)
-
-    void stream_ollama_chat(
-      request.base_url,
-      request.model,
-      request.messages,
-      controller.signal,
-      (content, thinking) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('ai:chat-chunk', {
-            request_id: request.request_id,
-            content,
-            thinking,
-          })
-        }
-      },
-    )
-      .then(() => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('ai:chat-complete', {
-            request_id: request.request_id,
-          })
-        }
-      })
-      .catch((error: unknown) => {
-        if (!event.sender.isDestroyed()) {
-          const message = error instanceof Error ? error.message : 'Ollama request failed.'
-          event.sender.send('ai:chat-error', {
-            request_id: request.request_id,
-            message,
-          })
-        }
-      })
-      .finally(() => {
-        ai_requests.delete(request.request_id)
-      })
-  },
-)
-
-ipcMain.on('ai:chat-cancel', (_event, request_id: string) => {
-  ai_requests.get(request_id)?.abort()
-  ai_requests.delete(request_id)
-})
-
 ipcMain.handle('ai:speech-status', async (_event, base_url: string, speech_model: string) => {
   try {
     return await get_speech_model_status(base_url, speech_model)
@@ -784,11 +725,6 @@ async function initialize_agent_platform() {
 function emergency_stop() {
   kill_all_terminals()
 
-  for (const controller of ai_requests.values()) {
-    controller.abort()
-  }
-
-  ai_requests.clear()
   updateLocalBridgePermissions({
     terminal: false,
     launcher: false,
@@ -860,9 +796,4 @@ app.on('will-quit', () => {
   secure_storage_context = null
   kill_all_terminals()
 
-  for (const controller of ai_requests.values()) {
-    controller.abort()
-  }
-
-  ai_requests.clear()
 })

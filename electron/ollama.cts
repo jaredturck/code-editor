@@ -4,12 +4,6 @@ export interface OllamaModel {
   modified_at: string
 }
 
-export interface OllamaMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  images?: string[]
-}
-
 export function normalize_ollama_url(value: string) {
   const trimmed = value.trim().replace(/\/+$/, '') || 'http://127.0.0.1:11434'
 
@@ -74,72 +68,6 @@ export async function get_ollama_model_capabilities(base_url: string, model: str
 
   return {
     image: capabilities.has('vision') || capabilities.has('image') || metadata.includes('vision'),
-  }
-}
-
-export async function stream_ollama_chat(
-  base_url: string,
-  model: string,
-  messages: OllamaMessage[],
-  signal: AbortSignal,
-  on_chunk: (content: string, thinking: string) => void,
-) {
-  const response = await fetch(`${normalize_ollama_url(base_url)}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: true }),
-    signal,
-  })
-
-  if (!response.ok || !response.body) {
-    throw new Error(await read_error(response))
-  }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  const consume_line = (line: string) => {
-    if (!line.trim()) {
-      return
-    }
-
-    const data = JSON.parse(line) as {
-      error?: string
-      message?: {
-        content?: string
-        thinking?: string
-        reasoning_content?: string
-      }
-    }
-
-    if (data.error) {
-      throw new Error(data.error)
-    }
-
-    on_chunk(data.message?.content ?? '', data.message?.thinking ?? data.message?.reasoning_content ?? '')
-  }
-
-  while (true) {
-    const result = await reader.read()
-
-    if (result.done) {
-      break
-    }
-
-    buffer += decoder.decode(result.value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      consume_line(line)
-    }
-  }
-
-  buffer += decoder.decode()
-
-  if (buffer.trim()) {
-    consume_line(buffer)
   }
 }
 
