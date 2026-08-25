@@ -1,6 +1,8 @@
 # Code Editor
 
-A desktop Electron code editor with CodeMirror editing, persistent settings, local media viewers, a real integrated terminal, diagnostics, Markdown preview, and an integrated migrated IRIS agent/backend platform. The visible editor shell is intentionally still the Code Editor; agentic capabilities are being connected to its existing Chat, Search, Settings, Explorer, Browser, and Terminal surfaces in stages.
+A desktop Electron code editor with CodeMirror editing, persistent settings, local media viewers, a real integrated terminal, diagnostics, Markdown preview, and the migrated IRIS agent/backend platform.
+
+The IRIS migration is complete for the defined product scope. The Code Editor remains the visible product shell; reusable IRIS agent, provider, persistence, semantic-search, automation, multi-agent, and local-system capabilities run underneath the editor rather than restoring the old IRIS Orb/panel UI.
 
 ![Code Editor](./src/assets/screenshots/Screenshot_20260630_153119.png)
 
@@ -15,36 +17,38 @@ A desktop Electron code editor with CodeMirror editing, persistent settings, loc
 - Problems panel, editor squiggles, gutter markers, and diagnostic hover messages
 - Image, video, audio, PDF, and unsupported-binary viewer tabs
 - Editable Markdown files with GitHub-flavored preview and highlighted code blocks
-- IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace file editing, multi-agent coordination/review, text/image attachments, optional voice transcription, fresh local-only screen verification, permissioned desktop automation, and live runtime visibility
-- Live Agent Chat runtime monitoring for CPU, RAM, GPU/VRAM, top processes, active/queued agents, request/token/context/cache usage, model cost tier, and effective autonomous authority
-- Read-only autonomous discovery of current system pressure, running processes, and verified local launcher/tool availability; local launching remains gated by the existing execution permission
-- Managed development-environment status plus explicit Start/Stop controls in Runtime, backed by the existing IRIS launcher service and bridge-owned launcher permission
-- Permission-scoped autonomous tool exposure: disabled file read/write and local-execution capabilities are removed from the session tool schema before model execution, with delegated-agent, broker, workspace-containment, approval, and bridge checks still enforced underneath
-- Fail-closed autonomous defaults for machine permissions, sudo and shell networking, with guarded web ingestion, package installation, project-local Python environments, screen capture, and exact-plan desktop automation
-- Compatible migrated IRIS runtime tests are re-enabled under `npm test`, covering backend, agent/multi-agent, provider, broker/security, and semantic-index contracts while obsolete IRIS presentation tests remain archived
-- The preserved local-only IRIS benchmark suite is re-enabled under `npm run benchmark`, covering encrypted persistence, semantic/indexing pipelines, provider adapters, agent contracts, network/security policy, and configured local model workloads
-- Dedicated long-running recovery coverage stress-tests multi-hour pause/resume accounting, durable interruption restore, rolling project context, and autonomous acceptance remediation without waiting on real wall-clock time
-- Migrated IRIS agent runtime, canonical tools/broker, provider layer, skills, model health/routing, semantic filesystem/RAG, web research, encrypted persistence, credentials, audio, Vision, Automation, system-monitor, and launcher/local-system services
-- OS-protected credential storage and encrypted local SQLite platform persistence
-- Authenticated loopback capability bridge with capability permissions and emergency-stop foundation
+- IRIS Agent Chat with configured provider/model execution, encrypted history, durable project runs, editor-aware workspace editing, multi-agent coordination/review, text/image attachments, voice transcription, local screen understanding, permissioned desktop automation, and live runtime visibility
+- Exact and semantic workspace search, document/PDF/archive extraction, image/video semantic indexing, semantic concepts, and RAG
+- Encrypted memory, project checkpoints, skills, artifacts, web research, model routing/health/failover, and hybrid local/cloud execution
+- CPU/RAM/GPU/process, model, agent, token, context, cache, and authority visibility during autonomous runs
+- Read-only autonomous discovery of system pressure, running processes, and verified local launcher/tool availability
+- Managed development-environment status plus explicit Start/Stop controls
+- Permission-scoped autonomous tool exposure with broker, workspace-containment, approval, bridge, and per-role checks
+- Fail-closed defaults for machine permissions, sudo, shell networking, web ingestion, package installation, screen capture, and desktop automation
+- Compatible migrated IRIS runtime tests included in `npm test`
+- Preserved local IRIS benchmark suite available through `npm run benchmark`
+- Dedicated long-running recovery and multi-agent collision coverage
+- OS-protected credential storage and encrypted local SQLite persistence
+- Authenticated loopback capability bridge with emergency-stop support
 
 System utilities such as Python, Git, compilers, and interpreters are not bundled. Commands entered in the terminal use programs available through the user's normal `PATH`.
 
-## IRIS backend migration
+## IRIS migration status
 
-This repository contains a bulk migration of the reusable IRIS platform/backend. IRIS presentation code such as the Orb/planet launcher, old panel shell, duplicate editor/file-manager UI, and old multi-window presentation is intentionally omitted. Existing Code Editor UI components remain the product frontend.
+**Migration status: complete.**
 
-The platform source is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some migrated systems are intentionally present before their Code Editor UI integration is complete.
+The reusable IRIS platform/backend has been migrated into the Code Editor. The old IRIS product presentation is intentionally not part of the target: the Orb/planet launcher, old panel shell, duplicate editor/file-manager UI, old multi-window shell, authentication/profile presentation, and other presentation-only pieces remain omitted by design.
 
-Connected product milestones include autonomous Agent Chat/project runs, editor/terminal/search/RAG integration, encrypted memory and artifacts, multi-agent coding coordination and independent review, voice input, fresh local screen understanding, permissioned exact-plan desktop automation, live system/agent/model usage visibility, local launcher/tool discovery, managed development-environment controls, final autonomous-run policy hardening, compatible migrated IRIS runtime tests, the preserved local benchmark suite, and dedicated long-running recovery validation. The remaining migration work is multi-agent collision validation.
+The active platform is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some compatibility/controller code remains intentionally unmounted where the underlying capability is already exposed through a Code Editor-native surface. That retained code is not unfinished migration work.
 
-See:
+Current documentation:
 
-- [`docs/migration/MIGRATION_PLAN.md`](./docs/migration/MIGRATION_PLAN.md) — migration architecture and SDLC plan
-- [`IRIS_MIGRATION.md`](./IRIS_MIGRATION.md) — subsystem status and integration ledger
-- [`docs/migration/MIGRATED_FILES.md`](./docs/migration/MIGRATED_FILES.md) — one-by-one source/destination file map
-- [`docs/migration/UNWIRED_BACKEND.md`](./docs/migration/UNWIRED_BACKEND.md) — migrated functionality not yet surfaced by the editor UI
-- [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) — archive/hash/import/syntax validation and remaining dependency-aware checks
+- [`docs/migration/CURRENT_STATUS.md`](./docs/migration/CURRENT_STATUS.md) — current product/runtime status
+- [`IRIS_MIGRATION.md`](./IRIS_MIGRATION.md) — completed migration ledger and scope
+- [`docs/migration/UNWIRED_BACKEND.md`](./docs/migration/UNWIRED_BACKEND.md) — intentionally retained compatibility/reference code
+- [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) — current verification state and remaining non-migration cleanup
+- [`docs/migration/MIGRATED_FILES.md`](./docs/migration/MIGRATED_FILES.md) — historical one-by-one source/destination inventory
+- [`docs/migration/MIGRATION_PLAN.md`](./docs/migration/MIGRATION_PLAN.md) — historical migration architecture and sequencing plan
 
 ## Installation
 
@@ -55,14 +59,14 @@ npm install
 npm run dev
 ```
 
-Ollama is optional and remains available through the migrated local-provider backend. Cloud/local provider credentials, model discovery, role assignments, routing, autonomy limits, skills, and semantic-index settings are exposed through the Code Editor's AI Settings UI.
+Ollama is optional and remains available through the migrated local-provider backend. Cloud/local provider credentials, model discovery, role assignments, routing, autonomy limits, skills, semantic-index settings, and local runtime settings are exposed through the Code Editor's AI Settings UI.
 
 The secure IRIS platform initializes before the renderer. On Linux, Electron must have a real OS secret-storage backend; the application intentionally refuses the insecure `basic_text` fallback.
 
 ## Verification
 
 ```bash
-npm run format
+npm run format:check
 npm run lint
 npm run typecheck
 npm test
@@ -70,7 +74,9 @@ npm run test:electron-runtime
 npm run build
 ```
 
-`npm test` runs the Code Editor integration suite, dedicated long-running recovery coverage, and the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The local performance suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`. The development application can then be launched with `npm run dev`.
+`npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The benchmark suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`.
+
+See [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) for the latest recorded verification state.
 
 ## Third-party notices
 
