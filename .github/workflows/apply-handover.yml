@@ -39,6 +39,8 @@ jobs:
           npm run format:check
           npm run lint
           npm run typecheck
+          npm run build:backend
+          npm run build:electron
           npx vitest run
           npx vitest run --config vitest.iris.config.ts \
             migrated-tests/iris/server/fileSemanticService.test.ts \
@@ -132,6 +134,8 @@ jobs:
           npm run format:check
           npm run lint
           npm run typecheck
+          npm run build:backend
+          npm run build:electron
           npx vitest run
           npx vitest run --config vitest.iris.config.ts \
             migrated-tests/iris/server/fileSemanticService.test.ts \
