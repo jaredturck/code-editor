@@ -1,5 +1,7 @@
 # Terminal, Build, Test and Diagnostics Integration
 
+> **Completed milestone.** This document records the terminal/diagnostics integration. Exact and semantic search were connected by later completed milestones.
+
 The Code Editor Agent Chat now exposes the migrated brokered `terminal.exec` capability when an open workspace exists and the user has explicitly enabled **Run terminal commands** in AI Settings.
 
 ## Runtime behavior
@@ -17,4 +19,4 @@ The current Code Editor diagnostics for files inside the open workspace are inje
 
 ## Safety boundary
 
-Terminal authority is opt-in and remains distinct from human terminal sessions. File mutations continue through the editor-aware authority layer so dirty CodeMirror buffers and revision conflicts are respected. Exact-code-search UI integration remains a later milestone even though an authorized terminal command may itself invoke tools such as `rg`.
+Terminal authority is opt-in and remains distinct from human terminal sessions. File mutations continue through the editor-aware authority layer so dirty CodeMirror buffers and revision conflicts are respected. Exact and semantic search are now connected separately through the Code Editor search/RAG integration; terminal commands such as `rg` do not replace those authority paths.
