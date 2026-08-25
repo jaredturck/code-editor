@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Controls step, timeout, and extension behavior for long-running agent sessions. It turns
  * limit conditions into user-facing choices rather than silently abandoning productive
@@ -22,13 +21,30 @@ const {
   dedupeStrings,
 } = Object.assign({}, config, continuity, todoTrace, capabilityPolicy, webSearchPolicy)
 
+interface ApprovalResponseRecord {
+  decision?: unknown
+  choice?: unknown
+  selection?: unknown
+  action?: unknown
+  approved?: unknown
+}
+
+interface LimitIssueInput {
+  toolName?: unknown
+  message?: unknown
+}
+
+interface FindFallbackOptions {
+  includeGlobalFallback?: boolean
+}
+
 /**
  * Maps the different labels an approval UI or model may return onto the small set of limit
  * decisions understood by the runtime. This keeps continue, extend, unlimited, and deny
  * behavior consistent across approval sources.
  */
 
-export function normalizeApprovalDecisionToken(value) {
+export function normalizeApprovalDecisionToken(value: unknown): string {
   const token = String(value || '')
     .trim()
     .toLowerCase()
@@ -50,13 +66,14 @@ export function normalizeApprovalDecisionToken(value) {
  * silently grant more work.
  */
 
-export function normalizeApprovalResponse(rawResponse) {
+export function normalizeApprovalResponse(rawResponse: unknown): { approved: boolean; decision: string } {
   if (rawResponse && typeof rawResponse === 'object') {
+    const response = rawResponse as ApprovalResponseRecord
     const decision = normalizeApprovalDecisionToken(
-      rawResponse.decision || rawResponse.choice || rawResponse.selection || rawResponse.action,
+      response.decision || response.choice || response.selection || response.action,
     )
 
-    const approved = rawResponse.approved === true || ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
+    const approved = response.approved === true || ['approve', 'continue', 'extend', 'unlimited'].includes(decision)
 
     return {
       approved,
@@ -81,7 +98,7 @@ export function normalizeApprovalResponse(rawResponse) {
 }
 
 // Determines whether the classify limit issue for the agent session runtime.
-export function classifyLimitIssue({ toolName, message }) {
+export function classifyLimitIssue({ toolName, message }: LimitIssueInput) {
   const tool = String(toolName || '').trim()
   const raw = String(message || '').trim()
   const lower = raw.toLowerCase()
@@ -144,7 +161,7 @@ export function classifyLimitIssue({ toolName, message }) {
 
 // Assembles limit decision options from lower-level state so callers receive one consistent
 // representation.
-export function buildLimitDecisionOptions(limitKind) {
+export function buildLimitDecisionOptions(limitKind: unknown) {
   const kind = String(limitKind || '').toLowerCase()
 
   const continueLabel = kind === 'step_budget' ? 'Continue task' : 'Continue once'
@@ -190,7 +207,7 @@ export function buildLimitDecisionOptions(limitKind) {
 }
 
 // Selects or derives tool timeout ms from the available settings, input, and runtime context.
-export function resolveToolTimeoutMs(toolName) {
+export function resolveToolTimeoutMs(toolName: string): number {
   return getCatalogToolTimeoutMs(toolName)
 }
 
@@ -198,10 +215,10 @@ export function resolveToolTimeoutMs(toolName) {
  * Runs with timeout from initialization through completion, including its cleanup behavior.
  */
 
-export async function runWithTimeout(promise, timeoutMs, message) {
-  let timeoutId = null
+export async function runWithTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-  const timeoutPromise = new Promise((_, reject) => {
+  const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(
       () => {
         reject(new Error(message))
@@ -220,22 +237,25 @@ export async function runWithTimeout(promise, timeoutMs, message) {
 }
 
 // Waits for milliseconds without allowing the surrounding workflow to wait indefinitely.
-export async function waitMs(durationMs) {
+export async function waitMs(durationMs: number): Promise<void> {
   const ms = Math.max(0, Number(durationMs) || 0)
   if (!ms) return
 
-  await new Promise((resolve) => {
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, ms)
   })
 }
 
 // Assembles find fallback paths from lower-level state so callers receive one consistent
 // representation.
-export function buildFindFallbackPaths(pathInput, { includeGlobalFallback = false } = {}) {
+export function buildFindFallbackPaths(
+  pathInput: unknown,
+  { includeGlobalFallback = false }: FindFallbackOptions = {},
+): string[] {
   const rawPath = String(pathInput || '').trim()
   if (!rawPath) return []
 
-  const fallbackPaths = []
+  const fallbackPaths: string[] = []
 
   if ((rawPath === '.' || rawPath === './') && includeGlobalFallback) {
     fallbackPaths.push('~/Documents')
