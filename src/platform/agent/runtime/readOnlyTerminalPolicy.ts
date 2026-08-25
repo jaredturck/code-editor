@@ -93,7 +93,7 @@ export function isWorkspacePath(value: unknown, workspaceRoot: unknown) {
   if (!raw || raw === '.' || raw === './') return true
 
   const normalized = normalizePath(raw)
-  if (normalized.startsWith('~/')) return false
+  if (normalized === '~' || normalized.startsWith('~/')) return false
   if (normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) return false
 
   const absolute = normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)
@@ -101,7 +101,7 @@ export function isWorkspacePath(value: unknown, workspaceRoot: unknown) {
   return normalized === root || normalized.startsWith(`${root}/`)
 }
 
-function argumentEscapesWorkspace(value: string, workspaceRoot: string) {
+function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string) {
   if (!value) return false
   const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
   if (!candidate || candidate === '--') return false
@@ -110,8 +110,21 @@ function argumentEscapesWorkspace(value: string, workspaceRoot: string) {
   return !isWorkspacePath(candidate, workspaceRoot)
 }
 
+function argumentObviouslyEscapesWorkspace(value: string) {
+  if (!value) return false
+  const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  if (!candidate || candidate === '--') return false
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
+  if (candidate.startsWith('-') && !candidate.includes('=')) return false
+
+  const normalized = normalizePath(candidate)
+  if (normalized === '~' || normalized.startsWith('~/')) return true
+  if (normalized === '..' || normalized.startsWith('../') || normalized.includes('/../')) return true
+  return normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)
+}
+
 function commandArgumentsEscapeWorkspace(words: string[], workspaceRoot: string) {
-  return words.slice(1).some((word) => argumentEscapesWorkspace(word, workspaceRoot))
+  return words.slice(1).some((word) => argumentEscapesKnownWorkspace(word, workspaceRoot))
 }
 
 function commandName(value: string) {
@@ -208,7 +221,11 @@ export function isReadOnlyWorkspaceCommand(command: unknown, workspaceRoot: unkn
   const words = validSimpleCommand(command)
   if (!words?.length) return false
   const root = String(workspaceRoot || '').trim()
-  if (root && terminalCommandEscapesWorkspace(command, root, cwd)) return false
+  if (root) {
+    if (terminalCommandEscapesWorkspace(command, root, cwd)) return false
+  } else if (words.slice(1).some(argumentObviouslyEscapesWorkspace)) {
+    return false
+  }
   const name = commandName(words[0])
 
   if (simpleCommands.has(name)) return true

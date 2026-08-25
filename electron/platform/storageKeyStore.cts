@@ -13,6 +13,9 @@ const MASTER_KEY_ID = 'master-v1'
 const MASTER_KEY_BYTES = 32
 const DATABASE_FILENAME = 'iris.sqlite3'
 const STORAGE_DIRECTORY = '.iris-ai'
+const LEGACY_DATABASE_FILENAME = 'orbital.sqlite3'
+const LEGACY_STORAGE_DIRECTORY = '.orbital-ai'
+const MIGRATION_STORAGE_DIRECTORY = '.iris-ai.migrating'
 
 interface StorageKeyOptions {
   app: Pick<App, 'getPath' | 'isReady'>
@@ -135,13 +138,59 @@ function assertDatabasePath(databasePath: string): void {
   }
 }
 
+function migrateLegacyStorageHome(homePath: string): void {
+  const targetDirectory = path.join(homePath, STORAGE_DIRECTORY)
+  if (fs.existsSync(targetDirectory)) return
+
+  const legacyDirectory = path.join(homePath, LEGACY_STORAGE_DIRECTORY)
+  if (!fs.existsSync(legacyDirectory)) return
+
+  const legacyStats = fs.lstatSync(legacyDirectory)
+  if (legacyStats.isSymbolicLink() || !legacyStats.isDirectory()) {
+    throw new Error('Legacy IRIS storage home is not a trusted directory')
+  }
+
+  const stagingDirectory = path.join(homePath, MIGRATION_STORAGE_DIRECTORY)
+  fs.rmSync(stagingDirectory, { recursive: true, force: true })
+
+  try {
+    fs.cpSync(legacyDirectory, stagingDirectory, {
+      recursive: true,
+      dereference: false,
+      errorOnExist: true,
+      force: false,
+    })
+
+    const copiedLegacyDatabase = path.join(stagingDirectory, LEGACY_DATABASE_FILENAME)
+    const migratedDatabase = path.join(stagingDirectory, DATABASE_FILENAME)
+    if (fs.existsSync(copiedLegacyDatabase)) {
+      if (fs.existsSync(migratedDatabase)) {
+        throw new Error('Legacy IRIS storage contains conflicting database files')
+      }
+      fs.renameSync(copiedLegacyDatabase, migratedDatabase)
+    }
+
+    fs.renameSync(stagingDirectory, targetDirectory)
+    try {
+      fs.chmodSync(targetDirectory, 0o700)
+    } catch {
+      // Windows and unusual filesystems may not support POSIX modes.
+    }
+  } catch (error) {
+    fs.rmSync(stagingDirectory, { recursive: true, force: true })
+    throw error
+  }
+}
+
 export async function loadOrCreateStorageKey({
   app,
   safeStorage,
   platform = process.platform,
 }: StorageKeyOptions): Promise<StorageKeyContext> {
   const backend = assertSecureStorage(app, safeStorage, platform)
-  const databasePath = path.join(app.getPath('home'), STORAGE_DIRECTORY, DATABASE_FILENAME)
+  const homePath = app.getPath('home')
+  migrateLegacyStorageHome(homePath)
+  const databasePath = path.join(homePath, STORAGE_DIRECTORY, DATABASE_FILENAME)
   assertDatabasePath(databasePath)
 
   const databaseExisted = fs.existsSync(databasePath)
@@ -202,4 +251,12 @@ export async function loadOrCreateStorageKey({
   }
 }
 
-export { DATABASE_FILENAME, LEGACY_RENDERER_STORAGE_DIRECTORIES, MASTER_KEY_BYTES, MASTER_KEY_ID, STORAGE_DIRECTORY }
+export {
+  DATABASE_FILENAME,
+  LEGACY_DATABASE_FILENAME,
+  LEGACY_RENDERER_STORAGE_DIRECTORIES,
+  LEGACY_STORAGE_DIRECTORY,
+  MASTER_KEY_BYTES,
+  MASTER_KEY_ID,
+  STORAGE_DIRECTORY,
+}

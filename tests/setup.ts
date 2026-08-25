@@ -4,6 +4,22 @@ import { afterEach } from 'vitest'
 
 afterEach(cleanup)
 
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  class DOMMatrixMock {
+    a = 1
+    b = 0
+    c = 0
+    d = 1
+    e = 0
+    f = 0
+  }
+
+  Object.defineProperty(globalThis, 'DOMMatrix', {
+    configurable: true,
+    value: DOMMatrixMock,
+  })
+}
+
 if (typeof window !== 'undefined') {
   class ResizeObserverMock {
     observe() {}
