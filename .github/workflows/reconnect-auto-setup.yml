@@ -1,0 +1,258 @@
+name: Reconnect automatic model setup
+
+on:
+  push:
+    paths:
+      - .github/workflows/reconnect-auto-setup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconnect-auto-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Reconnect Auto Configure
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          panel_path = Path('src/components/settings/AISettingsPanel.tsx')
+          panel = panel_path.read_text()
+
+          old = "import { testConnection } from '@/platform/aiService'\n"
+          new = old + "import { runAutomaticSetup } from '@/platform/autoSetup/autoSetupService'\n"
+          assert old in panel and "runAutomaticSetup" not in panel
+          panel = panel.replace(old, new, 1)
+
+          old = "  const [semantic_error, set_semantic_error] = useState('')\n"
+          new = old + "  const [auto_setup_busy, set_auto_setup_busy] = useState(false)\n  const [auto_setup_message, set_auto_setup_message] = useState('')\n  const [auto_setup_error, set_auto_setup_error] = useState('')\n"
+          assert old in panel
+          panel = panel.replace(old, new, 1)
+
+          marker = "  const refresh_semantic_status = async () => {\n"
+          insertion = '''  const run_auto_setup = async () => {
+            if (auto_setup_busy) return
+            set_auto_setup_busy(true)
+            set_auto_setup_error('')
+            set_auto_setup_message('Checking providers, local runtimes, and hardware…')
+
+            try {
+              const result = await runAutomaticSetup(readOrbSettings())
+              const next = update_platform_settings(result.patch as Partial<OrbSettings>)
+              const next_record = next as unknown as Record<string, unknown>
+              const local_model = String(next_record.agent_required_local_model || '').trim()
+              const local_url = String(next.ai_local_url || editor_ai.ollama_url).trim()
+
+              if (local_model || local_url !== editor_ai.ollama_url) {
+                on_editor_ai_change({
+                  ...editor_ai,
+                  ...(local_url ? { ollama_url: local_url } : {}),
+                  ...(local_model ? { selected_model: local_model } : {}),
+                })
+              }
+
+              const primary_provider = String(next.ai_provider || '').trim()
+              if (AI_PROVIDER_DEFINITIONS.some((entry) => entry.id === primary_provider)) {
+                set_models_provider(primary_provider)
+              }
+              set_credential_revision((value) => value + 1)
+              set_auto_setup_message(
+                result.summary.length
+                  ? `Auto setup complete. ${result.summary.join(' · ')}`
+                  : `Auto setup complete. ${result.validKeys} cloud credential${result.validKeys === 1 ? '' : 's'} validated.`,
+              )
+            } catch (error) {
+              set_auto_setup_message('')
+              set_auto_setup_error(error instanceof Error ? error.message : 'Automatic model setup failed.')
+            } finally {
+              set_auto_setup_busy(false)
+            }
+          }
+
+'''
+          assert marker in panel
+          panel = panel.replace(marker, insertion + marker, 1)
+
+          marker = '''    return (
+      <>
+        <SettingsSection title="Model catalog">'''
+          replacement = '''    return (
+      <>
+        <SettingsSection title="Automatic agent setup">
+          <div className="flex items-center gap-5 px-4 py-4" data-setting-id="model-auto-setup">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-[var(--text)]">Configure models automatically</div>
+              <div className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
+                Validate configured providers, inspect local AI runtimes and hardware, choose suitable models for every
+                agent role, and install an Ollama worker when needed.
+              </div>
+            </div>
+            <button
+              className="h-9 shrink-0 rounded-md border border-sky-500/30 bg-sky-500/8 px-4 text-xs font-medium text-sky-300 hover:bg-sky-500/14 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={auto_setup_busy}
+              onClick={() => void run_auto_setup()}
+              type="button"
+            >
+              {auto_setup_busy ? 'Configuring…' : 'Auto Configure'}
+            </button>
+          </div>
+          {auto_setup_message ? (
+            <div className="mx-2 mb-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-[10px] leading-4 text-emerald-300">
+              {auto_setup_message}
+            </div>
+          ) : null}
+          {auto_setup_error ? (
+            <div className="mx-2 mb-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-[10px] leading-4 text-red-300">
+              {auto_setup_error}
+            </div>
+          ) : null}
+        </SettingsSection>
+
+        <SettingsSection title="Model catalog">'''
+          assert marker in panel
+          panel = panel.replace(marker, replacement, 1)
+          panel_path.write_text(panel)
+
+          test_path = Path('tests/AISettingsPanel.test.tsx')
+          test = test_path.read_text()
+
+          old = "  update_bridge_permissions: vi.fn(async () => ({ ok: true })),\n"
+          new = old + "  run_auto_setup: vi.fn(),\n"
+          assert old in test
+          test = test.replace(old, new, 1)
+
+          marker = "vi.mock('@/platform/aiService', () => ({\n  testConnection: vi.fn(async () => ({ ok: true, models: ['model-a'], message: 'Connected.' })),\n}))\n\n"
+          replacement = marker + "vi.mock('@/platform/autoSetup/autoSetupService', () => ({\n  runAutomaticSetup: state.run_auto_setup,\n}))\n\n"
+          assert marker in test
+          test = test.replace(marker, replacement, 1)
+
+          old = "    state.update_bridge_permissions.mockClear()\n"
+          new = '''    state.update_bridge_permissions.mockClear()
+            state.run_auto_setup.mockReset()
+            state.run_auto_setup.mockResolvedValue({
+              patch: {
+                ai_provider: 'openai',
+                ai_model: 'gpt-auto',
+                ai_local_url: 'http://127.0.0.1:11434',
+                agent_required_local_model: 'qwen3.5:9b',
+                agent_models: [
+                  {
+                    id: 'orchestrator:openai:gpt-auto:1',
+                    role: 'orchestrator',
+                    provider: 'openai',
+                    model: 'gpt-auto',
+                    keyId: '1',
+                    primary: true,
+                    tags: [],
+                    disabledTags: [],
+                  },
+                ],
+                agent_multi_enabled: true,
+                agent_peer_consult_enabled: true,
+                agent_peer_review: 'off',
+                agent_model_routing: 'off',
+                agent_execution_policy: 'hybrid',
+                provider_selected_models: { openai: ['gpt-auto'], local: ['qwen3.5:9b'] },
+              },
+              summary: ['Local worker: qwen3.5:9b', 'Cloud responders: gpt-auto'],
+              testedKeys: 1,
+              validKeys: 1,
+              localDetected: true,
+            })
+            state.settings.ai_provider = 'openai'
+            state.settings.ai_model = 'gpt-4o'
+            state.settings.agent_models = null
+            state.settings.agent_multi_enabled = false
+            delete (state.settings as unknown as Record<string, unknown>).agent_required_local_model
+'''
+          assert old in test
+          test = test.replace(old, new, 1)
+
+          marker = "  it('keeps existing local Chat and speech settings editable during the agent migration', () => {\n"
+          tests = '''  it('automatically configures the model mesh from the Models tab', async () => {
+            const on_editor_ai_change = vi.fn()
+            render_panel('models', { on_editor_ai_change })
+
+            fireEvent.click(screen.getByRole('button', { name: 'Auto Configure' }))
+
+            await waitFor(() => expect(state.run_auto_setup).toHaveBeenCalledTimes(1))
+            await waitFor(() => expect(state.settings.agent_multi_enabled).toBe(true))
+            expect(state.settings.ai_provider).toBe('openai')
+            expect(state.settings.ai_model).toBe('gpt-auto')
+            expect((state.settings as unknown as Record<string, unknown>).agent_required_local_model).toBe('qwen3.5:9b')
+            expect(on_editor_ai_change).toHaveBeenCalledWith(
+              expect.objectContaining({
+                ollama_url: 'http://127.0.0.1:11434',
+                selected_model: 'qwen3.5:9b',
+              }),
+            )
+            expect(screen.getByText(/Auto setup complete\./)).toBeInTheDocument()
+          })
+
+          it('surfaces automatic setup failures without changing the settings shell', async () => {
+            state.run_auto_setup.mockRejectedValueOnce(new Error('No suitable model configuration is available.'))
+            render_panel('models')
+
+            fireEvent.click(screen.getByRole('button', { name: 'Auto Configure' }))
+
+            expect(await screen.findByText('No suitable model configuration is available.')).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: 'Auto Configure' })).toBeEnabled()
+          })
+
+'''
+          assert marker in test
+          test = test.replace(marker, tests + marker, 1)
+          test_path.write_text(test)
+
+          review_path = Path('docs/CODE_CLEANUP_REVIEW.md')
+          review = review_path.read_text()
+          start = review.index('### Automatic model setup and hardware-aware model selection')
+          end = review.index('### Duplicate agent-bus shared implementation')
+          review = review[:start] + review[end:]
+          review_path.write_text(review)
+          PY
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Format changed files
+        run: npx prettier --write src/components/settings/AISettingsPanel.tsx tests/AISettingsPanel.test.tsx docs/CODE_CLEANUP_REVIEW.md
+
+      - name: Verify changed-file formatting
+        run: npx prettier --check src/components/settings/AISettingsPanel.tsx tests/AISettingsPanel.test.tsx docs/CODE_CLEANUP_REVIEW.md
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test AI settings integration
+        run: npx vitest run tests/AISettingsPanel.test.tsx
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Commit verified reconnection
+        shell: bash
+        run: |
+          git rm .github/workflows/reconnect-auto-setup.yml
+          git add src/components/settings/AISettingsPanel.tsx tests/AISettingsPanel.test.tsx docs/CODE_CLEANUP_REVIEW.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Reconnect automatic agent model setup" -m "Restore Auto Configure in AI Settings → Models, apply the existing hardware/provider-aware setup plan atomically, sync the selected local worker into the legacy Chat model setting, and cover success and error flows. Remove the resolved product decision from the cleanup review." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+          git push origin HEAD:main
