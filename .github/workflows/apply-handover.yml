@@ -36,7 +36,19 @@ jobs:
             electron/preload.cts \
             src/components/SearchPanel.tsx \
             src/platform/projectSearch.ts
-          npm run verify:full
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npx vitest run
+          npx vitest run --config vitest.iris.config.ts \
+            migrated-tests/iris/server/fileSemanticService.test.ts \
+            migrated-tests/iris/server/fileIndexSourceService.test.ts \
+            migrated-tests/iris/server/fileDocumentService.test.ts \
+            migrated-tests/iris/server/filePdfService.test.ts \
+            migrated-tests/iris/server/fileArchiveService.test.ts \
+            migrated-tests/iris/server/bridgePermissionBoundary.test.ts
+          npm run test:electron-runtime
+          npm run build
           git diff --check
 
       - name: Commit Search formatting
@@ -63,26 +75,10 @@ jobs:
                   raise SystemExit(f'{path}: expected one match, found {count}')
               file_path.write_text(content.replace(old, new))
 
-          replace_once(
-              'src/types/editor.ts',
-              '  selected_model: string\n',
-              '',
-          )
-          replace_once(
-              'src/editor/editorSettings.ts',
-              "    selected_model: '',\n",
-              '',
-          )
-          replace_once(
-              'electron/settings.cts',
-              '    selected_model: string\n',
-              '',
-          )
-          replace_once(
-              'electron/settings.cts',
-              "    selected_model: '',\n",
-              '',
-          )
+          replace_once('src/types/editor.ts', '  selected_model: string\n', '')
+          replace_once('src/editor/editorSettings.ts', "    selected_model: '',\n", '')
+          replace_once('electron/settings.cts', '    selected_model: string\n', '')
+          replace_once('electron/settings.cts', "    selected_model: '',\n", '')
           replace_once(
               'electron/settings.cts',
               '      selected_model: string_setting(ai.selected_model, default_settings.ai.selected_model, 300),\n',
@@ -108,11 +104,7 @@ jobs:
               "            'Ollama model used by the existing voice-input path until audio is consolidated onto the migrated transcription service.',\n",
               "            'Ollama model used by the Code Editor voice-input path.',\n",
           )
-          replace_once(
-              'tests/AISettingsPanel.test.tsx',
-              "        selected_model: 'qwen',\n",
-              '',
-          )
+          replace_once('tests/AISettingsPanel.test.tsx', "        selected_model: 'qwen',\n", '')
           replace_once(
               'tests/AISettingsPanel.test.tsx',
               "    expect(on_editor_ai_change).toHaveBeenCalledWith(\n      expect.objectContaining({\n        ollama_url: 'http://127.0.0.1:11434',\n        selected_model: 'qwen3.5:9b',\n      }),\n    )\n",
@@ -137,7 +129,19 @@ jobs:
             exit 1
           fi
 
-          npm run verify:full
+          npm run format:check
+          npm run lint
+          npm run typecheck
+          npx vitest run
+          npx vitest run --config vitest.iris.config.ts \
+            migrated-tests/iris/server/fileSemanticService.test.ts \
+            migrated-tests/iris/server/fileIndexSourceService.test.ts \
+            migrated-tests/iris/server/fileDocumentService.test.ts \
+            migrated-tests/iris/server/filePdfService.test.ts \
+            migrated-tests/iris/server/fileArchiveService.test.ts \
+            migrated-tests/iris/server/bridgePermissionBoundary.test.ts
+          npm run test:electron-runtime
+          npm run build
           git diff --check
 
       - name: Commit model settings cleanup
