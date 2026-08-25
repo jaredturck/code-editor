@@ -9,14 +9,6 @@ What remains below requires a future product or architecture decision and is **n
 
 ## Product/architecture decisions intentionally left for later
 
-### Automatic model setup and hardware-aware model selection
-
-- `src/platform/autoSetup/autoSetupEngine.ts`
-- `src/platform/autoSetup/autoSetupService.ts`
-- `src/platform/providers/localRuntimePolicy.ts`
-
-These have weak current UI reachability but plausible product value for an agentic editor. Keep them until the product explicitly decides whether one-click and hardware-aware local-model setup should remain.
-
 ### Duplicate agent-bus shared implementation
 
 - `backend/desktopBridge/shared/agentBusShared.ts`

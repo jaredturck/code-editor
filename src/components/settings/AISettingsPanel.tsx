@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { testConnection } from '@/platform/aiService'
+import { runAutomaticSetup } from '@/platform/autoSetup/autoSetupService'
 import {
   cancelFileSemanticIndex,
   clearFileSemanticIndex,
@@ -181,6 +182,9 @@ function AISettingsPanel({
   const [semantic_preflight, set_semantic_preflight] = useState<BridgeFileSemanticPreflight | null>(null)
   const [semantic_busy, set_semantic_busy] = useState('')
   const [semantic_error, set_semantic_error] = useState('')
+  const [auto_setup_busy, set_auto_setup_busy] = useState(false)
+  const [auto_setup_message, set_auto_setup_message] = useState('')
+  const [auto_setup_error, set_auto_setup_error] = useState('')
 
   useEffect(() => subscribeSettingsChanged(set_platform_settings), [])
 
@@ -382,6 +386,45 @@ function AISettingsPanel({
       set_permission_error(error instanceof Error ? error.message : 'The permission change failed.')
     } finally {
       set_permission_busy((current) => ({ ...current, [key]: false }))
+    }
+  }
+
+  const run_auto_setup = async () => {
+    if (auto_setup_busy) return
+    set_auto_setup_busy(true)
+    set_auto_setup_error('')
+    set_auto_setup_message('Checking providers, local runtimes, and hardware…')
+
+    try {
+      const result = await runAutomaticSetup(readOrbSettings())
+      const next = update_platform_settings(result.patch as Partial<OrbSettings>)
+      const next_record = next as unknown as Record<string, unknown>
+      const local_model = String(next_record.agent_required_local_model || '').trim()
+      const local_url = String(next.ai_local_url || editor_ai.ollama_url).trim()
+
+      if (local_model || local_url !== editor_ai.ollama_url) {
+        on_editor_ai_change({
+          ...editor_ai,
+          ...(local_url ? { ollama_url: local_url } : {}),
+          ...(local_model ? { selected_model: local_model } : {}),
+        })
+      }
+
+      const primary_provider = String(next.ai_provider || '').trim()
+      if (AI_PROVIDER_DEFINITIONS.some((entry) => entry.id === primary_provider)) {
+        set_models_provider(primary_provider)
+      }
+      set_credential_revision((value) => value + 1)
+      set_auto_setup_message(
+        result.summary.length
+          ? `Auto setup complete. ${result.summary.join(' · ')}`
+          : `Auto setup complete. ${result.validKeys} cloud credential${result.validKeys === 1 ? '' : 's'} validated.`,
+      )
+    } catch (error) {
+      set_auto_setup_message('')
+      set_auto_setup_error(error instanceof Error ? error.message : 'Automatic model setup failed.')
+    } finally {
+      set_auto_setup_busy(false)
     }
   }
 
@@ -628,6 +671,36 @@ function AISettingsPanel({
 
     return (
       <>
+        <SettingsSection title="Automatic agent setup">
+          <div className="flex items-center gap-5 px-4 py-4" data-setting-id="model-auto-setup">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-[var(--text)]">Configure models automatically</div>
+              <div className="mt-1 text-[10px] leading-4 text-[var(--muted)]">
+                Validate configured providers, inspect local AI runtimes and hardware, choose suitable models for every
+                agent role, and install an Ollama worker when needed.
+              </div>
+            </div>
+            <button
+              className="h-9 shrink-0 rounded-md border border-sky-500/30 bg-sky-500/8 px-4 text-xs font-medium text-sky-300 hover:bg-sky-500/14 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={auto_setup_busy}
+              onClick={() => void run_auto_setup()}
+              type="button"
+            >
+              {auto_setup_busy ? 'Configuring…' : 'Auto Configure'}
+            </button>
+          </div>
+          {auto_setup_message ? (
+            <div className="mx-2 mb-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2 text-[10px] leading-4 text-emerald-300">
+              {auto_setup_message}
+            </div>
+          ) : null}
+          {auto_setup_error ? (
+            <div className="mx-2 mb-2 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-[10px] leading-4 text-red-300">
+              {auto_setup_error}
+            </div>
+          ) : null}
+        </SettingsSection>
+
         <SettingsSection title="Model catalog">
           {row(
             'model-provider',

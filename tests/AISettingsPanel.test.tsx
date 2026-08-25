@@ -47,6 +47,7 @@ const state = vi.hoisted(() => ({
   } as unknown as OrbSettings,
   set_key: vi.fn(() => true),
   update_bridge_permissions: vi.fn(async () => ({ ok: true })),
+  run_auto_setup: vi.fn(),
 }))
 
 vi.mock('@/platform/settingsStorage', () => ({
@@ -80,6 +81,10 @@ vi.mock('@/platform/keyStore', () => ({
 
 vi.mock('@/platform/aiService', () => ({
   testConnection: vi.fn(async () => ({ ok: true, models: ['model-a'], message: 'Connected.' })),
+}))
+
+vi.mock('@/platform/autoSetup/autoSetupService', () => ({
+  runAutomaticSetup: state.run_auto_setup,
 }))
 
 vi.mock('@/platform/desktopBridge', () => ({
@@ -136,6 +141,42 @@ describe('AISettingsPanel', () => {
     state.settings.permissions_file_read = false
     state.set_key.mockClear()
     state.update_bridge_permissions.mockClear()
+    state.run_auto_setup.mockReset()
+    state.run_auto_setup.mockResolvedValue({
+      patch: {
+        ai_provider: 'openai',
+        ai_model: 'gpt-auto',
+        ai_local_url: 'http://127.0.0.1:11434',
+        agent_required_local_model: 'qwen3.5:9b',
+        agent_models: [
+          {
+            id: 'orchestrator:openai:gpt-auto:1',
+            role: 'orchestrator',
+            provider: 'openai',
+            model: 'gpt-auto',
+            keyId: '1',
+            primary: true,
+            tags: [],
+            disabledTags: [],
+          },
+        ],
+        agent_multi_enabled: true,
+        agent_peer_consult_enabled: true,
+        agent_peer_review: 'off',
+        agent_model_routing: 'off',
+        agent_execution_policy: 'hybrid',
+        provider_selected_models: { openai: ['gpt-auto'], local: ['qwen3.5:9b'] },
+      },
+      summary: ['Local worker: qwen3.5:9b', 'Cloud responders: gpt-auto'],
+      testedKeys: 1,
+      validKeys: 1,
+      localDetected: true,
+    })
+    state.settings.ai_provider = 'openai'
+    state.settings.ai_model = 'gpt-4o'
+    state.settings.agent_models = null
+    state.settings.agent_multi_enabled = false
+    delete (state.settings as unknown as Record<string, unknown>).agent_required_local_model
     Object.defineProperty(window, 'orbitDesktop', {
       configurable: true,
       value: {
@@ -162,6 +203,36 @@ describe('AISettingsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Agents' }))
     expect(on_section_change).toHaveBeenCalledWith('agents')
+  })
+
+  it('automatically configures the model mesh from the Models tab', async () => {
+    const on_editor_ai_change = vi.fn()
+    render_panel('models', { on_editor_ai_change })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto Configure' }))
+
+    await waitFor(() => expect(state.run_auto_setup).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(state.settings.agent_multi_enabled).toBe(true))
+    expect(state.settings.ai_provider).toBe('openai')
+    expect(state.settings.ai_model).toBe('gpt-auto')
+    expect((state.settings as unknown as Record<string, unknown>).agent_required_local_model).toBe('qwen3.5:9b')
+    expect(on_editor_ai_change).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ollama_url: 'http://127.0.0.1:11434',
+        selected_model: 'qwen3.5:9b',
+      }),
+    )
+    expect(screen.getByText(/Auto setup complete\./)).toBeInTheDocument()
+  })
+
+  it('surfaces automatic setup failures without changing the settings shell', async () => {
+    state.run_auto_setup.mockRejectedValueOnce(new Error('No suitable model configuration is available.'))
+    render_panel('models')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto Configure' }))
+
+    expect(await screen.findByText('No suitable model configuration is available.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Auto Configure' })).toBeEnabled()
   })
 
   it('keeps existing local Chat and speech settings editable during the agent migration', () => {
