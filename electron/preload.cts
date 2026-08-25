@@ -159,7 +159,8 @@ contextBridge.exposeInMainWorld('editor_api', {
       target_directory: string,
       operation: 'copy' | 'cut',
       conflict_mode: 'ask' | 'replace' | 'keep_both',
-    ) => ipcRenderer.invoke('workspace:paste-entry', root_path, source_path, target_directory, operation, conflict_mode),
+    ) =>
+      ipcRenderer.invoke('workspace:paste-entry', root_path, source_path, target_directory, operation, conflict_mode),
     trash_entry: (root_path: string, target_path: string) =>
       ipcRenderer.invoke('workspace:trash-entry', root_path, target_path),
     reveal_entry: (root_path: string, target_path: string) =>

@@ -100,7 +100,17 @@ function concept_results_for_workspace(root_path: string, groups: BridgeFileSema
   return { results, visible_groups }
 }
 
-function SearchToggle({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: string }) {
+function SearchToggle({
+  active,
+  label,
+  onClick,
+  children,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+  children: string
+}) {
   return (
     <button
       aria-label={label}
@@ -131,11 +141,19 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   const [has_searched, set_has_searched] = useState(false)
   const [error, set_error] = useState('')
 
-  const semantic_results = (items: BridgeFileSemanticResult[], target: 'text' | 'media' = 'text', documents_only = false) => {
+  const semantic_results = (
+    items: BridgeFileSemanticResult[],
+    target: 'text' | 'media' = 'text',
+    documents_only = false,
+  ) => {
     if (!rootPath) return []
     return items
       .filter((item) => path_is_in_workspace(rootPath, item.path))
-      .filter((item) => target === 'media' ? item.semanticType === 'image' || item.semanticType === 'video' : item.semanticType === 'text')
+      .filter((item) =>
+        target === 'media'
+          ? item.semanticType === 'image' || item.semanticType === 'video'
+          : item.semanticType === 'text',
+      )
       .filter((item) => !documents_only || is_document_path(item.path))
       .map((item) => ({
         path: item.path,
@@ -192,7 +210,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     set_search_mode(mode)
     reset_pending_search()
     set_document_inspection(null)
-    if (mode === 'semantic' || mode === 'documents' || mode === 'media' || mode === 'concepts') void refresh_semantic_status(mode)
+    if (mode === 'semantic' || mode === 'documents' || mode === 'media' || mode === 'concepts')
+      void refresh_semantic_status(mode)
   }
 
   const run_search = async (event?: FormEvent) => {
@@ -214,7 +233,9 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     try {
       if (search_mode === 'files') {
         const matches = await searchProjectFileNames(rootPath, search_query, 200)
-        set_results(matches.map((item) => ({ path: item.path, line: null, content: '', document: is_document_path(item.path) })))
+        set_results(
+          matches.map((item) => ({ path: item.path, line: null, content: '', document: is_document_path(item.path) })),
+        )
         set_result_label('File-name matches')
       } else if (search_mode === 'text') {
         const matches = await searchProjectText(rootPath, search_query, {
@@ -336,7 +357,17 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               onClick={() => select_search_mode(mode)}
               type="button"
             >
-              {mode === 'text' ? 'Text' : mode === 'files' ? 'Files' : mode === 'semantic' ? 'Semantic' : mode === 'documents' ? 'Docs' : mode === 'media' ? 'Media' : 'Concepts'}
+              {mode === 'text'
+                ? 'Text'
+                : mode === 'files'
+                  ? 'Files'
+                  : mode === 'semantic'
+                    ? 'Semantic'
+                    : mode === 'documents'
+                      ? 'Docs'
+                      : mode === 'media'
+                        ? 'Media'
+                        : 'Concepts'}
             </button>
           ))}
         </div>
@@ -385,9 +416,36 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
               {search_mode === 'text' && (
                 <div className="ml-1 flex items-center gap-0.5">
-                  <SearchToggle active={match_case} label="Match case" onClick={() => { set_match_case((value) => !value); set_has_searched(false) }}>Aa</SearchToggle>
-                  <SearchToggle active={match_word} label="Match whole word" onClick={() => { set_match_word((value) => !value); set_has_searched(false) }}>ab</SearchToggle>
-                  <SearchToggle active={use_regex} label="Use regular expression" onClick={() => { set_use_regex((value) => !value); set_has_searched(false) }}>.*</SearchToggle>
+                  <SearchToggle
+                    active={match_case}
+                    label="Match case"
+                    onClick={() => {
+                      set_match_case((value) => !value)
+                      set_has_searched(false)
+                    }}
+                  >
+                    Aa
+                  </SearchToggle>
+                  <SearchToggle
+                    active={match_word}
+                    label="Match whole word"
+                    onClick={() => {
+                      set_match_word((value) => !value)
+                      set_has_searched(false)
+                    }}
+                  >
+                    ab
+                  </SearchToggle>
+                  <SearchToggle
+                    active={use_regex}
+                    label="Use regular expression"
+                    onClick={() => {
+                      set_use_regex((value) => !value)
+                      set_has_searched(false)
+                    }}
+                  >
+                    .*
+                  </SearchToggle>
                 </div>
               )}
 
@@ -404,14 +462,33 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
             {replace_open && search_mode === 'text' && (
               <div className="flex h-8 items-center rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 focus-within:border-sky-500">
-                <input aria-label="Replace" className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]" placeholder="Replace" type="text" />
-                <SearchToggle active={preserve_case} label="Preserve case" onClick={() => set_preserve_case((value) => !value)}>AB</SearchToggle>
+                <input
+                  aria-label="Replace"
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
+                  placeholder="Replace"
+                  type="text"
+                />
+                <SearchToggle
+                  active={preserve_case}
+                  label="Preserve case"
+                  onClick={() => set_preserve_case((value) => !value)}
+                >
+                  AB
+                </SearchToggle>
               </div>
             )}
 
-            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') && (
+            {(search_mode === 'semantic' ||
+              search_mode === 'documents' ||
+              search_mode === 'media' ||
+              search_mode === 'concepts') && (
               <div className="px-0.5 text-[10px] leading-4 text-[var(--muted)]">
-                {semantic_status || (search_mode === 'media' ? 'Uses the existing encrypted IRIS CLIP image/video index.' : search_mode === 'concepts' ? 'Uses the existing encrypted IRIS concept centroids and memberships.' : 'Uses the existing encrypted IRIS text-embedding index.')}
+                {semantic_status ||
+                  (search_mode === 'media'
+                    ? 'Uses the existing encrypted IRIS CLIP image/video index.'
+                    : search_mode === 'concepts'
+                      ? 'Uses the existing encrypted IRIS concept centroids and memberships.'
+                      : 'Uses the existing encrypted IRIS text-embedding index.')}
               </div>
             )}
           </div>
@@ -425,40 +502,99 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               <div className="truncate text-[11px] font-medium text-[var(--text)]">{document_inspection.name}</div>
               <div className="mt-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">
                 {document_inspection.sourceType} · {document_inspection.extractionMethod}
-                {document_inspection.pagesRead ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}` : ''}
+                {document_inspection.pagesRead
+                  ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}`
+                  : ''}
               </div>
-              {document_inspection.archiveEntry && <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">Archive entry: {document_inspection.archiveEntry}</div>}
+              {document_inspection.archiveEntry && (
+                <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">
+                  Archive entry: {document_inspection.archiveEntry}
+                </div>
+              )}
             </div>
-            <button className="shrink-0 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]" onClick={() => set_document_inspection(null)} title="Close document inspection" type="button">×</button>
+            <button
+              className="shrink-0 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+              onClick={() => set_document_inspection(null)}
+              title="Close document inspection"
+              type="button"
+            >
+              ×
+            </button>
           </div>
-          <div className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-4 text-[var(--text)]">{document_inspection.text}</div>
+          <div className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-4 text-[var(--text)]">
+            {document_inspection.text}
+          </div>
         </div>
       )}
 
       <div className="mt-3 min-h-0 flex-1 overflow-auto border-t border-[var(--border)] pt-2">
         {loading && <div className="px-1 py-2 text-xs text-[var(--muted)]">Searching project…</div>}
         {!loading && error && <div className="px-1 py-2 text-xs text-red-400">{error}</div>}
-        {!loading && !error && query.trim() && !has_searched && <div className="px-1 py-2 text-[10px] text-[var(--muted)]">Press Enter or Go to search.</div>}
-        {!loading && !error && has_searched && results.length === 0 && <div className="px-1 py-2 text-xs text-[var(--muted)]">No results.</div>}
+        {!loading && !error && query.trim() && !has_searched && (
+          <div className="px-1 py-2 text-[10px] text-[var(--muted)]">Press Enter or Go to search.</div>
+        )}
+        {!loading && !error && has_searched && results.length === 0 && (
+          <div className="px-1 py-2 text-xs text-[var(--muted)]">No results.</div>
+        )}
         {!loading && results.length > 0 && (
           <>
-            <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">{result_label || `${results.length} result${results.length === 1 ? '' : 's'}`} · {results.length}</div>
+            <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
+              {result_label || `${results.length} result${results.length === 1 ? '' : 's'}`} · {results.length}
+            </div>
             {results.map((result, index) => (
-              <div className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]" key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${result.concept_title || ''}:${index}`}>
-                <button className="min-w-0 flex-1 px-1.5 py-1.5 text-left" onClick={() => open_result(result)} title={result.document ? `Inspect ${result.path}` : result.path} type="button">
+              <div
+                className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]"
+                key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${result.concept_title || ''}:${index}`}
+              >
+                <button
+                  className="min-w-0 flex-1 px-1.5 py-1.5 text-left"
+                  onClick={() => open_result(result)}
+                  title={result.document ? `Inspect ${result.path}` : result.path}
+                  type="button"
+                >
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text)]">{rootPath ? workspace_display_path(rootPath, result.path) : result.path}{result.line ? `:${result.line}` : ''}</span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text)]">
+                      {rootPath ? workspace_display_path(rootPath, result.path) : result.path}
+                      {result.line ? `:${result.line}` : ''}
+                    </span>
                     {result.document && <span className="shrink-0 text-[9px] text-[var(--muted)]">DOC</span>}
-                    {result.semantic_type === 'image' && <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>}
-                    {result.semantic_type === 'video' && <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>}
-                    {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && <span className="shrink-0 text-[9px] text-[var(--muted)]">{format_timestamp(result.timestamp_ms)}</span>}
-                    {typeof result.score === 'number' && <span className="shrink-0 text-[9px] text-[var(--muted)]">{Math.max(0, Math.round(result.score * 100))}%</span>}
+                    {result.semantic_type === 'image' && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>
+                    )}
+                    {result.semantic_type === 'video' && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>
+                    )}
+                    {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">
+                        {format_timestamp(result.timestamp_ms)}
+                      </span>
+                    )}
+                    {typeof result.score === 'number' && (
+                      <span className="shrink-0 text-[9px] text-[var(--muted)]">
+                        {Math.max(0, Math.round(result.score * 100))}%
+                      </span>
+                    )}
                   </div>
-                  {result.concept_title && <div className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)]">Concept · {result.concept_title}</div>}
-                  {result.content && <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">{result.content}</div>}
+                  {result.concept_title && (
+                    <div className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)]">
+                      Concept · {result.concept_title}
+                    </div>
+                  )}
+                  {result.content && (
+                    <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">
+                      {result.content}
+                    </div>
+                  )}
                 </button>
                 {result.semantic && (
-                  <button className="mr-1 mt-1.5 shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--muted)] opacity-70 hover:bg-[var(--selected)] hover:text-[var(--text)] group-hover:opacity-100" onClick={() => void find_similar(result)} title="Find semantically similar files" type="button">Similar</button>
+                  <button
+                    className="mr-1 mt-1.5 shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--muted)] opacity-70 hover:bg-[var(--selected)] hover:text-[var(--text)] group-hover:opacity-100"
+                    onClick={() => void find_similar(result)}
+                    title="Find semantically similar files"
+                    type="button"
+                  >
+                    Similar
+                  </button>
                 )}
               </div>
             ))}

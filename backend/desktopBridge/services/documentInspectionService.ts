@@ -37,7 +37,10 @@ function hasPdfSignature(buffer: Buffer): boolean {
 }
 
 /** Resolve against the configured file-index roots, then perform bounded document extraction. */
-export async function inspectIndexedDocument(baseDir: string, requestedPath: unknown): Promise<DocumentInspectionResult> {
+export async function inspectIndexedDocument(
+  baseDir: string,
+  requestedPath: unknown,
+): Promise<DocumentInspectionResult> {
   const roots = await getFileIndexAccessRoots(baseDir)
   const targetPath = await resolveExistingPathWithinRoots(requestedPath, roots, baseDir)
   const stats = await fs.stat(targetPath)

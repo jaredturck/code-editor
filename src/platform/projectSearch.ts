@@ -17,16 +17,79 @@ export interface ProjectTextSearchOptions {
 }
 
 const ignored_directories = new Set([
-  '.git', '.hg', '.svn', '.next', '.nuxt', '.vite', '.venv', 'venv', 'node_modules',
-  'dist', 'build', 'out', 'coverage', 'target', 'vendor', '__pycache__',
+  '.git',
+  '.hg',
+  '.svn',
+  '.next',
+  '.nuxt',
+  '.vite',
+  '.venv',
+  'venv',
+  'node_modules',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  'target',
+  'vendor',
+  '__pycache__',
 ])
 
 const binary_extensions = new Set([
-  '.7z', '.a', '.avi', '.bin', '.bmp', '.class', '.db', '.dll', '.doc', '.docx', '.dylib', '.eot',
-  '.exe', '.flac', '.gif', '.gz', '.ico', '.jar', '.jpeg', '.jpg', '.lockb', '.m4a', '.m4v', '.mkv',
-  '.mov', '.mp3', '.mp4', '.odg', '.odp', '.ods', '.odt', '.ogg', '.otf', '.pdf', '.png', '.ppt',
-  '.pptx', '.pyc', '.rar', '.so', '.sqlite', '.sqlite3', '.tar', '.tgz', '.ttf', '.wav', '.webm',
-  '.webp', '.woff', '.woff2', '.xls', '.xlsx', '.xz', '.zip',
+  '.7z',
+  '.a',
+  '.avi',
+  '.bin',
+  '.bmp',
+  '.class',
+  '.db',
+  '.dll',
+  '.doc',
+  '.docx',
+  '.dylib',
+  '.eot',
+  '.exe',
+  '.flac',
+  '.gif',
+  '.gz',
+  '.ico',
+  '.jar',
+  '.jpeg',
+  '.jpg',
+  '.lockb',
+  '.m4a',
+  '.m4v',
+  '.mkv',
+  '.mov',
+  '.mp3',
+  '.mp4',
+  '.odg',
+  '.odp',
+  '.ods',
+  '.odt',
+  '.ogg',
+  '.otf',
+  '.pdf',
+  '.png',
+  '.ppt',
+  '.pptx',
+  '.pyc',
+  '.rar',
+  '.so',
+  '.sqlite',
+  '.sqlite3',
+  '.tar',
+  '.tgz',
+  '.ttf',
+  '.wav',
+  '.webm',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.xls',
+  '.xlsx',
+  '.xz',
+  '.zip',
 ])
 
 function extension_of(file_path: string) {
@@ -46,7 +109,9 @@ function build_matcher(query: string, options: ProjectTextSearchOptions) {
   try {
     return new RegExp(bounded, flags)
   } catch (error) {
-    throw new Error(error instanceof Error ? `Invalid search expression: ${error.message}` : 'Invalid search expression.')
+    throw new Error(
+      error instanceof Error ? `Invalid search expression: ${error.message}` : 'Invalid search expression.',
+    )
   }
 }
 
@@ -93,19 +158,23 @@ export async function searchProjectText(root_path: string, query: string, option
   if (!search_query) return []
   const max_results = Math.max(1, Math.min(500, Number(options.maxResults) || 200))
   const matcher = build_matcher(search_query, options)
-  const files = (await collect_workspace_files(root_path)).filter((file) => !binary_extensions.has(extension_of(file.path)))
+  const files = (await collect_workspace_files(root_path)).filter(
+    (file) => !binary_extensions.has(extension_of(file.path)),
+  )
   const matches: ProjectTextSearchMatch[] = []
   const batch_size = 16
 
   for (let start = 0; start < files.length && matches.length < max_results; start += batch_size) {
     const batch = files.slice(start, start + batch_size)
-    const opened_files = await Promise.all(batch.map(async (file) => {
-      try {
-        return { file, opened: await window.editor_api.file.open(file.path) }
-      } catch {
-        return null
-      }
-    }))
+    const opened_files = await Promise.all(
+      batch.map(async (file) => {
+        try {
+          return { file, opened: await window.editor_api.file.open(file.path) }
+        } catch {
+          return null
+        }
+      }),
+    )
 
     for (const item of opened_files) {
       if (!item || !item.opened || item.opened.status !== 'opened' || item.opened.kind !== 'text') continue
