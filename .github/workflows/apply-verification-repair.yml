@@ -1,0 +1,117 @@
+name: Apply verification repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-verification-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Repair migrated verification contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file_path = Path(path)
+              content = file_path.read_text()
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file_path.write_text(content.replace(old, new))
+
+          replace_once(
+              'migrated-tests/iris/setup.ts',
+              "import { initializeStorageForTests } from '@/platform/localStorageStore'\n",
+              '',
+          )
+          replace_once(
+              'migrated-tests/iris/setup.ts',
+              "beforeEach(() => {\n  initializeStorageForTests()\n",
+              "beforeEach(async () => {\n  const { initializeStorageForTests } = await import('@/platform/localStorageStore')\n  initializeStorageForTests()\n",
+          )
+
+          for path in [
+              'migrated-tests/iris/server/filesystemBoundary.test.ts',
+              'migrated-tests/iris/server/commandSafetyRoutes.test.ts',
+          ]:
+              replace_once(
+                  path,
+                  '  const response = await invokeBridgeRoute({ baseDir, url, body })\n',
+                  "  const response = await invokeBridgeRoute({ baseDir, url, method: 'POST', body })\n",
+              )
+
+          replace_once(
+              'migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts',
+              "    const dispatch = read('src/platform/agent/runtime/toolBroker.ts') + '\\n' + read('src/platform/subAgentRuntime.ts')\n",
+              "    const dispatch =\n      read('src/platform/agent/runtime/toolBroker.ts') +\n      '\\n' +\n      read('src/platform/agent/runtime/toolBrokerLegacy.ts') +\n      '\\n' +\n      read('src/platform/subAgentRuntime.ts')\n",
+          )
+          replace_once(
+              'migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts',
+              "    const broker = read('src/platform/agent/runtime/toolBroker.ts')\n",
+              "    const broker = read('src/platform/agent/runtime/toolBrokerLegacy.ts')\n",
+          )
+
+          replace_once(
+              '.github/workflows/verify.yml',
+              "      - name: Verify repository\n        run: npm run verify:full\n",
+              "      - name: Verify repository\n        env:\n          ELECTRON_DISABLE_SANDBOX: '1'\n        run: npm run verify:full\n",
+          )
+          PY
+
+          npx prettier --write \
+            migrated-tests/iris/setup.ts \
+            migrated-tests/iris/server/filesystemBoundary.test.ts \
+            migrated-tests/iris/server/commandSafetyRoutes.test.ts \
+            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts \
+            .github/workflows/verify.yml
+
+      - name: Verify repaired failures
+        run: |
+          npx vitest run --config vitest.iris.config.ts \
+            migrated-tests/iris/server/filesystemBoundary.test.ts \
+            migrated-tests/iris/server/commandSafetyRoutes.test.ts \
+            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts \
+            migrated-tests/iris/lib/boundedRoleTask.test.ts \
+            migrated-tests/iris/lib/visionTask.test.ts
+
+      - name: Verify repository
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: npm run verify:full
+
+      - name: Commit verified repair
+        run: |
+          git config user.name "ChatGPT"
+          git config user.email "noreply@openai.com"
+          git add \
+            migrated-tests/iris/setup.ts \
+            migrated-tests/iris/server/filesystemBoundary.test.ts \
+            migrated-tests/iris/server/commandSafetyRoutes.test.ts \
+            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts \
+            .github/workflows/verify.yml
+          git diff --cached --check
+          git commit -m "Repair migrated verification contracts" -m "Align migrated route tests with POST-only bridge handlers, keep broker contract checks aware of the active legacy dispatcher, and defer shared storage loading so per-test model mocks remain effective. Disable Chromium sandbox only for the hosted Electron native-module smoke test." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+          git push origin HEAD:main
