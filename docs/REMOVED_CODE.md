@@ -174,3 +174,104 @@ These tests target the intentionally omitted IRIS Orb/multi-window presentation 
 - Three pre-existing unresolved historical UI-test imports disappeared with the obsolete tests.
 - `src/platform/screenCaptureBridge.ts` remains live through `src/platform/desktopBridge.ts`, preserving current agent screen capture.
 - `window.orbitDesktop.onAgentStopRequest`, security permissions, and credential APIs remain used directly by current runtime code; they were not removed.
+
+---
+
+## 2026-08-25 — Pass two: dead runtime compatibility and Vite cache
+
+**Commit:** `Remove dead runtime compatibility code`  
+**Source removed:** 1,114 lines across 7 files  
+**Historical tests removed:** 248 lines across 3 files  
+**Generated cache removed:** tracked `.vite/` cache metadata  
+**Total source/test code removed:** 1,362 lines
+
+### Why this was removed
+
+This pass moved beyond old panel presentation and reviewed whole-file reachability from the live renderer, Electron main process, backend bridge and supported package-script entry points. Candidates were then checked for indirect filename-based use before deletion so worker scripts, preload code and generated runtime targets were not mistaken for ordinary imports.
+
+The deleted source fell into four isolated groups.
+
+#### Superseded Chat responder policy
+
+- `src/platform/agent/chatExecutionPolicy.ts`
+
+This module implemented the old per-conversation responder-selection path. It had no live application caller; its only remaining caller was its migrated unit test.
+
+Current Agent Chat resolves the configured Orchestrator through `agentIdentity` / `resolveAgentRoleSettings` and builds run settings in `src/chat/agentChatLegacy.ts`. Execution policy remains supported through current Settings and runtime code, so deleting this unused selector does **not** remove `hybrid`, `local_only` or `primary_only` execution behavior.
+
+#### Unused offline evaluation harness
+
+- `src/platform/eval/evalRunner.ts`
+- `src/platform/eval/evalTasks.ts`
+
+The eval harness had no runtime, script, benchmark or test caller. Its fixed prompts also still described historical IRIS paths such as `src/lib`, making it increasingly misleading as a maintenance tool.
+
+The supported evaluation/performance path is the separate `benchmarks/iris/` harness exposed by `npm run benchmark`, while normal behavioral correctness remains covered through Vitest. Keeping a second unreachable evaluation framework added conceptual weight without providing a current capability.
+
+#### Unused migrated UI utility
+
+- `src/platform/utils.ts`
+
+This file contained only the old `cn()` Tailwind class merger and `isIframe` flag. Neither had a live caller after the IRIS UI cleanup. Code Editor does not use this migrated UI primitive layer, so the module and its historical utility test were removed.
+
+#### Obsolete Electron IRIS logging/permission helpers
+
+- `electron/platform/logger.cts`
+- `electron/platform/security.cts`
+- `electron/platform/screenCapturePermissions.cts`
+
+These files belonged to the older IRIS Electron shell path and had no caller from the current Electron main/preload graph.
+
+The old Electron logger depended on an `iris:log`/desktop-log IPC surface that the current preload does not expose. The current renderer logger/security implementation is separate under `src/platform/`, and Electron's current main process handles its active media permission policy directly.
+
+Current screen understanding is unaffected: capture remains owned by `electron/platform/localBridge.cts`, Electron `desktopCapturer`, and the authenticated backend screen route. Current emergency-stop and credential/security bridge APIs are also unaffected.
+
+### Historical tests removed with the deleted code
+
+- `migrated-tests/iris/lib/chatExecutionPolicy.test.ts`
+- `migrated-tests/iris/lib/utils.test.ts`
+- `migrated-tests/iris/electron/screenCapturePermissions.test.ts`
+
+The first two tested source modules that no longer exist after this cleanup. The screen-permission test targeted the old IRIS Electron source layout and was outside the supported migrated-test include set.
+
+### Generated cache cleanup
+
+Tracked `.vite/` dependency-cache metadata was removed and `.vite/` was added to `.gitignore`. Vite recreates this cache locally; it is not project source or durable test evidence.
+
+### Verification evidence
+
+- Call-graph reachability from `src/main.tsx`, `electron/main.cts`, `backend/bridgeServer.ts` and the benchmark entry point showed **zero live application inbound edges** for every deleted TypeScript/CTS module.
+- Exact repository searches found no dynamic filename registrations for the deleted runtime modules.
+- After simulating the deletions, **462 TypeScript-family files parsed with 0 parser errors**.
+- No supported live source module imports any deleted path.
+- Worker/child-process files and `electron/preload.cts` were explicitly retained despite appearing unreachable to a normal static import graph because they are loaded by filename/runtime configuration.
+
+A full dependency-backed `npm run verify:full` should still be run in the installed development checkout after Dropbox/Git synchronization.
+
+---
+
+## Pass-two candidates deliberately retained
+
+The following files looked suspicious in a pure reachability report but were **not** deleted because the product/context checklist argues for keeping them for now.
+
+### Automatic model setup and hardware fit
+
+- `src/platform/autoSetup/autoSetupEngine.ts`
+- `src/platform/autoSetup/autoSetupService.ts`
+- `src/platform/providers/localRuntimePolicy.ts`
+
+These currently have no live Code Editor UI caller, but automatic provider/model configuration and VRAM-aware local model selection are reasonable capabilities for an agentic editor. The related `modelSelectionRules.ts` logic is also reused by active model-recovery/cloud-routing code. This cluster should be deleted only if the product intentionally abandons one-click/hardware-aware setup.
+
+### Backend Vite bridge plugin
+
+- `backend/desktopBridgePlugin.ts`
+- `backend/desktopBridge/middleware.ts`
+- `backend/desktopBridge/errors.ts`
+
+The packaged/current Electron bridge does not call this Vite plugin, but migrated server security tests use it as an integration harness around the same bridge router. Removing it now would discard useful route/security coverage or require rewriting those tests, so it stays.
+
+### Renderer activity logger
+
+- `src/platform/logger.ts`
+
+The current Electron preload no longer exposes the old logger IPC surface, so much of this module effectively no-ops today. However `aiService.ts` still calls its structured logging helpers, and application/agent logging is a useful feature in its own right. This should get a focused product decision: either reconnect a narrow safe logging bridge or remove the renderer logging path together with its call sites. It was not deleted speculatively.
