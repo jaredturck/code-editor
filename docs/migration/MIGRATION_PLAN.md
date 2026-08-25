@@ -1,5 +1,7 @@
 # IRIS Backend Migration Plan
 
+> **Status: COMPLETE.** This is the historical architecture/sequencing plan used during the migration. Temporary statements such as “not available yet”, “staged”, or P006/P007 capability restrictions describe that milestone in time and are superseded by [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) and [`../../IRIS_MIGRATION.md`](../../IRIS_MIGRATION.md).
+
 ## Objective
 
 Migrate the reusable IRIS platform/backend into the existing Code Editor while preserving the Code Editor as the product shell and keeping the current editor UI substantially unchanged. IRIS is the implementation source: working IRIS logic is copied and adapted rather than rewritten. UI-only IRIS shell code (Orb/planet launcher, IRIS workspace window shell, duplicate editor/file-manager presentation, login/profile pages) is not part of the migration target.
@@ -309,11 +311,15 @@ No migrated implementation is deleted merely because its original panel was not 
 
 ## Post-migration follow-up sequence
 
-1. Add editor-buffer-aware filesystem write/edit/patch authority and human/agent collision handling.
-2. Connect brokered terminal/build/test/diagnostics execution for the edit → run → fix → verify loop.
-3. Promote Agent Chat to durable long-duration autonomous project runs with checkpoints and resume.
-4. Wire semantic/exact search into the existing Search activity and workspace watcher.
-5. Enable multi-agent delegation/review and collision control.
-6. Integrate model/cache management and local runtime work from Projects 1 and 3.
-7. Re-enable/import compatible IRIS tests subsystem-by-subsystem.
-8. Refactor only after behavior is stable in the new application.
+The planned integration sequence is complete:
+
+- [x] Add editor-buffer-aware filesystem write/edit/patch authority and human/agent collision handling.
+- [x] Connect brokered terminal/build/test/diagnostics execution for the edit → run → fix → verify loop.
+- [x] Promote Agent Chat to durable long-duration autonomous project runs with checkpoints and resume.
+- [x] Wire semantic/exact search into the existing Search activity and workspace watcher.
+- [x] Enable multi-agent delegation/review and collision control.
+- [x] Integrate model/cache management and local runtime work from Projects 1 and 3.
+- [x] Re-enable compatible IRIS runtime/backend tests and the benchmark harness.
+- [x] Stabilize the migrated behavior before broad refactoring.
+
+Current post-migration maintenance is tracked in [`CURRENT_STATUS.md`](./CURRENT_STATUS.md) and [`VALIDATION_REPORT.md`](./VALIDATION_REPORT.md).
