@@ -3,15 +3,13 @@ import {
   findSimilarFiles,
   getFileSemanticStatus,
   inspectDocumentFile,
-  openFileWithSystem,
-  powerFd,
-  powerRipgrep,
   searchFileSemanticConcepts,
   searchFileSemanticIndex,
   type BridgeDocumentInspection,
   type BridgeFileSemanticConceptGroup,
   type BridgeFileSemanticResult,
 } from '../platform/desktopBridge'
+import { searchProjectFileNames, searchProjectText } from '../platform/projectSearch'
 
 interface SearchResult {
   path: string
@@ -28,10 +26,6 @@ interface SearchResult {
 type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media' | 'concepts'
 
 const document_extensions = new Set(['.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.zip'])
-
-function is_not_null<T>(value: T | null): value is T {
-  return value !== null
-}
 
 function normalize_path(value: string) {
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -78,7 +72,6 @@ function concept_results_for_workspace(root_path: string, groups: BridgeFileSema
     const members = group.results.filter((item) => path_is_in_workspace(root_path, item.path))
     if (!members.length) continue
     visible_groups += 1
-
     for (const item of members) {
       results.push({
         path: item.path,
@@ -97,17 +90,7 @@ function concept_results_for_workspace(root_path: string, groups: BridgeFileSema
   return { results, visible_groups }
 }
 
-function SearchToggle({
-  active,
-  label,
-  onClick,
-  children,
-}: {
-  active: boolean
-  label: string
-  onClick: () => void
-  children: string
-}) {
+function SearchToggle({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: string }) {
   return (
     <button
       aria-label={label}
@@ -123,7 +106,7 @@ function SearchToggle({
 }
 
 function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpenFile: (file_path: string) => void }) {
-  const [replace_open, set_replace_open] = useState(true)
+  const [replace_open, set_replace_open] = useState(false)
   const [match_case, set_match_case] = useState(false)
   const [match_word, set_match_word] = useState(false)
   const [use_regex, set_use_regex] = useState(false)
@@ -135,22 +118,14 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   const [semantic_status, set_semantic_status] = useState('')
   const [document_inspection, set_document_inspection] = useState<BridgeDocumentInspection | null>(null)
   const [loading, set_loading] = useState(false)
+  const [has_searched, set_has_searched] = useState(false)
   const [error, set_error] = useState('')
 
-  const semantic_results = (
-    items: BridgeFileSemanticResult[],
-    target: 'text' | 'media' = 'text',
-    documents_only = false,
-  ) => {
+  const semantic_results = (items: BridgeFileSemanticResult[], target: 'text' | 'media' = 'text', documents_only = false) => {
     if (!rootPath) return []
-
     return items
       .filter((item) => path_is_in_workspace(rootPath, item.path))
-      .filter((item) =>
-        target === 'media'
-          ? item.semanticType === 'image' || item.semanticType === 'video'
-          : item.semanticType === 'text',
-      )
+      .filter((item) => target === 'media' ? item.semanticType === 'image' || item.semanticType === 'video' : item.semanticType === 'text')
       .filter((item) => !documents_only || is_document_path(item.path))
       .map((item) => ({
         path: item.path,
@@ -169,7 +144,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
       const status = await getFileSemanticStatus(false)
       const media_mode = mode === 'media'
       const concept_mode = mode === 'concepts'
-
       if (status.indexStatus === 'ready') {
         set_semantic_status(
           concept_mode
@@ -189,7 +163,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
       } else {
         set_semantic_status('Build the semantic index in Settings → AI → Semantic Index')
       }
-
       return status
     } catch (status_error) {
       set_semantic_status('')
@@ -198,60 +171,52 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     }
   }
 
-  const select_search_mode = (mode: SearchMode) => {
-    set_search_mode(mode)
+  const reset_pending_search = () => {
     set_results([])
     set_result_label('')
-    set_document_inspection(null)
+    set_has_searched(false)
     set_error('')
+  }
 
-    if (mode === 'semantic' || mode === 'documents' || mode === 'media' || mode === 'concepts') {
-      void refresh_semantic_status(mode)
-    }
+  const select_search_mode = (mode: SearchMode) => {
+    set_search_mode(mode)
+    reset_pending_search()
+    set_document_inspection(null)
+    if (mode === 'semantic' || mode === 'documents' || mode === 'media' || mode === 'concepts') void refresh_semantic_status(mode)
   }
 
   const run_search = async (event?: FormEvent) => {
     event?.preventDefault()
     const search_query = query.trim()
-
     if (!rootPath || !search_query) {
       set_results([])
       set_result_label('')
+      set_has_searched(Boolean(search_query))
       set_error(rootPath ? '' : 'Open a folder to search the project.')
       return
     }
 
     set_loading(true)
+    set_has_searched(true)
     set_error('')
     set_document_inspection(null)
 
     try {
       if (search_mode === 'files') {
-        const response = await powerFd({
-          path: rootPath,
-          pattern: search_query,
+        const matches = await searchProjectFileNames(rootPath, search_query, 200)
+        set_results(matches.map((item) => ({ path: item.path, line: null, content: '', document: is_document_path(item.path) })))
+        set_result_label('File-name matches')
+      } else if (search_mode === 'text') {
+        const matches = await searchProjectText(rootPath, search_query, {
+          ignoreCase: !match_case,
+          useRegex: use_regex,
+          wordBoundary: match_word,
           maxResults: 200,
         })
-        const next_results = Array.isArray(response.results)
-          ? response.results
-              .map((item) => {
-                const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
-                const path = String(source.path || '')
-                return path ? { path, line: null, content: '', document: is_document_path(path) } : null
-              })
-              .filter(is_not_null)
-          : []
-        set_results(next_results)
-        set_result_label('File-name matches')
-        set_error(String(response.error || ''))
-      } else if (
-        search_mode === 'semantic' ||
-        search_mode === 'documents' ||
-        search_mode === 'media' ||
-        search_mode === 'concepts'
-      ) {
+        set_results(matches.map((item) => ({ path: item.file, line: item.line, content: item.content })))
+        set_result_label('Text matches')
+      } else {
         const status = await refresh_semantic_status(search_mode)
-
         if (!status || status.indexStatus !== 'ready') {
           set_results([])
           set_result_label('')
@@ -266,7 +231,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             set_error(`CLIP model ${status.imageModel} is not installed.`)
             return
           }
-
           const [images, videos] = await Promise.all([
             searchFileSemanticIndex(search_query, 100, 'image'),
             searchFileSemanticIndex(search_query, 100, 'video'),
@@ -281,7 +245,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             set_error('Concept index is empty. Rebuild the semantic index in Settings → AI → Semantic Index.')
             return
           }
-
           const groups = await searchFileSemanticConcepts(search_query, 10, 20)
           const discovered = concept_results_for_workspace(rootPath, groups)
           set_results(discovered.results)
@@ -292,35 +255,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
           set_results(semantic_results(response, 'text', documents_only))
           set_result_label(documents_only ? 'Indexed documents' : 'Semantic matches')
         }
-      } else {
-        const response = await powerRipgrep(search_query, {
-          path: rootPath,
-          mode: 'content',
-          ignoreCase: !match_case,
-          fixedStrings: !use_regex,
-          wordBoundary: match_word,
-          contextLines: 0,
-          maxResults: 200,
-        })
-        const next_results = Array.isArray(response.matches)
-          ? response.matches
-              .map((item) => {
-                const source = item && typeof item === 'object' ? (item as Record<string, unknown>) : {}
-                const path = String(source.file || '')
-                return path
-                  ? {
-                      path,
-                      line: Number(source.line) || null,
-                      content: String(source.content || ''),
-                      document: is_document_path(path),
-                    }
-                  : null
-              })
-              .filter(is_not_null)
-          : []
-        set_results(next_results)
-        set_result_label('Text matches')
-        set_error(String(response.error || ''))
       }
     } catch (search_error) {
       set_results([])
@@ -333,23 +267,20 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
   const find_similar = async (result: SearchResult) => {
     if (!rootPath) return
-
     const media = result.semantic_type === 'image' || result.semantic_type === 'video'
     set_search_mode(media ? 'media' : 'semantic')
     set_loading(true)
+    set_has_searched(true)
     set_error('')
     set_document_inspection(null)
-
     try {
       const status = await refresh_semantic_status(media ? 'media' : 'semantic')
-
       if (!status || status.indexStatus !== 'ready') {
         set_results([])
         set_result_label('')
         if (status) set_error('Semantic index is not ready yet.')
         return
       }
-
       const response = await findSimilarFiles(result.path, 200)
       set_results(semantic_results(response, media ? 'media' : 'text'))
       set_result_label(`Similar to ${workspace_display_path(rootPath, result.path)}`)
@@ -365,10 +296,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   const inspect_document = async (file_path: string) => {
     set_loading(true)
     set_error('')
-
     try {
-      const inspection = await inspectDocumentFile(file_path)
-      set_document_inspection(inspection)
+      set_document_inspection(await inspectDocumentFile(file_path))
     } catch (inspection_error) {
       set_document_inspection(null)
       set_error(inspection_error instanceof Error ? inspection_error.message : 'Document inspection failed.')
@@ -380,10 +309,6 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
   const open_result = (result: SearchResult) => {
     if (result.document) {
       void inspect_document(result.path)
-      return
-    }
-    if (result.semantic_type === 'image' || result.semantic_type === 'video') {
-      void openFileWithSystem(result.path)
       return
     }
     onOpenFile(result.path)
@@ -401,17 +326,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               onClick={() => select_search_mode(mode)}
               type="button"
             >
-              {mode === 'text'
-                ? 'Text'
-                : mode === 'files'
-                  ? 'Files'
-                  : mode === 'semantic'
-                    ? 'Semantic'
-                    : mode === 'documents'
-                      ? 'Docs'
-                      : mode === 'media'
-                        ? 'Media'
-                        : 'Concepts'}
+              {mode === 'text' ? 'Text' : mode === 'files' ? 'Files' : mode === 'semantic' ? 'Semantic' : mode === 'documents' ? 'Docs' : mode === 'media' ? 'Media' : 'Concepts'}
             </button>
           ))}
         </div>
@@ -437,7 +352,10 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               <input
                 aria-label="Search"
                 className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-                onChange={(event) => set_query(event.target.value)}
+                onChange={(event) => {
+                  set_query(event.target.value)
+                  reset_pending_search()
+                }}
                 placeholder={
                   search_mode === 'files'
                     ? 'Search file names'
@@ -449,7 +367,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                           ? 'Describe an image or video'
                           : search_mode === 'concepts'
                             ? 'Describe a concept or project theme'
-                            : 'Search'
+                            : 'Search project text'
                 }
                 type="text"
                 value={query}
@@ -457,29 +375,21 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
               {search_mode === 'text' && (
                 <div className="ml-1 flex items-center gap-0.5">
-                  <SearchToggle
-                    active={match_case}
-                    label="Match case"
-                    onClick={() => set_match_case((value) => !value)}
-                  >
-                    Aa
-                  </SearchToggle>
-                  <SearchToggle
-                    active={match_word}
-                    label="Match whole word"
-                    onClick={() => set_match_word((value) => !value)}
-                  >
-                    ab
-                  </SearchToggle>
-                  <SearchToggle
-                    active={use_regex}
-                    label="Use regular expression"
-                    onClick={() => set_use_regex((value) => !value)}
-                  >
-                    .*
-                  </SearchToggle>
+                  <SearchToggle active={match_case} label="Match case" onClick={() => { set_match_case((value) => !value); set_has_searched(false) }}>Aa</SearchToggle>
+                  <SearchToggle active={match_word} label="Match whole word" onClick={() => { set_match_word((value) => !value); set_has_searched(false) }}>ab</SearchToggle>
+                  <SearchToggle active={use_regex} label="Use regular expression" onClick={() => { set_use_regex((value) => !value); set_has_searched(false) }}>.*</SearchToggle>
                 </div>
               )}
+
+              <button
+                aria-label="Run search"
+                className="ml-1 flex h-6 min-w-7 items-center justify-center rounded px-1.5 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                disabled={loading || !query.trim()}
+                title="Search (Enter)"
+                type="submit"
+              >
+                {loading ? '…' : 'Go'}
+              </button>
             </div>
 
             {replace_open && search_mode === 'text' && (
@@ -490,27 +400,13 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                   placeholder="Replace"
                   type="text"
                 />
-                <SearchToggle
-                  active={preserve_case}
-                  label="Preserve case"
-                  onClick={() => set_preserve_case((value) => !value)}
-                >
-                  AB
-                </SearchToggle>
+                <SearchToggle active={preserve_case} label="Preserve case" onClick={() => set_preserve_case((value) => !value)}>AB</SearchToggle>
               </div>
             )}
 
-            {(search_mode === 'semantic' ||
-              search_mode === 'documents' ||
-              search_mode === 'media' ||
-              search_mode === 'concepts') && (
+            {(search_mode === 'semantic' || search_mode === 'documents' || search_mode === 'media' || search_mode === 'concepts') && (
               <div className="px-0.5 text-[10px] leading-4 text-[var(--muted)]">
-                {semantic_status ||
-                  (search_mode === 'media'
-                    ? 'Uses the existing encrypted IRIS CLIP image/video index.'
-                    : search_mode === 'concepts'
-                      ? 'Uses the existing encrypted IRIS concept centroids and memberships.'
-                      : 'Uses the existing encrypted IRIS text-embedding index.')}
+                {semantic_status || (search_mode === 'media' ? 'Uses the existing encrypted IRIS CLIP image/video index.' : search_mode === 'concepts' ? 'Uses the existing encrypted IRIS concept centroids and memberships.' : 'Uses the existing encrypted IRIS text-embedding index.')}
               </div>
             )}
           </div>
@@ -524,96 +420,40 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
               <div className="truncate text-[11px] font-medium text-[var(--text)]">{document_inspection.name}</div>
               <div className="mt-0.5 text-[9px] uppercase tracking-wide text-[var(--muted)]">
                 {document_inspection.sourceType} · {document_inspection.extractionMethod}
-                {document_inspection.pagesRead
-                  ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}`
-                  : ''}
+                {document_inspection.pagesRead ? ` · ${document_inspection.pagesRead} page${document_inspection.pagesRead === 1 ? '' : 's'}` : ''}
               </div>
-              {document_inspection.archiveEntry && (
-                <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">
-                  Archive entry: {document_inspection.archiveEntry}
-                </div>
-              )}
+              {document_inspection.archiveEntry && <div className="mt-0.5 truncate text-[9px] text-[var(--muted)]">Archive entry: {document_inspection.archiveEntry}</div>}
             </div>
-            <button
-              className="shrink-0 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
-              onClick={() => set_document_inspection(null)}
-              title="Close document inspection"
-              type="button"
-            >
-              ×
-            </button>
+            <button className="shrink-0 rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]" onClick={() => set_document_inspection(null)} title="Close document inspection" type="button">×</button>
           </div>
-          <div className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-4 text-[var(--text)]">
-            {document_inspection.text}
-          </div>
+          <div className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[10px] leading-4 text-[var(--text)]">{document_inspection.text}</div>
         </div>
       )}
 
       <div className="mt-3 min-h-0 flex-1 overflow-auto border-t border-[var(--border)] pt-2">
-        {loading && <div className="px-1 py-2 text-xs text-[var(--muted)]">Searching…</div>}
+        {loading && <div className="px-1 py-2 text-xs text-[var(--muted)]">Searching project…</div>}
         {!loading && error && <div className="px-1 py-2 text-xs text-red-400">{error}</div>}
-        {!loading && !error && query.trim() && results.length === 0 && (
-          <div className="px-1 py-2 text-xs text-[var(--muted)]">No results.</div>
-        )}
+        {!loading && !error && query.trim() && !has_searched && <div className="px-1 py-2 text-[10px] text-[var(--muted)]">Press Enter or Go to search.</div>}
+        {!loading && !error && has_searched && results.length === 0 && <div className="px-1 py-2 text-xs text-[var(--muted)]">No results.</div>}
         {!loading && results.length > 0 && (
           <>
-            <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">
-              {result_label || `${results.length} result${results.length === 1 ? '' : 's'}`} · {results.length}
-            </div>
+            <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-[var(--muted)]">{result_label || `${results.length} result${results.length === 1 ? '' : 's'}`} · {results.length}</div>
             {results.map((result, index) => (
-              <div
-                className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]"
-                key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${result.concept_title || ''}:${index}`}
-              >
-                <button
-                  className="min-w-0 flex-1 px-1.5 py-1.5 text-left"
-                  onClick={() => open_result(result)}
-                  title={result.document ? `Inspect ${result.path}` : result.path}
-                  type="button"
-                >
+              <div className="group flex items-start gap-1 rounded hover:bg-[var(--hover)]" key={`${result.path}:${result.line ?? 0}:${result.timestamp_ms ?? 0}:${result.concept_title || ''}:${index}`}>
+                <button className="min-w-0 flex-1 px-1.5 py-1.5 text-left" onClick={() => open_result(result)} title={result.document ? `Inspect ${result.path}` : result.path} type="button">
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text)]">
-                      {rootPath ? workspace_display_path(rootPath, result.path) : result.path}
-                      {result.line ? `:${result.line}` : ''}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--text)]">{rootPath ? workspace_display_path(rootPath, result.path) : result.path}{result.line ? `:${result.line}` : ''}</span>
                     {result.document && <span className="shrink-0 text-[9px] text-[var(--muted)]">DOC</span>}
-                    {result.semantic_type === 'image' && (
-                      <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>
-                    )}
-                    {result.semantic_type === 'video' && (
-                      <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>
-                    )}
-                    {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && (
-                      <span className="shrink-0 text-[9px] text-[var(--muted)]">
-                        {format_timestamp(result.timestamp_ms)}
-                      </span>
-                    )}
-                    {typeof result.score === 'number' && (
-                      <span className="shrink-0 text-[9px] text-[var(--muted)]">
-                        {Math.max(0, Math.round(result.score * 100))}%
-                      </span>
-                    )}
+                    {result.semantic_type === 'image' && <span className="shrink-0 text-[9px] text-[var(--muted)]">IMG</span>}
+                    {result.semantic_type === 'video' && <span className="shrink-0 text-[9px] text-[var(--muted)]">VIDEO</span>}
+                    {result.semantic_type === 'video' && format_timestamp(result.timestamp_ms) && <span className="shrink-0 text-[9px] text-[var(--muted)]">{format_timestamp(result.timestamp_ms)}</span>}
+                    {typeof result.score === 'number' && <span className="shrink-0 text-[9px] text-[var(--muted)]">{Math.max(0, Math.round(result.score * 100))}%</span>}
                   </div>
-                  {result.concept_title && (
-                    <div className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)]">
-                      Concept · {result.concept_title}
-                    </div>
-                  )}
-                  {result.content && (
-                    <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">
-                      {result.content}
-                    </div>
-                  )}
+                  {result.concept_title && <div className="mt-0.5 truncate text-[9px] font-medium text-[var(--muted)]">Concept · {result.concept_title}</div>}
+                  {result.content && <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">{result.content}</div>}
                 </button>
                 {result.semantic && (
-                  <button
-                    className="mr-1 mt-1.5 shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--muted)] opacity-70 hover:bg-[var(--selected)] hover:text-[var(--text)] group-hover:opacity-100"
-                    onClick={() => void find_similar(result)}
-                    title="Find semantically similar files"
-                    type="button"
-                  >
-                    Similar
-                  </button>
+                  <button className="mr-1 mt-1.5 shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--muted)] opacity-70 hover:bg-[var(--selected)] hover:text-[var(--text)] group-hover:opacity-100" onClick={() => void find_similar(result)} title="Find semantically similar files" type="button">Similar</button>
                 )}
               </div>
             ))}
