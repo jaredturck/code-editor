@@ -11,7 +11,7 @@ import {
 } from '../../server/desktopBridge/storage/encryptedDatabase'
 import { invokeBridgeRoute } from './bridgeRouteTestHarness'
 
-const fixtureRoot = path.resolve('tests/fixtures/workspace')
+const fixtureRoot = path.resolve('migrated-tests/iris/fixtures/workspace')
 const writtenFixture = path.join(fixtureRoot, 'written-by-test.txt')
 const temporaryRoots: string[] = []
 

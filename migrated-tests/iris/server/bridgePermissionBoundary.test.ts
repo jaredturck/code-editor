@@ -21,7 +21,7 @@ interface BridgeJsonResponse {
 
 const running: BridgeHandle[] = []
 const temporaryDirectories: string[] = []
-const fixtureRoot = path.resolve('tests/fixtures/workspace')
+const fixtureRoot = path.resolve('migrated-tests/iris/fixtures/workspace')
 const token = '0123456789abcdef0123456789abcdef'
 
 // Sends one request through the bridge middleware for permission-boundary assertions.

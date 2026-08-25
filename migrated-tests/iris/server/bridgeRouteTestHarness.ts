@@ -1,3 +1,5 @@
+/** Route-test harness for the packaged bridge router without the removed Vite middleware. */
+
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { handleBridgeRequest } from '../../server/desktopBridge/routes/router'
@@ -15,7 +17,7 @@ export interface BridgeRouteTestResponse {
 export async function invokeBridgeRoute({
   baseDir,
   url,
-  method = 'POST',
+  method = 'GET',
   body,
   permissions,
 }: {
@@ -58,6 +60,7 @@ export async function invokeBridgeRoute({
   } catch (error) {
     const candidate = error as { statusCode?: unknown; message?: unknown }
     response.statusCode = Number.isInteger(candidate.statusCode) ? Number(candidate.statusCode) : 500
+    response.setHeader('Content-Type', 'application/json; charset=utf-8')
     response.end(
       JSON.stringify({
         error: typeof candidate.message === 'string' ? candidate.message : 'Unexpected local bridge error',

@@ -70,8 +70,12 @@ function normalizePreflightPlan(value: unknown): LocalPreflightPlan | null {
   }
 }
 
+const SOCIAL_TURN_PATTERN = /^(?:hi|hello|hey|thanks|thank you|ok|okay|cool|great|got it|sounds good|good (?:morning|afternoon|evening))[.!?\s]*$/i
+
 export function shouldRunLocalPlanning(userInput: string): boolean {
-  return Boolean(String(userInput || '').trim())
+  const text = String(userInput || '').trim()
+  if (!text) return false
+  return !SOCIAL_TURN_PATTERN.test(text)
 }
 
 export async function buildLocalPreflightPlan(
@@ -139,28 +143,29 @@ export async function buildLocalPreflightPlan(
 }
 
 export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): string {
-  if (!plan) return ''
+  const normalized = normalizePreflightPlan(plan)
+  if (!normalized) return ''
   const parts = [
-    `Local preflight: task=${plan.taskType}.`,
-    plan.developmentTask
+    `Local preflight: task=${normalized.taskType}.`,
+    normalized.developmentTask
       ? 'Development lifecycle: inspect the current project and toolchain first; prepare only what is missing; implement; verify against the real environment; diagnose and fix any failures; then verify again before finishing.'
       : '',
-    plan.workspaceMutationExpected
+    normalized.workspaceMutationExpected
       ? 'Task contract: workspace mutation is required for completion. Make the requested change with the available workspace tools; do not finish with only a proposed snippet, example, or explanation. Remain in the current agent loop until the mutation succeeds or a genuine blocker prevents it.'
       : '',
-    plan.verificationRequired
+    normalized.verificationRequired
       ? 'Task contract: completion requires real verification. Continue the current agent loop until appropriate verification evidence exists; if verification fails, diagnose the observed failure, choose the next action, fix it, and verify again.'
       : '',
-    plan.successCriteria.length ? `Success criteria: ${plan.successCriteria.join(' | ')}.` : '',
-    plan.preflightChecks.length ? `Preflight checks: ${plan.preflightChecks.join(' | ')}.` : '',
-    plan.needsLocalFiles
-      ? `Use filesystem RAG${plan.localQueries.length ? ` for: ${plan.localQueries.join(' | ')}` : ''}.`
+    normalized.successCriteria.length ? `Success criteria: ${normalized.successCriteria.join(' | ')}.` : '',
+    normalized.preflightChecks.length ? `Preflight checks: ${normalized.preflightChecks.join(' | ')}.` : '',
+    normalized.needsLocalFiles
+      ? `Use filesystem RAG${normalized.localQueries.length ? ` for: ${normalized.localQueries.join(' | ')}` : ''}.`
       : 'Filesystem RAG is optional.',
-    plan.needsWebResearch
-      ? `Use web research${plan.webQueries.length ? ` for: ${plan.webQueries.join(' | ')}` : ''}.`
+    normalized.needsWebResearch
+      ? `Use web research${normalized.webQueries.length ? ` for: ${normalized.webQueries.join(' | ')}` : ''}.`
       : 'Web research is not initially required.',
-    plan.verificationChecks.length ? `Verification goals: ${plan.verificationChecks.join(' | ')}.` : '',
-    plan.steps.length ? `Plan: ${plan.steps.join(' → ')}.` : '',
+    normalized.verificationChecks.length ? `Verification goals: ${normalized.verificationChecks.join(' | ')}.` : '',
+    normalized.steps.length ? `Plan: ${normalized.steps.join(' → ')}.` : '',
   ]
   return parts.filter(Boolean).join(' ')
 }
