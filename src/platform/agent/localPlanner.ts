@@ -70,7 +70,8 @@ function normalizePreflightPlan(value: unknown): LocalPreflightPlan | null {
   }
 }
 
-const SOCIAL_TURN_PATTERN = /^(?:hi|hello|hey|thanks|thank you|ok|okay|cool|great|got it|sounds good|good (?:morning|afternoon|evening))[.!?\s]*$/i
+const SOCIAL_TURN_PATTERN =
+  /^(?:hi|hello|hey|thanks|thank you|ok|okay|cool|great|got it|sounds good|good (?:morning|afternoon|evening))[.!?\s]*$/i
 
 export function shouldRunLocalPlanning(userInput: string): boolean {
   const text = String(userInput || '').trim()

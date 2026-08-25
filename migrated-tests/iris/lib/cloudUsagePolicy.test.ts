@@ -18,6 +18,7 @@ const settings = {
   agent_execution_policy: 'hybrid',
   agent_primary_assignment_id: 'orchestrator:openai:gpt-4.1:1',
   agent_cloud_request_budget: 3,
+  agent_multi_enabled: true,
   provider_selected_models: {
     openai: ['gpt-4.1', 'gpt-4o-mini'],
     deepseek: ['deepseek-v4-pro', 'deepseek-v4-flash'],
@@ -80,18 +81,14 @@ describe('cloud usage policy', () => {
       provider: 'openai',
       model: 'gpt-4.1',
     })
-    // Mesh is enabled and the primary is NOT locked → role binding/routing run; roles stay real.
     expect(plan?.workingSettings.agent_multi_enabled).toBe(true)
     expect(plan?.workingSettings.agent_primary_locked).not.toBe(true)
-    // The roster is PRESERVED (not flattened to a local clone) so cloud peers remain reachable as
-    // full-capability escalation targets...
     const models = plan?.workingSettings.agent_models as Array<{
       provider: string
       role: string
       primary: boolean
     }>
     expect(models.some((entry) => entry.provider === 'openai')).toBe(true)
-    // ...while the LOCAL worker is the orchestrator primary (local-first).
     const orchestratorPrimary = models.find((entry) => entry.role === 'orchestrator' && entry.primary)
     expect(orchestratorPrimary?.provider).toBe('local')
   })

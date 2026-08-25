@@ -15,8 +15,7 @@ function read(rel: string) {
 
 describe('tool catalog ↔ broker contract', () => {
   it('every catalog tool has a handler reference in the broker or sub-agent runtime', () => {
-    const dispatch =
-      read('src/platform/agent/runtime/toolBroker.ts') + '\n' + read('src/platform/subAgentRuntime.ts')
+    const dispatch = read('src/platform/agent/runtime/toolBroker.ts') + '\n' + read('src/platform/subAgentRuntime.ts')
 
     const names = getToolDefinitions().map((tool) => tool.name)
     expect(names.length).toBeGreaterThan(0)

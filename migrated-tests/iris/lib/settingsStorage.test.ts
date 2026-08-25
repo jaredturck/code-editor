@@ -170,6 +170,7 @@ describe('settingsStorage', () => {
       launcher: true,
       automation: true,
       microphone: true,
+      screenCapture: false,
     })
   })
 })

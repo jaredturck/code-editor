@@ -11,7 +11,7 @@ import { DEFAULT_ORB_SETTINGS } from '@/platform/settingsStorage'
 describe('tool broker permission grants', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('requests a persistent file-read grant and resumes only that capability', async () => {
+  it('requests a persistent file-read grant outside the autonomous workspace path', async () => {
     vi.spyOn(desktopBridge, 'readTextFile').mockResolvedValue({
       path: '/tmp/test.txt',
       content: 'hello',
@@ -29,7 +29,7 @@ describe('tool broker permission grants', () => {
     const broker = createModuleBroker({
       settings: {
         ...DEFAULT_ORB_SETTINGS,
-        agent_working_dir: '/tmp',
+        agent_working_dir: '',
       },
       todoTool: {
         list: () => [],
@@ -81,7 +81,7 @@ describe('tool broker permission grants', () => {
     const broker = createModuleBroker({
       settings: {
         ...DEFAULT_ORB_SETTINGS,
-        agent_working_dir: '/tmp',
+        agent_working_dir: '',
       },
       todoTool: {
         list: () => [],
