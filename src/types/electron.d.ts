@@ -273,24 +273,9 @@ interface DiagnosticsApi {
   analyze: (input: { language: string; content: string; file_path: string | null }) => Promise<RawDiagnostic[]>
 }
 
-interface OllamaMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  images?: string[]
-}
-
-interface AIChatRequest {
-  request_id: string
-  base_url: string
-  model: string
-  messages: OllamaMessage[]
-}
-
 interface AIApi {
   list_models: (base_url: string) => Promise<AIModel[]>
   model_capabilities: (base_url: string, model: string) => Promise<{ image: boolean }>
-  start_chat: (request: AIChatRequest) => void
-  cancel_chat: (request_id: string) => void
   speech_status: (
     base_url: string,
     speech_model: string,
@@ -300,9 +285,6 @@ interface AIApi {
   }>
   install_speech_model: (base_url: string, speech_model: string) => Promise<boolean>
   transcribe: (base_url: string, speech_model: string, audio: Uint8Array) => Promise<string>
-  on_chat_chunk: (callback: (payload: { request_id: string; content: string; thinking: string }) => void) => () => void
-  on_chat_complete: (callback: (payload: { request_id: string }) => void) => () => void
-  on_chat_error: (callback: (payload: { request_id: string; message: string }) => void) => () => void
 }
 
 interface EditorApi {

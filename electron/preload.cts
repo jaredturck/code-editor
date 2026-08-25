@@ -15,29 +15,12 @@ contextBridge.exposeInMainWorld('editor_api', {
     list_models: (base_url: string) => ipcRenderer.invoke('ai:list-models', base_url),
     model_capabilities: (base_url: string, model: string) =>
       ipcRenderer.invoke('ai:model-capabilities', base_url, model),
-    start_chat: (request: unknown) => ipcRenderer.send('ai:chat-start', request),
-    cancel_chat: (request_id: string) => ipcRenderer.send('ai:chat-cancel', request_id),
     speech_status: (base_url: string, speech_model: string) =>
       ipcRenderer.invoke('ai:speech-status', base_url, speech_model),
     install_speech_model: (base_url: string, speech_model: string) =>
       ipcRenderer.invoke('ai:install-speech-model', base_url, speech_model),
     transcribe: (base_url: string, speech_model: string, audio: Uint8Array) =>
       ipcRenderer.invoke('ai:transcribe', base_url, speech_model, audio),
-    on_chat_chunk: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on('ai:chat-chunk', listener)
-      return () => ipcRenderer.removeListener('ai:chat-chunk', listener)
-    },
-    on_chat_complete: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on('ai:chat-complete', listener)
-      return () => ipcRenderer.removeListener('ai:chat-complete', listener)
-    },
-    on_chat_error: (callback: (payload: unknown) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload)
-      ipcRenderer.on('ai:chat-error', listener)
-      return () => ipcRenderer.removeListener('ai:chat-error', listener)
-    },
   },
   browser: {
     create: (id: number, url: string) => ipcRenderer.invoke('browser:create', id, url),
