@@ -13,7 +13,7 @@
     "build": "npm run build:backend && npm run build:electron && tsc -b && vite build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "oxlint src electron vite.config.ts",
+    "lint": "oxlint src electron backend vite.config.ts",
     "test": "npm run build:backend && npm run build:electron && vitest run && npm run test:iris",
     "test:iris": "vitest run --config vitest.iris.config.ts",
     "test:watch": "vitest",
