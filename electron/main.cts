@@ -18,6 +18,7 @@ import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { analyze_document, type DiagnosticInput } from './diagnostics.cjs'
 import { inspect_local_browser_runtime, type BrowserInspectionOptions } from './browserInspection.cjs'
+import { normalize_browser_url } from './browserUrl.cjs'
 import { file_exists, get_resource_path, open_editor_file, read_attachment, resolve_relative_file } from './files.cjs'
 import {
   get_ollama_model_capabilities,
@@ -130,24 +131,6 @@ function send_maximized_state(main_window: BrowserWindow) {
 
 function is_web_url(value: string) {
   return value.startsWith('http://') || value.startsWith('https://')
-}
-
-function normalize_browser_url(value: string) {
-  const trimmed_value = value.trim()
-
-  if (!trimmed_value) {
-    return 'https://duckduckgo.com/'
-  }
-
-  if (/^https?:\/\//i.test(trimmed_value)) {
-    return trimmed_value
-  }
-
-  if (!trimmed_value.includes(' ') && (trimmed_value.includes('.') || trimmed_value.startsWith('localhost'))) {
-    return `https://${trimmed_value}`
-  }
-
-  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed_value)}`
 }
 
 function get_browser_state(browser_id: number, entry: BrowserEntry) {
