@@ -109,3 +109,68 @@ These tests exercised omitted IRIS UI/controller behavior rather than the suppor
 - No runtime service used by current Code Editor surfaces was removed in this batch.
 
 A full dependency-backed verification run should still be performed in the normal installed development checkout before treating broader cleanup as release-ready.
+
+---
+
+## 2026-08-25 — Obsolete IRIS Orb/window-shell compatibility
+
+**Commit:** `Remove obsolete IRIS Orb shell compatibility`  
+**Source removed:** 716 lines across 8 files  
+**Historical tests removed:** 588 lines across 6 files  
+**Total removed:** 1,304 lines across 14 deleted files, plus 40 stale compatibility lines removed from `AgentSettingsContext.ts` and `src/types/platform.d.ts`
+
+### Why this was removed
+
+This cluster existed to support the original IRIS Orb and multi-window shell. The Code Editor has a single editor-native Electron window and does not mount the old Orb providers or window-mode UI.
+
+The call graph showed that, after the old Chat/panel controllers were removed, these modules were reachable only from each other and from archived IRIS UI tests:
+
+- the Orb shell and clipboard providers had no live renderer consumers;
+- `useOrbShell` and `useClipboardHistory` were only stale compatibility re-exports;
+- `runtimeMode.ts` only classified obsolete Orb/workspace/editor IRIS window roles;
+- `desktopShellWindow.ts` wrapped window-control preload methods that the current Code Editor preload does not expose, aside from capabilities now consumed directly elsewhere;
+- the old browser/Electron `getDisplayMedia` capture strategy was not used by current vision. Current agent screen capture uses `src/platform/screenCaptureBridge.ts` and the authenticated backend screen route.
+
+### Files removed
+
+#### Orb/clipboard context compatibility
+
+- `src/platform-context/orb/ClipboardContext.tsx`
+- `src/platform-context/orb/OrbShellContext.tsx`
+- `src/platform-context/orb/useClipboardHistory.ts`
+- `src/platform-context/orb/useOrbShell.ts`
+
+The active settings context remains. `src/platform-context/AgentSettingsContext.ts` was narrowed to export only the settings provider/hooks that still have live callers. `src/types/platform.d.ts` was also narrowed to remove old Orb/window-control bridge methods that the current preload no longer exposes, while retaining the current security, credential, screen-source and emergency-stop contracts.
+
+#### Old desktop shell/window wrappers
+
+- `src/platform/desktopShellWindow.ts`
+- `src/platform/runtimeMode.ts`
+
+These modules represented the old IRIS Orb/workspace/editor window model. The Code Editor owns its Electron window behavior directly.
+
+#### Old renderer screen-capture presentation helpers
+
+- `src/platform-features/screen-capture/captureStrategies.ts`
+- `src/platform-features/screen-capture/types.ts`
+
+Current screen understanding remains supported through `src/platform/screenCaptureBridge.ts`, Electron screen-source access, and the authenticated backend capture route.
+
+### Historical migrated tests removed with the dead code
+
+- `migrated-tests/iris/components/orb/FloatingOrb.test.tsx`
+- `migrated-tests/iris/components/orb/OrbPills.test.tsx`
+- `migrated-tests/iris/context/OrbContext.test.tsx`
+- `migrated-tests/iris/lib/desktopShellWindow.test.ts`
+- `migrated-tests/iris/lib/runtimeMode.test.ts`
+- `migrated-tests/iris/lib/screenCaptureErrors.test.ts`
+
+These tests target the intentionally omitted IRIS Orb/multi-window presentation or the obsolete renderer capture strategy. Several already referenced old source components/paths that do not exist in Code Editor.
+
+### Verification evidence
+
+- TypeScript parser pass after this deletion: **450 files, 0 parse errors** across active source/test TypeScript-family files.
+- Local-import comparison against the preceding cleanup state: **0 newly unresolved imports**.
+- Three pre-existing unresolved historical UI-test imports disappeared with the obsolete tests.
+- `src/platform/screenCaptureBridge.ts` remains live through `src/platform/desktopBridge.ts`, preserving current agent screen capture.
+- `window.orbitDesktop.onAgentStopRequest`, security permissions, and credential APIs remain used directly by current runtime code; they were not removed.
