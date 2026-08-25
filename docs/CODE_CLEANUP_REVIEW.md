@@ -9,13 +9,6 @@ What remains below requires a future product or architecture decision and is **n
 
 ## Product/architecture decisions intentionally left for later
 
-### Duplicate agent-bus shared implementation
-
-- `backend/desktopBridge/shared/agentBusShared.ts`
-- `src/platform/agent/agentBusShared.ts`
-
-This is duplication across separate TypeScript build roots, not dead code. Consolidation requires a shared-source/build-layout decision or a parity test that protects both execution targets.
-
 ### Large `*Legacy` implementation layers
 
 Files such as `agentRuntimeLegacy.ts` and `toolBrokerLegacy.ts` are active implementation. “Legacy” describes provenance, not reachability. Cleanup here is a tested decomposition/refactor project rather than deletion.
@@ -33,6 +26,7 @@ Future cleanup should continue to protect:
 - notes, launcher and skills runtime services used by agents even without dedicated panels;
 - provider adapters and routing/failover infrastructure;
 - benchmark source under `benchmarks/iris/`;
+- the mirrored renderer/backend `agentBusShared.ts` helpers while their TypeScript build roots remain separate; `tests/agentBusSharedParity.test.ts` prevents silent behavioral drift;
 - thin backend route/service seams that are useful future decomposition boundaries;
 - layered security, permission and workspace-containment checks where duplication is defense-in-depth.
 
