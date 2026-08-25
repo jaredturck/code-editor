@@ -1,50 +1,20 @@
 /** Covers the stable semantic selectors used inside the hidden DuckDuckGo Chromium window. */
 
-import fs from 'node:fs'
-import path from 'node:path'
-import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
-
-interface ParserModule {
-  buildDuckDuckGoSearchUrl: (request: {
-    query: string
-    maxResults: number
-    safeSearch: string
-    timeRange: string
-    locale: string
-    region: string
-  }) => string
-  extractDuckDuckGoPage: (maxResults: number, timeoutMs: number) => Promise<Record<string, any>>
-  resolveDuckDuckGoSearchMode: (value: unknown) => string
-}
-
-function loadParserModule(): ParserModule {
-  const filename = path.resolve('electron-src/duckDuckGoPageParser.cts')
-  const source = fs.readFileSync(filename, 'utf8')
-  const compiled = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true,
-    },
-    fileName: filename,
-  }).outputText
-  const module = { exports: {} as Record<string, unknown> }
-  const execute = new Function('exports', 'module', 'require', compiled)
-  execute(module.exports, module, require)
-  return module.exports as unknown as ParserModule
-}
-
-const parser = loadParserModule()
+import {
+  buildDuckDuckGoSearchUrl,
+  extractDuckDuckGoPage,
+  resolveDuckDuckGoSearchMode,
+} from '../electron/platform/duckDuckGoPageParser.cts'
 
 afterEach(() => {
   document.documentElement.innerHTML = '<head></head><body></body>'
 })
 
 describe('DuckDuckGo page parser', () => {
-  it('builds the normal web URL from Orbital search settings', () => {
+  it('builds the normal web URL from IRIS search settings', () => {
     const url = new URL(
-      parser.buildDuckDuckGoSearchUrl({
+      buildDuckDuckGoSearchUrl({
         query: 'what is a cat',
         maxResults: 8,
         safeSearch: 'strict',
@@ -60,7 +30,7 @@ describe('DuckDuckGo page parser', () => {
     expect(url.searchParams.get('kl')).toBe('uk-en')
     expect(url.searchParams.get('kp')).toBe('1')
     expect(url.searchParams.get('df')).toBe('w')
-    expect(parser.resolveDuckDuckGoSearchMode('unknown')).toBe('browser')
+    expect(resolveDuckDuckGoSearchMode('unknown')).toBe('browser')
   })
 
   it('extracts organic cards and ignores adverts without relying on generated classes', async () => {
@@ -91,7 +61,7 @@ describe('DuckDuckGo page parser', () => {
       </section>
     `
 
-    const result = await parser.extractDuckDuckGoPage(8, 1000)
+    const result = await extractDuckDuckGoPage(8, 1000)
 
     expect(result.challenge).toBe(false)
     expect(result.results).toEqual([
@@ -118,7 +88,7 @@ describe('DuckDuckGo page parser', () => {
       value: 'Unfortunately, bots use DuckDuckGo too.',
     })
 
-    await expect(parser.extractDuckDuckGoPage(8, 1000)).resolves.toMatchObject({
+    await expect(extractDuckDuckGoPage(8, 1000)).resolves.toMatchObject({
       challenge: true,
     })
   })

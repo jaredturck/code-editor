@@ -8,10 +8,9 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createCredentialStore } from '../electron/platform/credentialStore.cts'
 
-const require = createRequire(import.meta.url)
 interface SafeStorageFixture {
   isEncryptionAvailable: () => boolean
   getSelectedStorageBackend: () => string
@@ -27,9 +26,6 @@ interface CredentialStoreFixture {
   status: () => Record<string, unknown>
 }
 
-const { createCredentialStore } = require('../../electron/credentialStore.cjs') as {
-  createCredentialStore: (options: Record<string, unknown>) => CredentialStoreFixture
-}
 const temporaryRoots: string[] = []
 
 // Determines whether the fake safe storage for the surrounding test scenario.
@@ -48,7 +44,7 @@ function fakeSafeStorage(backend = 'kwallet6'): SafeStorageFixture {
 
 // Creates the isolated fixture used by the credential-store tests.
 async function fixture(backend = 'kwallet6'): Promise<{ root: string; store: CredentialStoreFixture }> {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'orbital-credentials-'))
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'iris-credentials-'))
   temporaryRoots.push(root)
   const app = { isReady: () => true, getPath: () => root }
   return {

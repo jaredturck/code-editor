@@ -1,26 +1,8 @@
 /**
  * Verifies distro-independent Linux password-store selection from desktop/session metadata.
  */
-
-import { createRequire } from 'node:module'
 import { describe, expect, it, vi } from 'vitest'
-
-const require = createRequire(import.meta.url)
-const { configureLinuxPasswordStore, detectLinuxPasswordStore } = require('../../electron/linuxPasswordStore.cjs') as {
-  configureLinuxPasswordStore: (options: Record<string, unknown>) => {
-    backend: string
-    desktop: string
-    reason: string
-  } | null
-  detectLinuxPasswordStore: (
-    environment: Record<string, string>,
-    commandExists?: (command: string) => boolean,
-  ) => {
-    backend: string
-    desktop: string
-    reason: string
-  } | null
-}
+import { configureLinuxPasswordStore, detectLinuxPasswordStore } from '../electron/platform/linuxPasswordStore.cts'
 
 function fakeApp(explicitBackend = '') {
   const appendSwitch = vi.fn()

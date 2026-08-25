@@ -4,7 +4,7 @@ import {
   modelImageCapability,
   normalizeChatAttachments,
   persistedChatAttachments,
-} from '@/features/chat/chatAttachments'
+} from '@/platform-features/chat/chatAttachments'
 
 describe('chat image attachments', () => {
   it('normalizes bounded image attachments and removes transient previews for persistence', () => {

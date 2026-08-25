@@ -1,5 +1,5 @@
 /**
- * Verifies that Orbital stores only an OS-wrapped master key, refuses insecure Linux
+ * Verifies that IRIS stores only an OS-wrapped master key, refuses insecure Linux
  * backends, and clears obsolete Chromium plaintext persistence before desktop startup.
  */
 
@@ -8,19 +8,9 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
-import { createRequire } from 'node:module'
 import sqlite3 from 'sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
-
-const require = createRequire(import.meta.url)
-const { loadOrCreateStorageKey, removeLegacyRendererStorage } = require('../../electron/storageKeyStore.cjs') as {
-  loadOrCreateStorageKey: (options: Record<string, unknown>) => Promise<{
-    databasePath: string
-    masterKey: Buffer
-    backend: string
-  }>
-  removeLegacyRendererStorage: (app: { getPath: (name: string) => string }) => void
-}
+import { loadOrCreateStorageKey, removeLegacyRendererStorage } from '../electron/platform/storageKeyStore.cts'
 
 const temporaryRoots: string[] = []
 const wrappingKey = Buffer.alloc(32, 0x4a)
@@ -47,7 +37,7 @@ function fakeSafeStorage(backend = 'kwallet6') {
 }
 
 async function fixture() {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'orbital-storage-key-'))
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'iris-storage-key-'))
   temporaryRoots.push(root)
   const paths: Record<string, string> = {
     home: root,
@@ -175,13 +165,10 @@ describe('Electron application storage key', () => {
       platform: 'linux',
     })
 
-    // Database moved + renamed under the new home, and the original master key still unwraps.
     expect(ctx.databasePath).toBe(path.join(root, '.iris-ai', 'iris.sqlite3'))
     expect(Buffer.from(ctx.masterKey).equals(knownKey)).toBe(true)
     ctx.masterKey.fill(0)
 
-    // Non-database data (chats, etc.) came along, the original is preserved as a backup, and the
-    // staging directory was cleaned up by the atomic rename.
     expect(fs.existsSync(path.join(root, '.iris-ai', 'chats', 'marker.txt'))).toBe(true)
     expect(fs.existsSync(path.join(root, '.orbital-ai', 'orbital.sqlite3'))).toBe(true)
     expect(fs.existsSync(path.join(root, '.iris-ai.migrating'))).toBe(false)
