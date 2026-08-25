@@ -141,7 +141,6 @@ export interface DiagnosticsSettings {
 
 export interface AISettings {
   ollama_url: string
-  selected_model: string
   speech_model: string
 }
 

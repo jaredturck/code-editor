@@ -122,7 +122,6 @@ function render_panel(
       active_section={active_section}
       editor_ai={{
         ollama_url: 'http://127.0.0.1:11434',
-        selected_model: 'qwen',
         speech_model: 'speech',
       }}
       highlighted_setting={null}
@@ -216,12 +215,7 @@ describe('AISettingsPanel', () => {
     expect(state.settings.ai_provider).toBe('openai')
     expect(state.settings.ai_model).toBe('gpt-auto')
     expect((state.settings as unknown as Record<string, unknown>).agent_required_local_model).toBe('qwen3.5:9b')
-    expect(on_editor_ai_change).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ollama_url: 'http://127.0.0.1:11434',
-        selected_model: 'qwen3.5:9b',
-      }),
-    )
+    expect(on_editor_ai_change).not.toHaveBeenCalled()
     expect(screen.getByText(/Auto setup complete\./)).toBeInTheDocument()
   })
 
@@ -235,7 +229,7 @@ describe('AISettingsPanel', () => {
     expect(screen.getByRole('button', { name: 'Auto Configure' })).toBeEnabled()
   })
 
-  it('keeps existing local Chat and speech settings editable during the agent migration', () => {
+  it('keeps speech settings editable', () => {
     const on_editor_ai_change = vi.fn()
     render_panel('models', { on_editor_ai_change })
 

@@ -348,7 +348,6 @@ function AISettingsPanel({
 
     if (provider_id === 'local') {
       const selected_model = selected[0] || ''
-      on_editor_ai_change({ ...editor_ai, selected_model })
       if (selected_model && !get_primary_agent_model(next, 'orchestrator')) {
         update_platform_settings({ ai_provider: 'local', ai_model: selected_model })
       }
@@ -398,16 +397,10 @@ function AISettingsPanel({
     try {
       const result = await runAutomaticSetup(readOrbSettings())
       const next = update_platform_settings(result.patch as Partial<OrbSettings>)
-      const next_record = next as unknown as Record<string, unknown>
-      const local_model = String(next_record.agent_required_local_model || '').trim()
       const local_url = String(next.ai_local_url || editor_ai.ollama_url).trim()
 
-      if (local_model || local_url !== editor_ai.ollama_url) {
-        on_editor_ai_change({
-          ...editor_ai,
-          ...(local_url ? { ollama_url: local_url } : {}),
-          ...(local_model ? { selected_model: local_model } : {}),
-        })
+      if (local_url !== editor_ai.ollama_url) {
+        on_editor_ai_change({ ...editor_ai, ollama_url: local_url })
       }
 
       const primary_provider = String(next.ai_provider || '').trim()
@@ -819,22 +812,11 @@ function AISettingsPanel({
           )}
         </SettingsSection>
 
-        <SettingsSection title="Existing Code Editor AI">
-          {row(
-            'ollama-model',
-            'Current local Chat model',
-            'The existing AI Chat panel still uses this Ollama model until it is connected to the full agent runtime.',
-            <input
-              className={`${input_class} w-72 font-mono`}
-              onChange={(event) => on_editor_ai_change({ ...editor_ai, selected_model: event.target.value })}
-              placeholder="Select in AI Chat"
-              value={editor_ai.selected_model}
-            />,
-          )}
+        <SettingsSection title="Voice input">
           {row(
             'speech-model',
             'Speech transcription model',
-            'Ollama model used by the existing voice-input path until audio is consolidated onto the migrated transcription service.',
+            'Ollama model used by the Code Editor voice-input path.',
             <input
               className={`${input_class} w-72 font-mono`}
               onChange={(event) => on_editor_ai_change({ ...editor_ai, speech_model: event.target.value })}

@@ -55,7 +55,6 @@ export const default_editor_settings: EditorSettings = {
   },
   ai: {
     ollama_url: 'http://127.0.0.1:11434',
-    selected_model: '',
     speech_model: 'gabegoodhart/granite4.1-speech:2b',
   },
   keybindings: {},

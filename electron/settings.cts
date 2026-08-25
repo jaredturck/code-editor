@@ -103,7 +103,6 @@ export interface AppSettings {
   }
   ai: {
     ollama_url: string
-    selected_model: string
     speech_model: string
   }
   keybindings: Record<string, { enabled: boolean; key: string | null }>
@@ -164,7 +163,6 @@ export const default_settings: AppSettings = {
   },
   ai: {
     ollama_url: 'http://127.0.0.1:11434',
-    selected_model: '',
     speech_model: 'gabegoodhart/granite4.1-speech:2b',
   },
   keybindings: {},
@@ -384,7 +382,6 @@ export function sanitize_settings(value: unknown): AppSettings {
     },
     ai: {
       ollama_url: string_setting(ai.ollama_url, default_settings.ai.ollama_url, 500),
-      selected_model: string_setting(ai.selected_model, default_settings.ai.selected_model, 300),
       speech_model: string_setting(ai.speech_model, default_settings.ai.speech_model, 300),
     },
     keybindings,
