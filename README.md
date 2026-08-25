@@ -41,14 +41,12 @@ The reusable IRIS platform/backend has been migrated into the Code Editor. The o
 
 The active platform is organized under `src/platform/`, `src/platform-features/`, `backend/`, and `electron/platform/`. Some compatibility/controller code remains intentionally unmounted where the underlying capability is already exposed through a Code Editor-native surface. That retained code is not unfinished migration work.
 
-Current documentation:
+Migration documentation has been consolidated now that the migration is complete:
 
-- [`docs/migration/CURRENT_STATUS.md`](./docs/migration/CURRENT_STATUS.md) — current product/runtime status
-- [`IRIS_MIGRATION.md`](./IRIS_MIGRATION.md) — completed migration ledger and scope
-- [`docs/migration/UNWIRED_BACKEND.md`](./docs/migration/UNWIRED_BACKEND.md) — intentionally retained compatibility/reference code
-- [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) — current verification state and remaining non-migration cleanup
-- [`docs/migration/MIGRATED_FILES.md`](./docs/migration/MIGRATED_FILES.md) — historical one-by-one source/destination inventory
-- [`docs/migration/MIGRATION_PLAN.md`](./docs/migration/MIGRATION_PLAN.md) — historical migration architecture and sequencing plan
+- [`docs/MIGRATION.md`](./docs/MIGRATION.md) — authoritative migration history, architecture, source mapping, security boundaries, validation context, and guidance for future maintainers
+- [`docs/iris-reference/`](./docs/iris-reference/) — preserved documentation from the original IRIS source project
+
+The old milestone/checklist documents remain available through Git history when forensic migration detail is needed.
 
 ## Installation
 
@@ -76,7 +74,7 @@ npm run build
 
 `npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The benchmark suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`.
 
-See [`docs/migration/VALIDATION_REPORT.md`](./docs/migration/VALIDATION_REPORT.md) for the latest recorded verification state.
+Migration-era validation context is recorded in [`docs/MIGRATION.md`](./docs/MIGRATION.md). Current source and current verification results are authoritative when they differ from historical snapshots.
 
 ## Third-party notices
 
