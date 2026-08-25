@@ -22,7 +22,7 @@ Git history remains the recovery mechanism for anything removed here.
 
 ## 2026-08-25 — Obsolete IRIS panel/controller layer
 
-**Commit:** `d299b4ef8f34cb10667b337b38a433b77c547543` (`Remove obsolete IRIS panel controllers`)  
+**Commit:** `Remove obsolete IRIS panel controllers`  
 **Source removed:** 4,691 lines across 16 files  
 **Historical tests removed:** 1,472 lines across 8 files  
 **Total removed:** 6,163 lines across 24 files
