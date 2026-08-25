@@ -40,11 +40,19 @@ function is_web_url(value: string) {
   }
 }
 
-function trusted_renderer_url() {
+export function trusted_renderer_url() {
   return app.isPackaged ? pathToFileURL(join(__dirname, '../dist/index.html')).toString() : 'http://localhost:5173'
 }
 
+const secured_privileged_renderers = new WeakSet<Electron.WebContents>()
+
+export function is_trusted_renderer_web_contents(web_contents: Pick<Electron.WebContents, 'getURL'>) {
+  return is_trusted_renderer_navigation(web_contents.getURL(), trusted_renderer_url())
+}
+
 export function secure_privileged_renderer_navigation(window: BrowserWindow) {
+  if (secured_privileged_renderers.has(window.webContents)) return
+  secured_privileged_renderers.add(window.webContents)
   const trusted_url = trusted_renderer_url()
   const guard_navigation = (event: Electron.Event, url: string) => {
     if (is_trusted_renderer_navigation(url, trusted_url)) return

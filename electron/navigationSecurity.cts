@@ -22,3 +22,15 @@ export function is_privileged_editor_preload(value: unknown) {
   const path = String(value || '').replace(/\\/g, '/')
   return path.slice(path.lastIndexOf('/') + 1) === 'preload.cjs'
 }
+
+/** Allows only explicitly enabled microphone capture; camera/video remains denied. */
+export function should_allow_editor_media_permission(
+  permission: unknown,
+  details: unknown,
+  microphone_enabled: boolean,
+) {
+  if (permission !== 'media' || !microphone_enabled) return false
+  const detail_record = details && typeof details === 'object' ? (details as Record<string, unknown>) : {}
+  const media_types = Array.isArray(detail_record.mediaTypes) ? detail_record.mediaTypes : []
+  return media_types.length > 0 && media_types.every((type) => type === 'audio')
+}

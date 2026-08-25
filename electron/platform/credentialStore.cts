@@ -50,6 +50,7 @@ interface CredentialIpcOptions {
   ipcMain: IpcMain
   BrowserWindow?: Pick<typeof ElectronBrowserWindow, 'fromWebContents'> | null
   store: CredentialStore
+  authorizeRenderer?: (event: IpcMainEvent) => boolean
 }
 
 // Normalizes and validates a provider credential ID before it is used as a storage key.
@@ -236,12 +237,13 @@ function createCredentialStore({
 }
 
 // Registers the narrow synchronous IPC surface used by the renderer to manage provider credentials.
-function registerCredentialIpc({ ipcMain, BrowserWindow, store }: CredentialIpcOptions): void {
+function registerCredentialIpc({ ipcMain, BrowserWindow, store, authorizeRenderer }: CredentialIpcOptions): void {
   if (!ipcMain || !store) throw new Error('Credential IPC requires ipcMain and a store')
 
   // Confirms that a credential request originated from an application BrowserWindow.
   function rendererIsAuthorized(event: IpcMainEvent): boolean {
     try {
+      if (authorizeRenderer) return authorizeRenderer(event)
       return Boolean(BrowserWindow && BrowserWindow.fromWebContents(event.sender))
     } catch {
       return false

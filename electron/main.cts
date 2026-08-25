@@ -27,6 +27,8 @@ import {
   transcribe_audio,
 } from './ollama.cjs'
 import { read_settings, update_settings, type AppSettings } from './settings.cjs'
+import { is_trusted_renderer_web_contents, secure_privileged_renderer_navigation } from './navigationBootstrap.cjs'
+import { should_allow_editor_media_permission } from './navigationSecurity.cjs'
 import {
   copy_workspace_text,
   create_workspace_entry,
@@ -74,7 +76,12 @@ interface BrowserEntry {
 
 const linux_password_store = configureLinuxPasswordStore({ app })
 const credential_store = createCredentialStore({ app, safeStorage })
-registerCredentialIpc({ ipcMain, BrowserWindow, store: credential_store })
+registerCredentialIpc({
+  ipcMain,
+  BrowserWindow,
+  store: credential_store,
+  authorizeRenderer: (event) => Boolean(get_event_window(event.sender)),
+})
 
 const browser_entries = new Map<string, BrowserEntry>()
 const approved_close_windows = new Set<number>()
@@ -95,7 +102,17 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 function get_event_window(sender: Electron.WebContents) {
+  if (!is_trusted_renderer_web_contents(sender)) return null
   return BrowserWindow.fromWebContents(sender)
+}
+
+function allow_editor_media_permission(
+  web_contents: Electron.WebContents | null,
+  permission: unknown,
+  details?: unknown,
+) {
+  if (!web_contents || !get_event_window(web_contents)) return false
+  return should_allow_editor_media_permission(permission, details, getLocalBridgePermissions()?.microphone === true)
 }
 
 function get_browser_key(owner_id: number, browser_id: number) {
@@ -278,7 +295,7 @@ async function write_existing_text(file_path: string, content: string) {
 }
 
 ipcMain.handle('platform:bridge-permissions-get', (event) => {
-  if (!BrowserWindow.fromWebContents(event.sender)) {
+  if (!get_event_window(event.sender)) {
     return { ok: false, error: 'bridge-permission-request-not-from-app-window' }
   }
 
@@ -286,7 +303,7 @@ ipcMain.handle('platform:bridge-permissions-get', (event) => {
 })
 
 ipcMain.handle('platform:bridge-permissions-update', (event, permissions: unknown) => {
-  if (!BrowserWindow.fromWebContents(event.sender)) {
+  if (!get_event_window(event.sender)) {
     return { ok: false, error: 'bridge-permission-request-not-from-app-window' }
   }
 
@@ -296,7 +313,7 @@ ipcMain.handle('platform:bridge-permissions-update', (event, permissions: unknow
 })
 
 ipcMain.handle('platform:get-screen-sources', async (event) => {
-  if (!BrowserWindow.fromWebContents(event.sender)) {
+  if (!get_event_window(event.sender)) {
     return []
   }
 
@@ -678,6 +695,8 @@ function create_window() {
     },
   })
 
+  secure_privileged_renderer_navigation(main_window)
+
   const owner_id = main_window.webContents.id
 
   main_window.on('maximize', () => send_maximized_state(main_window))
@@ -763,11 +782,11 @@ app.whenReady().then(async () => {
       headers: request.headers,
     })
   })
-  session.defaultSession.setPermissionCheckHandler((web_contents, permission) => {
-    return permission === 'media' && web_contents !== null && BrowserWindow.fromWebContents(web_contents) !== null
+  session.defaultSession.setPermissionCheckHandler((web_contents, permission, _requesting_origin, details) => {
+    return allow_editor_media_permission(web_contents, permission, details)
   })
-  session.defaultSession.setPermissionRequestHandler((web_contents, permission, callback) => {
-    callback(permission === 'media' && BrowserWindow.fromWebContents(web_contents) !== null)
+  session.defaultSession.setPermissionRequestHandler((web_contents, permission, callback, details) => {
+    callback(allow_editor_media_permission(web_contents, permission, details))
   })
   globalShortcut.register('CommandOrControl+Shift+Backspace', emergency_stop)
   create_window()
@@ -795,5 +814,4 @@ app.on('will-quit', () => {
   secure_storage_context?.masterKey.fill(0)
   secure_storage_context = null
   kill_all_terminals()
-
 })

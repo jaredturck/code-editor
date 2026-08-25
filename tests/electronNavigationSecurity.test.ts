@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { is_privileged_editor_preload, is_trusted_renderer_navigation } from '../electron/navigationSecurity.cts'
+import {
+  is_privileged_editor_preload,
+  is_trusted_renderer_navigation,
+  should_allow_editor_media_permission,
+} from '../electron/navigationSecurity.cts'
 
 describe('privileged renderer navigation security', () => {
   it('identifies only the privileged editor preload', () => {
@@ -17,6 +21,15 @@ describe('privileged renderer navigation security', () => {
     expect(is_trusted_renderer_navigation('https://example.com/', trusted)).toBe(false)
     expect(is_trusted_renderer_navigation('http://127.0.0.1:5173/', trusted)).toBe(false)
     expect(is_trusted_renderer_navigation('file:///tmp/index.html', trusted)).toBe(false)
+  })
+
+  it('allows only audio media when microphone access is explicitly enabled', () => {
+    expect(should_allow_editor_media_permission('media', { mediaTypes: ['audio'] }, true)).toBe(true)
+    expect(should_allow_editor_media_permission('media', { mediaTypes: ['audio'] }, false)).toBe(false)
+    expect(should_allow_editor_media_permission('media', { mediaTypes: ['video'] }, true)).toBe(false)
+    expect(should_allow_editor_media_permission('media', { mediaTypes: ['audio', 'video'] }, true)).toBe(false)
+    expect(should_allow_editor_media_permission('media', {}, true)).toBe(false)
+    expect(should_allow_editor_media_permission('notifications', { mediaTypes: ['audio'] }, true)).toBe(false)
   })
 
   it('allows only the packaged editor entry document plus query/hash changes', () => {
