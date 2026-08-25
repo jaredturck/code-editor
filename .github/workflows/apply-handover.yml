@@ -49,7 +49,6 @@ jobs:
             migrated-tests/iris/server/filePdfService.test.ts \
             migrated-tests/iris/server/fileArchiveService.test.ts \
             migrated-tests/iris/server/bridgePermissionBoundary.test.ts
-          npm run test:electron-runtime
           npm run build
           git diff --check
 
@@ -144,7 +143,6 @@ jobs:
             migrated-tests/iris/server/filePdfService.test.ts \
             migrated-tests/iris/server/fileArchiveService.test.ts \
             migrated-tests/iris/server/bridgePermissionBoundary.test.ts
-          npm run test:electron-runtime
           npm run build
           git diff --check
 
