@@ -47,7 +47,7 @@ import {
 } from './fileClipService.js'
 import { hasZipSignature } from './fileArchiveService.js'
 import { createFileExtractionPool, type FileExtractionPool } from './fileExtractionPool.js'
-import type { FileExtractionKind, FileExtractionResult } from './fileExtractionWorkerTypes.js'
+import type { FileExtractionKind } from './fileExtractionWorkerTypes.js'
 import { createFileImageProcessingPool, type FileImageProcessingPool } from './fileImageProcessingPool.js'
 import type { PreparedClipImage } from './fileImageProcessingWorkerTypes.js'
 import { FileImageQueue } from './fileImageQueue.js'
@@ -307,8 +307,6 @@ interface PreparedExtractedFile {
   input: string
   metadata: Record<string, unknown>
 }
-
-type ExtractedFileText = Exclude<FileExtractionResult, null>
 
 interface SearchCacheRecord extends FileSemanticSearchResult {
   embedding: number[]
@@ -949,7 +947,6 @@ function fileNodeId(): string {
 }
 
 function shouldSkipProtectedPath(rootPath: string, absolutePath: string): boolean {
-  const relativePath = path.relative(rootPath, absolutePath)
   if (process.platform !== 'linux') return false
   const normalizedPath = path.resolve(absolutePath)
   return PROTECTED_LINUX_PATHS.some(
