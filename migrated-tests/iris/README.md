@@ -1,40 +1,46 @@
-# Test suite
+# Migrated IRIS Runtime Tests
 
-The suite is designed to run without credentials, internet access, paid API calls, local AI servers, Electron, or desktop automation tools.
+The original IRIS test tree is preserved here so reusable runtime/backend behavior can be validated against the migrated Code Editor implementation without restoring obsolete IRIS presentation code.
 
-## Commands
+## Current commands
+
+Run only the compatible migrated IRIS suite:
+
+```bash
+npm run test:iris
+```
+
+Run the normal Code Editor suite followed by the compatible migrated IRIS suite:
 
 ```bash
 npm test
-npm run test:watch
-npm run test:coverage
-npm run verify
+```
+
+Run the complete deterministic repository verification chain:
+
+```bash
 npm run verify:full
 ```
 
+The old source-IRIS `test:coverage` and `verify` commands are not Code Editor package scripts and should not be used as current repository instructions.
+
+## Selection and compatibility
+
+`vitest.iris.config.ts` selects the supported migrated runtime/backend surface under:
+
+- `migrated-tests/iris/lib/**/*.test.ts`
+- `migrated-tests/iris/server/**/*.test.ts`
+
+A small compatibility resolver maps historical IRIS imports such as `../../server/` and `../../src/lib/providers/` onto the migrated `backend/` and `src/platform/providers/` locations.
+
+Presentation-specific tests that depend on the old Orb/window shell remain excluded. The preserved files are still useful migration history, but exclusion does not mean the corresponding backend capability is unfinished.
+
 ## Side-effect policy
 
-`tests/setup.ts` replaces `fetch`, `XMLHttpRequest`, `WebSocket`, and `EventSource` with implementations that throw immediately. A test must explicitly install a local mock before exercising code that normally uses one of those APIs.
+`migrated-tests/iris/setup.ts` blocks uncontrolled network/browser transports by default. Provider, bridge, terminal, launcher, automation, screen-capture and agent tests use mocks or controlled fixtures rather than contacting real external providers or taking over the desktop.
 
-Provider tests use fake keys and in-memory responses. Bridge, terminal, clipboard, launcher, automation, screen-capture, editor-window, and agent tests use mocks or the isolated `tests/fixtures/workspace` directory. The normal suite does not execute shell commands, launch applications, change the real clipboard, or contact any external endpoint.
+The benchmark suite is separate from correctness tests and runs through `npm run benchmark`.
 
-## Covered production contracts
+## Current verification note
 
-The current characterization suite covers:
-
-- Local storage, settings, API-key compatibility, notes, run history, and reward storage.
-- OpenAI, Anthropic, Gemini, OpenRouter, OpenCode, and local-model request/response adapters using mocked `fetch`.
-- Desktop bridge client methods and selected bridge-server route contracts.
-- Structured task construction, validation, sub-agent queues, orchestration, broadcasts, timeouts, and scripted fake-model execution.
-- Skill profiles, compilation fallback behavior, reward calculations, and model-family behavior.
-- Agent tool-definition metadata and duplicate-name checks.
-- Authentication compatibility, Orb context behavior, screen capture, editor runtime, mobile detection, toast state, desktop-window helpers, and compatibility exports.
-- Production bundling through the existing `npm run build` command in `npm run verify`.
-
-## Deliberate exclusions
-
-The suite does not make live provider/search requests or judge model-answer quality. It also avoids pixel-level animation tests, generated Radix/shadcn internals, real Electron window management, real desktop automation, and real shell/application execution.
-
-Large private implementations inside `agentRuntime.js` and `desktopBridgePlugin.js` are currently characterized through their exported contracts. More direct tests should be added immediately before those files are split into smaller exported modules.
-
-`npm run verify` runs type checking, all tests, and the production build. `npm run verify:full` also runs the existing lint command; at the time this suite was added, lint reports pre-existing unused imports in `PermissionsPanel.jsx` and `SettingsPanel.jsx`.
+The latest recorded Code Editor Vitest phase has two failures before the chained `test:iris` phase, so the migrated IRIS suite was not reached in that particular `npm test` run. See [`../../docs/migration/VALIDATION_REPORT.md`](../../docs/migration/VALIDATION_REPORT.md) for the current verification state.
