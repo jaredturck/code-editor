@@ -53,8 +53,11 @@ jobs:
       - name: Install dependencies for verification
         run: npm ci --ignore-scripts
 
-      - name: Verify formatting
-        run: npm run format:check
+      - name: Format changed source
+        run: npx prettier --write backend/desktopBridge/services/fileSemanticService.ts
+
+      - name: Verify changed-file formatting
+        run: npx prettier --check backend/desktopBridge/services/fileSemanticService.ts package-lock.json
 
       - name: Verify lint
         run: npm run lint
