@@ -1,5 +1,7 @@
 /** Curated Ollama recommendations shown separately from installed local models. */
 
+import { evaluateLocalRuntimeFit } from '@/platform/providers/localRuntimePolicy'
+
 export interface RecommendedLocalModel {
   id: string
   label: string
@@ -44,10 +46,16 @@ export interface LocalHardwareProfile {
   gpuMemoryTotalMb?: number
 }
 
-/** Chooses IRIS's required local worker model from coarse hardware capacity. */
-export function chooseAutomaticLocalModel(hardware: LocalHardwareProfile | null | undefined): string {
-  const gpuMemoryGb = Number(hardware?.gpuMemoryTotalMb || 0) / 1024
+const AUTOMATIC_LOCAL_MODEL_CANDIDATES = ['qwen3.6:27b', 'qwen3.5:9b'] as const
 
-  if (gpuMemoryGb >= 28) return 'qwen3.6:27b'
-  return 'qwen3.5:9b'
+/** Chooses the strongest recommended worker that the runtime-fit policy says can execute locally. */
+export function chooseAutomaticLocalModel(hardware: LocalHardwareProfile | null | undefined): string {
+  const estimates = AUTOMATIC_LOCAL_MODEL_CANDIDATES.map((model) => evaluateLocalRuntimeFit(model, hardware))
+  const viable = estimates.find((estimate) => estimate.fit === 'fits' || estimate.fit === 'tight')
+  if (viable) return viable.model
+
+  // Unknown VRAM includes CPU-only and systems whose GPU telemetry is unavailable. Preserve the
+  // conservative small-model fallback there, but do not auto-download a model known to be oversized.
+  if (estimates.every((estimate) => estimate.availableVramGb === null)) return 'qwen3.5:9b'
+  return ''
 }

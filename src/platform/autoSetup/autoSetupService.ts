@@ -123,6 +123,14 @@ export async function runAutomaticSetup(
         )
       }
       selectedLocalModel = chooseAutomaticLocalModel(hardware)
+      if (!selectedLocalModel) {
+        const availableVramGb = evaluateLocalRuntimeFit('qwen3.5:9b', hardware).availableVramGb
+        throw new Error(
+          availableVramGb === null
+            ? 'No suitable automatic local worker could be selected for this machine.'
+            : `No recommended local worker safely fits the detected ${availableVramGb} GB of GPU memory. Install a smaller compatible model manually or use a cloud provider.`,
+        )
+      }
       await pullLocalOllamaModel(preferred.url, selectedLocalModel)
       localModels = normalizeModelList([selectedLocalModel, ...localModels])
       setupSummary.push(`Downloaded local worker: ${selectedLocalModel}`)

@@ -40,6 +40,8 @@ describe('automatic setup model selection', () => {
     expect(plan.patch.ai_model).not.toBe('gpt-5.5')
     expect(['gpt-4.1', 'gemini-3.5-flash']).toContain(plan.patch.ai_model)
     expect(plan.patch.agent_execution_policy).toBe('hybrid')
+    expect(plan.patch.agent_peer_review).toBe('suggested')
+    expect(plan.patch.agent_model_routing).toBe('on')
     expect(plan.patch.agent_models.filter((entry) => entry.role === 'orchestrator')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ provider: 'local', primary: false }),
@@ -79,6 +81,8 @@ describe('automatic setup model selection', () => {
     expect(plan.patch.ai_provider).toBe('local')
     expect(plan.patch.agent_execution_policy).toBe('local_only')
     expect(plan.patch.agent_models.every((entry) => entry.provider === 'local')).toBe(true)
+    expect(plan.patch.agent_peer_review).toBe('suggested')
+    expect(plan.patch.agent_model_routing).toBe('on')
   })
 
   it('excludes non-chat model categories from automatic profiles', () => {

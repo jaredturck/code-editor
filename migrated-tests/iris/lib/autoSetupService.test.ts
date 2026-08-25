@@ -112,7 +112,13 @@ describe('runAutomaticSetup', () => {
       audio_model: 'gabegoodhart/granite4.1-speech:2b',
       audio_local_fallback: true,
     })
-    expect(result.summary).toHaveLength(3)
+    expect(result.summary).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Local runtime:'),
+        expect.stringContaining('Cloud responders:'),
+        expect.stringContaining('Audio:'),
+      ]),
+    )
   })
 
   it('keeps a rejected key visible as invalid and excludes it from a local-only profile', async () => {
@@ -190,6 +196,36 @@ describe('runAutomaticSetup', () => {
       audio_local_fallback: false,
     })
     expect(result.summary.at(-1)).toBe('Audio: openai / gpt-4o-mini-transcribe')
+  })
+
+  it('uses runtime-fit policy to select the stronger worker on a 24 GB GPU', async () => {
+    mocks.discoverLocalAIServers.mockResolvedValue({
+      servers: [{ kind: 'ollama', url: 'http://127.0.0.1:11434', modelCount: 1, models: ['all-minilm:22m'] }],
+      preferred: { kind: 'ollama', url: 'http://127.0.0.1:11434', modelCount: 1, models: ['all-minilm:22m'] },
+    })
+    mocks.systemStats.mockResolvedValue({ memTotal: 64 * 1024 ** 3, gpuMemoryTotalMb: 24 * 1024 })
+
+    const result = await runAutomaticSetup({
+      ai_provider: 'local',
+      ai_model: '',
+      ai_local_url: 'http://127.0.0.1:11434',
+    })
+
+    expect(mocks.pullLocalOllamaModel).toHaveBeenCalledWith('http://127.0.0.1:11434', 'qwen3.6:27b')
+    expect(result.patch.agent_required_local_model).toBe('qwen3.6:27b')
+  })
+
+  it('does not download a known-oversized worker on a very small GPU', async () => {
+    mocks.discoverLocalAIServers.mockResolvedValue({
+      servers: [{ kind: 'ollama', url: 'http://127.0.0.1:11434', modelCount: 1, models: ['all-minilm:22m'] }],
+      preferred: { kind: 'ollama', url: 'http://127.0.0.1:11434', modelCount: 1, models: ['all-minilm:22m'] },
+    })
+    mocks.systemStats.mockResolvedValue({ memTotal: 32 * 1024 ** 3, gpuMemoryTotalMb: 4 * 1024 })
+
+    await expect(
+      runAutomaticSetup({ ai_provider: 'local', ai_model: '', ai_local_url: 'http://127.0.0.1:11434' }),
+    ).rejects.toThrow(/safely fits/i)
+    expect(mocks.pullLocalOllamaModel).not.toHaveBeenCalled()
   })
 
   it('downloads a hardware-appropriate Ollama model when no suitable chat model is installed', async () => {

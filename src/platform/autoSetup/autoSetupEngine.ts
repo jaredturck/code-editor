@@ -135,6 +135,9 @@ export function buildAutomaticSetupPlan(settings: ProviderConfigurationSettings)
     scout: localScout || cloudScout || primary,
     overwatcher: localOverwatcher || cloudOverwatcher || primary,
   }
+  const distinctModelBindings = new Set(
+    agentModels.map((entry) => `${entry.provider}:${entry.model}:${entry.keyId}`.toLowerCase()),
+  ).size
 
   return {
     patch: {
@@ -142,8 +145,8 @@ export function buildAutomaticSetupPlan(settings: ProviderConfigurationSettings)
       agent_models: agentModels,
       agent_multi_enabled: true,
       agent_peer_consult_enabled: true,
-      agent_peer_review: 'off',
-      agent_model_routing: 'off',
+      agent_peer_review: 'suggested',
+      agent_model_routing: distinctModelBindings > 1 ? 'on' : 'off',
       ai_provider: primary.provider,
       ai_model: primary.model,
       agent_execution_policy: primary.local ? 'local_only' : 'hybrid',
