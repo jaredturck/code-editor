@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Applies path, command, and tool restrictions before agent actions execute. It combines
  * universal secret and system protections with the selected safety profile and explicit
@@ -35,20 +34,28 @@ const {
   normalizePathForPolicy,
 } = Object.assign({}, config, continuity, todoTrace, capabilityPolicy, webSearchPolicy, limitPolicy)
 
+type SafetySettings = Record<string, unknown>
+
 interface SafePathOptions {
   operation?: 'read' | 'write' | 'cwd'
-  settings?: any
+  settings?: SafetySettings | null
+}
+
+interface CommandApprovalState {
+  allowElevatedCommands?: boolean
+  allowNetworkCommands?: boolean
+  allowShellPassthrough?: boolean
 }
 
 // Selects or derives agent root base from the available settings, input, and runtime context.
-export function resolveAgentRootBase(settings) {
+export function resolveAgentRootBase(settings: SafetySettings | null | undefined): string {
   const wd = String(settings?.agent_working_dir || '').trim()
   return wd || '~'
 }
 
 // Re-root a model-supplied path: absolute and ~-relative paths are honored as-is
 // "." / "" / relative paths resolve under the working root (home by default).
-export function applyAgentRoot(rawPath, settings) {
+export function applyAgentRoot(rawPath: unknown, settings: SafetySettings | null | undefined): string {
   const base = resolveAgentRootBase(settings)
   const p = String(rawPath || '').trim()
   if (!p) return p // let the caller decide on empty
@@ -63,7 +70,7 @@ export function applyAgentRoot(rawPath, settings) {
  * applying the configured working root.
  */
 
-export function assertSafePath(pathInput, { operation = 'read', settings }: SafePathOptions = {}) {
+export function assertSafePath(pathInput: unknown, { operation = 'read', settings }: SafePathOptions = {}): string {
   const requested = String(pathInput || '').trim()
   if (!requested) {
     throw new Error('Path is required.')
@@ -86,14 +93,14 @@ export function assertSafePath(pathInput, { operation = 'read', settings }: Safe
   // Secrets must never be read and system/key dirs must never be written, even
   // with elevated capability — these are the exfiltration / persistence vectors
   // we lock down before sudo. Independent of the safety profile.
-  if (operation === 'read' && BLOCKED_READ_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
+  if (operation === 'read' && BLOCKED_READ_PATH_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedPath))) {
     throw new Error('Reading secret/key paths (e.g. .ssh, .gnupg, /etc/shadow) is blocked for safety.')
   }
   if (operation === 'write' || operation === 'cwd') {
     if (PATH_TRAVERSAL_PATTERN.test(normalizedPath)) {
       throw new Error('Path traversal on write is blocked for safety.')
     }
-    if (BLOCKED_WRITE_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
+    if (BLOCKED_WRITE_PATH_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedPath))) {
       throw new Error('Writing to system or key directories (e.g. /etc, /usr, .ssh) is blocked for safety.')
     }
   }
@@ -101,7 +108,7 @@ export function assertSafePath(pathInput, { operation = 'read', settings }: Safe
   // ── Strict-profile-only extras ────────────────────────────────────────────
   const safety = resolveSafetyConfig(settings, MAX_AGENT_STEPS)
   if (safety.profile === 'strict' && (operation === 'write' || operation === 'cwd')) {
-    if (STRICT_WRITE_PATH_PATTERNS.some((pattern) => pattern.test(normalizedPath))) {
+    if (STRICT_WRITE_PATH_PATTERNS.some((pattern: RegExp) => pattern.test(normalizedPath))) {
       throw new Error('Writing to shell startup / autostart files is blocked by the strict safety profile.')
     }
   }
@@ -115,7 +122,12 @@ export function assertSafePath(pathInput, { operation = 'read', settings }: Safe
  * before they reach the bridge rather than relying on shell failure as a policy mechanism.
  */
 
-export function assertSafeCommand(command, settings, context = 'terminal', approvalState = null) {
+export function assertSafeCommand(
+  command: unknown,
+  settings: SafetySettings | null | undefined,
+  context = 'terminal',
+  approvalState: CommandApprovalState | null = null,
+): string {
   const text = String(command || '').trim()
   if (!text) {
     throw new Error('Command is required.')
@@ -139,7 +151,7 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
     throw new Error('Command is too long for safe execution.')
   }
 
-  const blocked = DANGEROUS_COMMAND_PATTERNS.some((pattern) => pattern.test(text))
+  const blocked = DANGEROUS_COMMAND_PATTERNS.some((pattern: RegExp) => pattern.test(text))
   if (blocked) {
     throw new Error('Command blocked by safety policy.')
   }
@@ -151,7 +163,7 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
     throw new Error('Terminal commands are blocked in read-only permission tier (Tier 0/1).')
   }
   if (safety.permissionTier <= PERMISSION_TIER.STANDARD) {
-    const tier2Blocked = TIER_2_BLOCKED_PATTERNS.some((pattern) => pattern.test(text))
+    const tier2Blocked = TIER_2_BLOCKED_PATTERNS.some((pattern: RegExp) => pattern.test(text))
     if (tier2Blocked) {
       throw new Error('Command blocked by Tier 2 policy. Network-/disk-/user-management commands require Tier 3.')
     }
@@ -182,12 +194,12 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
     throw new Error('Command blocked by fork-bomb safety rule.')
   }
 
-  if (PIPE_TO_SHELL_PATTERNS.some((pattern) => pattern.test(text))) {
+  if (PIPE_TO_SHELL_PATTERNS.some((pattern: RegExp) => pattern.test(text))) {
     throw new Error('Command blocked: pipe-to-shell execution is not allowed.')
   }
 
   if (!safety.allowNetworkCommands && !allowNetworkCommand) {
-    const usesNetworkTool = NETWORK_COMMAND_PATTERNS.some((pattern) => pattern.test(text))
+    const usesNetworkTool = NETWORK_COMMAND_PATTERNS.some((pattern: RegExp) => pattern.test(text))
     if (usesNetworkTool) {
       throw new Error('Network-related commands are blocked by safety settings.')
     }
@@ -206,7 +218,7 @@ export function assertSafeCommand(command, settings, context = 'terminal', appro
 }
 
 // Rejects a tool request that falls outside the active permission tier or safety profile.
-export function assertAllowedTool(toolName) {
+export function assertAllowedTool(toolName: string) {
   const tool = TOOL_BY_NAME[toolName]
   if (!tool) {
     throw new Error(`Unknown tool: ${toolName}`)
