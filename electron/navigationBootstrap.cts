@@ -2,6 +2,7 @@ import { app, shell, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { is_trusted_renderer_navigation } from './navigationSecurity.cjs'
+import './search.cjs'
 
 declare global {
   namespace Electron {

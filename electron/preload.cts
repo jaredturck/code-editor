@@ -104,6 +104,15 @@ contextBridge.exposeInMainWorld('editor_api', {
       ipcRenderer.invoke('git:commit-agent-changes', root_path, run_id, goal),
     abandon_agent_run: (run_id: string) => ipcRenderer.invoke('git:abandon-agent-run', run_id),
   },
+  search: {
+    semantic_status: () => ipcRenderer.invoke('search:semantic-status'),
+    semantic: (query: string, limit = 50, kind: 'all' | 'text' | 'image' | 'video' = 'all') =>
+      ipcRenderer.invoke('search:semantic', query, limit, kind),
+    concepts: (query: string, group_limit = 6, files_per_group = 12) =>
+      ipcRenderer.invoke('search:concepts', query, group_limit, files_per_group),
+    similar: (file_path: string, limit = 50) => ipcRenderer.invoke('search:similar', file_path, limit),
+    inspect_document: (file_path: string) => ipcRenderer.invoke('search:inspect-document', file_path),
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     update: (settings: unknown) => ipcRenderer.invoke('settings:update', settings),
@@ -150,8 +159,7 @@ contextBridge.exposeInMainWorld('editor_api', {
       target_directory: string,
       operation: 'copy' | 'cut',
       conflict_mode: 'ask' | 'replace' | 'keep_both',
-    ) =>
-      ipcRenderer.invoke('workspace:paste-entry', root_path, source_path, target_directory, operation, conflict_mode),
+    ) => ipcRenderer.invoke('workspace:paste-entry', root_path, source_path, target_directory, operation, conflict_mode),
     trash_entry: (root_path: string, target_path: string) =>
       ipcRenderer.invoke('workspace:trash-entry', root_path, target_path),
     reveal_entry: (root_path: string, target_path: string) =>

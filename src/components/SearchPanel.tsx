@@ -1,14 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import {
-  findSimilarFiles,
-  getFileSemanticStatus,
-  inspectDocumentFile,
-  searchFileSemanticConcepts,
-  searchFileSemanticIndex,
-  type BridgeDocumentInspection,
-  type BridgeFileSemanticConceptGroup,
-  type BridgeFileSemanticResult,
+import type {
+  BridgeFileSemanticConceptGroup,
+  BridgeFileSemanticResult,
+  BridgeFileSemanticStatus,
 } from '../platform/desktopBridge'
+import type { BridgeDocumentInspection } from '../platform/documentBridge'
 import { searchProjectFileNames, searchProjectText } from '../platform/projectSearch'
 
 interface SearchResult {
@@ -23,9 +19,25 @@ interface SearchResult {
   concept_title?: string
 }
 
+interface EditorSearchApi {
+  semantic_status: () => Promise<BridgeFileSemanticStatus>
+  semantic: (
+    query: string,
+    limit?: number,
+    kind?: 'all' | 'text' | 'image' | 'video',
+  ) => Promise<BridgeFileSemanticResult[]>
+  concepts: (query: string, group_limit?: number, files_per_group?: number) => Promise<BridgeFileSemanticConceptGroup[]>
+  similar: (file_path: string, limit?: number) => Promise<BridgeFileSemanticResult[]>
+  inspect_document: (file_path: string) => Promise<BridgeDocumentInspection>
+}
+
 type SearchMode = 'text' | 'files' | 'semantic' | 'documents' | 'media' | 'concepts'
 
 const document_extensions = new Set(['.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp', '.zip'])
+
+function search_api(): EditorSearchApi {
+  return (window.editor_api as typeof window.editor_api & { search: EditorSearchApi }).search
+}
 
 function normalize_path(value: string) {
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -67,7 +79,6 @@ function format_timestamp(value?: number) {
 function concept_results_for_workspace(root_path: string, groups: BridgeFileSemanticConceptGroup[]) {
   let visible_groups = 0
   const results: SearchResult[] = []
-
   for (const group of groups) {
     const members = group.results.filter((item) => path_is_in_workspace(root_path, item.path))
     if (!members.length) continue
@@ -86,7 +97,6 @@ function concept_results_for_workspace(root_path: string, groups: BridgeFileSema
       })
     }
   }
-
   return { results, visible_groups }
 }
 
@@ -141,7 +151,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
   const refresh_semantic_status = async (mode: SearchMode = search_mode) => {
     try {
-      const status = await getFileSemanticStatus(false)
+      const status = await search_api().semantic_status()
       const media_mode = mode === 'media'
       const concept_mode = mode === 'concepts'
       if (status.indexStatus === 'ready') {
@@ -232,8 +242,8 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             return
           }
           const [images, videos] = await Promise.all([
-            searchFileSemanticIndex(search_query, 100, 'image'),
-            searchFileSemanticIndex(search_query, 100, 'video'),
+            search_api().semantic(search_query, 100, 'image'),
+            search_api().semantic(search_query, 100, 'video'),
           ])
           const media = [...images, ...videos].sort((left, right) => right.score - left.score).slice(0, 200)
           set_results(semantic_results(media, 'media'))
@@ -245,12 +255,12 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
             set_error('Concept index is empty. Rebuild the semantic index in Settings → AI → Semantic Index.')
             return
           }
-          const groups = await searchFileSemanticConcepts(search_query, 10, 20)
+          const groups = await search_api().concepts(search_query, 10, 20)
           const discovered = concept_results_for_workspace(rootPath, groups)
           set_results(discovered.results)
           set_result_label(`${discovered.visible_groups} concept cluster${discovered.visible_groups === 1 ? '' : 's'}`)
         } else {
-          const response = await searchFileSemanticIndex(search_query, 200, 'text')
+          const response = await search_api().semantic(search_query, 200, 'text')
           const documents_only = search_mode === 'documents'
           set_results(semantic_results(response, 'text', documents_only))
           set_result_label(documents_only ? 'Indexed documents' : 'Semantic matches')
@@ -281,7 +291,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
         if (status) set_error('Semantic index is not ready yet.')
         return
       }
-      const response = await findSimilarFiles(result.path, 200)
+      const response = await search_api().similar(result.path, 200)
       set_results(semantic_results(response, media ? 'media' : 'text'))
       set_result_label(`Similar to ${workspace_display_path(rootPath, result.path)}`)
     } catch (search_error) {
@@ -297,7 +307,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
     set_loading(true)
     set_error('')
     try {
-      set_document_inspection(await inspectDocumentFile(file_path))
+      set_document_inspection(await search_api().inspect_document(file_path))
     } catch (inspection_error) {
       set_document_inspection(null)
       set_error(inspection_error instanceof Error ? inspection_error.message : 'Document inspection failed.')
@@ -383,7 +393,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
               <button
                 aria-label="Run search"
-                className="ml-1 flex h-6 min-w-7 items-center justify-center rounded px-1.5 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"
+                className="ml-1 flex h-6 min-w-7 items-center justify-center rounded px-1.5 text-[10px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)] disabled:opacity-40"
                 disabled={loading || !query.trim()}
                 title="Search (Enter)"
                 type="submit"
@@ -394,12 +404,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
 
             {replace_open && search_mode === 'text' && (
               <div className="flex h-8 items-center rounded border border-[var(--input-border)] bg-[var(--input-bg)] px-2 focus-within:border-sky-500">
-                <input
-                  aria-label="Replace"
-                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]"
-                  placeholder="Replace"
-                  type="text"
-                />
+                <input aria-label="Replace" className="min-w-0 flex-1 border-0 bg-transparent p-0 text-xs text-[var(--text)] outline-none placeholder:text-[var(--muted)]" placeholder="Replace" type="text" />
                 <SearchToggle active={preserve_case} label="Preserve case" onClick={() => set_preserve_case((value) => !value)}>AB</SearchToggle>
               </div>
             )}
