@@ -1,0 +1,154 @@
+name: Apply handover
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-handover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format and verify Search integration
+        run: |
+          npx prettier --write \
+            backend/desktopBridge/services/documentInspectionService.ts \
+            electron/preload.cts \
+            src/components/SearchPanel.tsx \
+            src/platform/projectSearch.ts
+          npm run verify:full
+          git diff --check
+
+      - name: Commit Search formatting
+        run: |
+          git config user.name "ChatGPT"
+          git config user.email "noreply@openai.com"
+          git add \
+            backend/desktopBridge/services/documentInspectionService.ts \
+            electron/preload.cts \
+            src/components/SearchPanel.tsx \
+            src/platform/projectSearch.ts
+          git commit -m "Finish Search integration formatting" -m "Normalize the trusted Search integration after the renderer/IPC reconnection so the repository passes its formatting gate without changing the permission boundary." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+
+      - name: Remove stale editor Chat model state
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              file_path = Path(path)
+              content = file_path.read_text()
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file_path.write_text(content.replace(old, new))
+
+          replace_once(
+              'src/types/editor.ts',
+              '  selected_model: string\n',
+              '',
+          )
+          replace_once(
+              'src/editor/editorSettings.ts',
+              "    selected_model: '',\n",
+              '',
+          )
+          replace_once(
+              'electron/settings.cts',
+              '    selected_model: string\n',
+              '',
+          )
+          replace_once(
+              'electron/settings.cts',
+              "    selected_model: '',\n",
+              '',
+          )
+          replace_once(
+              'electron/settings.cts',
+              '      selected_model: string_setting(ai.selected_model, default_settings.ai.selected_model, 300),\n',
+              '',
+          )
+          replace_once(
+              'src/components/settings/AISettingsPanel.tsx',
+              '      on_editor_ai_change({ ...editor_ai, selected_model })\n',
+              '',
+          )
+          replace_once(
+              'src/components/settings/AISettingsPanel.tsx',
+              "      const next_record = next as unknown as Record<string, unknown>\n      const local_model = String(next_record.agent_required_local_model || '').trim()\n      const local_url = String(next.ai_local_url || editor_ai.ollama_url).trim()\n\n      if (local_model || local_url !== editor_ai.ollama_url) {\n        on_editor_ai_change({\n          ...editor_ai,\n          ...(local_url ? { ollama_url: local_url } : {}),\n          ...(local_model ? { selected_model: local_model } : {}),\n        })\n      }\n",
+              "      const local_url = String(next.ai_local_url || editor_ai.ollama_url).trim()\n\n      if (local_url !== editor_ai.ollama_url) {\n        on_editor_ai_change({ ...editor_ai, ollama_url: local_url })\n      }\n",
+          )
+          replace_once(
+              'src/components/settings/AISettingsPanel.tsx',
+              '''        <SettingsSection title="Existing Code Editor AI">\n          {row(\n            'ollama-model',\n            'Current local Chat model',\n            'The existing AI Chat panel still uses this Ollama model until it is connected to the full agent runtime.',\n            <input\n              className={`${input_class} w-72 font-mono`}\n              onChange={(event) => on_editor_ai_change({ ...editor_ai, selected_model: event.target.value })}\n              placeholder="Select in AI Chat"\n              value={editor_ai.selected_model}\n            />,\n          )}\n''',
+              '        <SettingsSection title="Voice input">\n',
+          )
+          replace_once(
+              'src/components/settings/AISettingsPanel.tsx',
+              "            'Ollama model used by the existing voice-input path until audio is consolidated onto the migrated transcription service.',\n",
+              "            'Ollama model used by the Code Editor voice-input path.',\n",
+          )
+          replace_once(
+              'tests/AISettingsPanel.test.tsx',
+              "        selected_model: 'qwen',\n",
+              '',
+          )
+          replace_once(
+              'tests/AISettingsPanel.test.tsx',
+              "    expect(on_editor_ai_change).toHaveBeenCalledWith(\n      expect.objectContaining({\n        ollama_url: 'http://127.0.0.1:11434',\n        selected_model: 'qwen3.5:9b',\n      }),\n    )\n",
+              '    expect(on_editor_ai_change).not.toHaveBeenCalled()\n',
+          )
+          replace_once(
+              'tests/AISettingsPanel.test.tsx',
+              "  it('keeps existing local Chat and speech settings editable during the agent migration', () => {\n",
+              "  it('keeps speech settings editable', () => {\n",
+          )
+          PY
+
+          npx prettier --write \
+            src/types/editor.ts \
+            src/editor/editorSettings.ts \
+            electron/settings.cts \
+            src/components/settings/AISettingsPanel.tsx \
+            tests/AISettingsPanel.test.tsx
+
+          if grep -R -n -E 'editor_ai\.selected_model|settings\.ai\.selected_model|ai\.selected_model' src electron tests; then
+            echo 'Stale editor-level selected_model reference remains.'
+            exit 1
+          fi
+
+          npm run verify:full
+          git diff --check
+
+      - name: Commit model settings cleanup
+        run: |
+          git add \
+            src/types/editor.ts \
+            src/editor/editorSettings.ts \
+            electron/settings.cts \
+            src/components/settings/AISettingsPanel.tsx \
+            tests/AISettingsPanel.test.tsx
+          git commit -m "Remove stale editor Chat model state" -m "Drop the duplicate editor-level local Chat model field and UI mirror. Keep provider and agent model selection canonical in the IRIS platform settings while retaining the live Ollama URL and speech model settings." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+
+      - name: Push verified commits
+        run: git push origin HEAD:main
