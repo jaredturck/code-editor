@@ -76,6 +76,24 @@ describe('editor-aware agent filesystem', () => {
     expect(saved.content).toBe(content)
   })
 
+  it('treats missing optional project-skill paths as an expected state', async () => {
+    const { list_agent_workspace, read_agent_workspace_file } = await import('../electron/workspace.cts')
+    const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
+    const settings_path = join(root, '.iris', 'skills.json')
+    const skills_path = join(root, '.iris', 'skills')
+
+    await expect(read_agent_workspace_file(root, settings_path, true)).resolves.toMatchObject({
+      path: settings_path,
+      missing: true,
+    })
+    await expect(list_agent_workspace(root, skills_path, 3, true)).resolves.toMatchObject({
+      rootPath: skills_path,
+      missing: true,
+      tree: { path: skills_path, type: 'directory', children: [] },
+    })
+    await expect(read_agent_workspace_file(root, settings_path)).rejects.toThrow(/does not exist/i)
+  })
+
   it('blocks a workspace symlink that resolves outside the workspace', async () => {
     const { read_agent_workspace_file } = await import('../electron/workspace.cts')
     const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))

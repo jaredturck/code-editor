@@ -130,8 +130,19 @@ function text_revision(content: string) {
   return createHash('sha256').update(content, 'utf8').digest('hex')
 }
 
-export async function read_agent_workspace_file(root_path: string, target_path: string) {
-  const target = await resolve_agent_workspace_target(root_path, target_path)
+export async function read_agent_workspace_file(root_path: string, target_path: string, optional = false) {
+  const target = await resolve_agent_workspace_target(root_path, target_path, optional)
+  if (!target.exists) {
+    return {
+      path: target.path,
+      content: '',
+      revision: '',
+      size: 0,
+      modified_time: 0,
+      missing: true,
+    }
+  }
+
   const target_stat = await stat(target.canonical_path)
   if (!target_stat.isFile()) throw new Error(`${basename(target.path)} is not a file.`)
   const content = await readFile(target.canonical_path, 'utf8')
@@ -181,9 +192,23 @@ export async function stat_agent_workspace_path(root_path: string, target_path: 
   }
 }
 
-export async function list_agent_workspace(root_path: string, target_path: string, depth = 3) {
+export async function list_agent_workspace(root_path: string, target_path: string, depth = 3, optional = false) {
   const normalized_depth = Math.max(1, Math.min(6, Math.round(depth)))
-  const target = await resolve_agent_workspace_target(root_path, target_path)
+  const target = await resolve_agent_workspace_target(root_path, target_path, optional)
+  if (!target.exists) {
+    return {
+      rootPath: target.path,
+      tree: {
+        name: basename(target.path) || target.path,
+        path: target.path,
+        type: 'directory' as const,
+        children: [] as Array<Record<string, unknown>>,
+      },
+      truncated: false,
+      missing: true,
+    }
+  }
+
   const root_stat = await stat(target.canonical_path)
   if (!root_stat.isDirectory()) throw new Error(`${basename(target.path)} is not a directory.`)
 
@@ -546,9 +571,12 @@ export function stop_workspace_watch(owner_id: number) {
 // Agent file authority is exposed through dedicated IPC channels so renderer-side autonomous
 // tools retain the same canonical workspace/symlink boundary as direct workspace operations.
 if (ipcMain?.handle) {
-  ipcMain.handle('workspace:agent-read-file', async (_event, root_path: string, target_path: string) => {
-    return read_agent_workspace_file(root_path, target_path)
-  })
+  ipcMain.handle(
+    'workspace:agent-read-file',
+    async (_event, root_path: string, target_path: string, optional = false) => {
+      return read_agent_workspace_file(root_path, target_path, optional)
+    },
+  )
 
   ipcMain.handle(
     'workspace:agent-write-file',
@@ -569,9 +597,12 @@ if (ipcMain?.handle) {
     return stat_agent_workspace_path(root_path, target_path)
   })
 
-  ipcMain.handle('workspace:agent-list', async (_event, root_path: string, target_path: string, depth: number) => {
-    return list_agent_workspace(root_path, target_path, depth)
-  })
+  ipcMain.handle(
+    'workspace:agent-list',
+    async (_event, root_path: string, target_path: string, depth: number, optional = false) => {
+      return list_agent_workspace(root_path, target_path, depth, optional)
+    },
+  )
 }
 
 // Git is rooted to the open workspace and exposed as structured IPC so neither the renderer

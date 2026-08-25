@@ -289,6 +289,7 @@ export function create_editor_file_authority(
           workspace_root,
           String(args.path || workspace_root),
           Number(args.depth) || 3,
+          args.optional === true,
         )
       }
 
@@ -307,7 +308,14 @@ export function create_editor_file_authority(
       if (!file_path) throw new Error(`${tool_name} requires a file path.`)
 
       if (tool_name === 'files.read') {
-        const disk = await window.editor_api.workspace.agent_read_file(workspace_root, file_path)
+        const disk = await window.editor_api.workspace.agent_read_file(
+          workspace_root,
+          file_path,
+          args.optional === true,
+        )
+        if (disk.missing) {
+          return { ...disk, isBinary: false }
+        }
         const snapshot = host.get_snapshot(disk.path)
         const content = snapshot?.content ?? disk.content
         const revision = snapshot ? `editor:${content_revision(content)}` : `disk:${disk.revision}`

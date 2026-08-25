@@ -83,6 +83,26 @@ describe('project skill loading', () => {
     bridge_state.files.set('/workspace/.iris/skills/secure-review.md', project_skill)
   })
 
+  it('uses non-throwing optional probes when project skills are absent', async () => {
+    bridge_state.tree = null
+    const readTextFile = vi.fn(async (_path: string, options?: Record<string, unknown>) => ({
+      content: '',
+      missing: options?.optional === true,
+    }))
+    const listDirectory = vi.fn(async (_path: string, _depth?: number, options?: Record<string, unknown>) => ({
+      rootPath: '/workspace/.iris/skills',
+      tree: { name: 'skills', path: '/workspace/.iris/skills', type: 'directory' as const, children: [] },
+      missing: options?.optional === true,
+    }))
+
+    await expect(loadProjectSkillDefinitions('/workspace', { listDirectory, readTextFile })).resolves.toEqual([])
+    expect(readTextFile).toHaveBeenCalledWith(
+      '/workspace/.iris/skills.json',
+      expect.objectContaining({ optional: true }),
+    )
+    expect(listDirectory).toHaveBeenCalledWith('/workspace/.iris/skills', 3, { optional: true })
+  })
+
   it('loads bounded project skills and applies project settings', async () => {
     bridge_state.files.set(
       '/workspace/.iris/skills.json',

@@ -141,14 +141,14 @@ contextBridge.exposeInMainWorld('editor_api', {
   workspace: {
     read_directory: (root_path: string, directory_path: string) =>
       ipcRenderer.invoke('workspace:read-directory', root_path, directory_path),
-    agent_read_file: (root_path: string, target_path: string) =>
-      ipcRenderer.invoke('workspace:agent-read-file', root_path, target_path),
+    agent_read_file: (root_path: string, target_path: string, optional = false) =>
+      ipcRenderer.invoke('workspace:agent-read-file', root_path, target_path, optional),
     agent_write_file: (root_path: string, target_path: string, content: string, expected_revision: string | null) =>
       ipcRenderer.invoke('workspace:agent-write-file', root_path, target_path, content, expected_revision),
     agent_stat: (root_path: string, target_path: string) =>
       ipcRenderer.invoke('workspace:agent-stat', root_path, target_path),
-    agent_list: (root_path: string, target_path: string, depth: number) =>
-      ipcRenderer.invoke('workspace:agent-list', root_path, target_path, depth),
+    agent_list: (root_path: string, target_path: string, depth: number, optional = false) =>
+      ipcRenderer.invoke('workspace:agent-list', root_path, target_path, depth, optional),
     create_entry: (root_path: string, parent_path: string, name: string, kind: 'file' | 'directory') =>
       ipcRenderer.invoke('workspace:create-entry', root_path, parent_path, name, kind),
     rename_entry: (root_path: string, source_path: string, name: string) =>

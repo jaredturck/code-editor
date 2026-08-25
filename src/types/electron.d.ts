@@ -15,12 +15,14 @@ interface WorkspaceApi {
   agent_read_file: (
     root_path: string,
     target_path: string,
+    optional?: boolean,
   ) => Promise<{
     path: string
     content: string
     revision: string
     size: number
     modified_time: number
+    missing?: boolean
   }>
   agent_write_file: (
     root_path: string,
@@ -42,10 +44,12 @@ interface WorkspaceApi {
     root_path: string,
     target_path: string,
     depth: number,
+    optional?: boolean,
   ) => Promise<{
     rootPath: string
     tree: { name: string; path: string; type: 'file' | 'directory'; children?: unknown[] }
     truncated: boolean
+    missing?: boolean
   }>
   create_entry: (
     root_path: string,

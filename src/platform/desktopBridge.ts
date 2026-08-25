@@ -210,11 +210,16 @@ export async function searchFileSemanticIndex(
   return results.filter((result) => path_is_in_workspace(workspace_root, result.path)).slice(0, requested_limit)
 }
 
-export async function listDirectory(path: string, depth = 3): Promise<{ rootPath: string; tree: BridgeFileNode }> {
+export async function listDirectory(
+  path: string,
+  depth = 3,
+  options: BridgeOptions = {},
+): Promise<{ rootPath: string; tree: BridgeFileNode; missing?: boolean }> {
   if (editor_file_authority) {
-    return (await editor_file_authority.execute('files.list', { path, depth })) as {
+    return (await editor_file_authority.execute('files.list', { ...options, path, depth })) as {
       rootPath: string
       tree: BridgeFileNode
+      missing?: boolean
     }
   }
   return base.listDirectory(path, depth)

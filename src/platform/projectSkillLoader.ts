@@ -12,8 +12,12 @@ interface ProjectSkillOverride {
 }
 
 export interface ProjectSkillIO {
-  listDirectory: (path: string, depth?: number) => Promise<{ rootPath: string; tree: BridgeFileNode }>
-  readTextFile: (path: string, options?: Record<string, unknown>) => Promise<{ content: string }>
+  listDirectory: (
+    path: string,
+    depth?: number,
+    options?: Record<string, unknown>,
+  ) => Promise<{ rootPath: string; tree: BridgeFileNode; missing?: boolean }>
+  readTextFile: (path: string, options?: Record<string, unknown>) => Promise<{ content: string; missing?: boolean }>
 }
 
 interface ProjectSkillSettings {
@@ -72,7 +76,9 @@ async function read_project_skill_settings(workspace_root: string, io: ProjectSk
     const result = await io.readTextFile(workspace_path(workspace_root, PROJECT_SKILL_SETTINGS), {
       startLine: 1,
       lineCount: 400,
+      optional: true,
     })
+    if (result.missing) return { enabled: true, skills: {} } satisfies ProjectSkillSettings
     const content = String(result.content || '').slice(0, 20000)
     return normalize_project_skill_settings(JSON.parse(content))
   } catch (error) {
@@ -111,7 +117,8 @@ export async function loadProjectSkillDefinitions(workspace_root: string, io: Pr
 
   let tree: BridgeFileNode
   try {
-    const listing = await io.listDirectory(workspace_path(root, PROJECT_SKILL_DIRECTORY), 3)
+    const listing = await io.listDirectory(workspace_path(root, PROJECT_SKILL_DIRECTORY), 3, { optional: true })
+    if (listing.missing) return [] as BridgeSkillDefinition[]
     tree = listing.tree
   } catch {
     return [] as BridgeSkillDefinition[]
