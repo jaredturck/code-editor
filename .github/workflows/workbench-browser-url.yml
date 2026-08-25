@@ -1,0 +1,134 @@
+name: Validate local preview URL handling
+
+on:
+  push:
+    branches: [chatgpt-workbench]
+    paths:
+      - .github/workflows/workbench-browser-url.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-preview-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply local preview URL fix
+        shell: bash
+        run: |
+          cat > electron/browserUrl.cts <<'EOF'
+          function loopback_host_from_input(value: string) {
+            const authority = value.split(/[/?#]/, 1)[0].toLowerCase()
+            if (authority.startsWith('[')) {
+              const end = authority.indexOf(']')
+              return end >= 0 ? authority.slice(1, end) : authority
+            }
+            return authority.split(':', 1)[0]
+          }
+
+          function is_loopback_browser_target(value: string) {
+            const host = loopback_host_from_input(value)
+            return (
+              host === 'localhost' ||
+              host === '::1' ||
+              host === '0.0.0.0' ||
+              /^127(?:\.\d{1,3}){3}$/.test(host)
+            )
+          }
+
+          export function normalize_browser_url(value: string) {
+            const trimmed_value = value.trim()
+
+            if (!trimmed_value) return 'https://duckduckgo.com/'
+            if (/^https?:\/\//i.test(trimmed_value)) return trimmed_value
+            if (!trimmed_value.includes(' ') && is_loopback_browser_target(trimmed_value)) {
+              return `http://${trimmed_value}`
+            }
+            if (!trimmed_value.includes(' ') && trimmed_value.includes('.')) {
+              return `https://${trimmed_value}`
+            }
+            return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed_value)}`
+          }
+          EOF
+
+          python - <<'PY'
+          from pathlib import Path
+          main = Path('electron/main.cts')
+          text = main.read_text()
+          marker = "import { inspect_local_browser_runtime, type BrowserInspectionOptions } from './browserInspection.cjs'\n"
+          assert marker in text
+          text = text.replace(marker, marker + "import { normalize_browser_url } from './browserUrl.cjs'\n", 1)
+          old = '''function normalize_browser_url(value: string) {\n  const trimmed_value = value.trim()\n\n  if (!trimmed_value) {\n    return 'https://duckduckgo.com/'\n  }\n\n  if (/^https?:\\/\\//i.test(trimmed_value)) {\n    return trimmed_value\n  }\n\n  if (!trimmed_value.includes(' ') && (trimmed_value.includes('.') || trimmed_value.startsWith('localhost'))) {\n    return `https://${trimmed_value}`\n  }\n\n  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed_value)}`\n}\n\n'''
+          assert old in text
+          text = text.replace(old, '', 1)
+          main.write_text(text)
+          PY
+
+          cat > tests/electronBrowserUrl.test.ts <<'EOF'
+          import { describe, expect, it } from 'vitest'
+          import { normalize_browser_url } from '../electron/browserUrl.cts'
+
+          describe('Electron browser URL normalization', () => {
+            it('defaults common loopback development targets to HTTP', () => {
+              expect(normalize_browser_url('localhost:5173')).toBe('http://localhost:5173')
+              expect(normalize_browser_url('127.0.0.1:3000/app')).toBe('http://127.0.0.1:3000/app')
+              expect(normalize_browser_url('127.25.1.9:8080')).toBe('http://127.25.1.9:8080')
+              expect(normalize_browser_url('[::1]:4173')).toBe('http://[::1]:4173')
+              expect(normalize_browser_url('0.0.0.0:8000')).toBe('http://0.0.0.0:8000')
+            })
+
+            it('preserves explicit schemes and defaults ordinary hosts to HTTPS', () => {
+              expect(normalize_browser_url('http://localhost:5173')).toBe('http://localhost:5173')
+              expect(normalize_browser_url('https://example.com/path')).toBe('https://example.com/path')
+              expect(normalize_browser_url('example.com/path')).toBe('https://example.com/path')
+            })
+
+            it('treats ordinary text as a search query', () => {
+              expect(normalize_browser_url('react router docs')).toBe(
+                'https://duckduckgo.com/?q=react%20router%20docs',
+              )
+            })
+          })
+          EOF
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Format changed files
+        run: npx prettier --write electron/main.cts electron/browserUrl.cts tests/electronBrowserUrl.test.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test URL normalization
+        run: npx vitest run tests/electronBrowserUrl.test.ts
+
+      - name: Build Electron
+        run: npm run build:electron
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Commit local preview fix to main
+        shell: bash
+        run: |
+          git add electron/main.cts electron/browserUrl.cts tests/electronBrowserUrl.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix local development preview URLs" -m "Default bare localhost, IPv4 loopback, IPv6 loopback, and development bind addresses to HTTP while preserving explicit schemes and HTTPS defaults for ordinary external hosts." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+          git push origin HEAD:main
