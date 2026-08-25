@@ -44,18 +44,6 @@ function requestedAbsolutePath(inputPath: unknown, rootPath: string): string {
   return path.resolve(path.isAbsolute(expanded) ? expanded : path.join(rootPath, expanded))
 }
 
-// Returns a canonical real path when the target exists and preserves missing paths for later
-// validation.
-async function realpathOrSelf(targetPath: string): Promise<string> {
-  try {
-    return await fs.realpath(targetPath)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException)?.code
-    if (code === 'ENOENT') return path.resolve(targetPath)
-    throw error
-  }
-}
-
 // Walks upward to find the nearest existing ancestor of a path that may not exist yet.
 async function nearestExistingAncestor(targetPath: string): Promise<string> {
   let current = path.resolve(targetPath)

@@ -124,7 +124,7 @@ export function normalizeWebProviderSettings(settings) {
   return {
     googleCseApiKey: getKey('search-google-cse'),
     googleCseCx: String(settings?.search_web_google_cse_cx || '').trim(),
-    tavilyApiKey: getey('search-tavily'),
+    tavilyApiKey: getKey('search-tavily'),
     exaApiKey: getKey('search-exa'),
     serperApiKey: getKey('search-serper'),
     serpApiApiKey: getKey('search-serpapi'),
@@ -152,7 +152,7 @@ export function hasConfiguredProviderCredentials(providerId, providerSettings) {
     case 'brave':
       return Boolean(providerSettings.braveApiKey)
     case 'serpapi':
-      return Boolean(providerSettings.serpApiApiKey)
+      return Boolean(providerSettings.serpApiKey)
     default:
       return false
   }
