@@ -6,7 +6,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { initializeStorageForTests } from '@/platform/localStorageStore'
 
 function installCredentialBridge(): void {
   const values = new Map<string, string>()
@@ -183,7 +182,8 @@ function ensureStorage(name: 'localStorage' | 'sessionStorage'): void {
 ensureStorage('localStorage')
 ensureStorage('sessionStorage')
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { initializeStorageForTests } = await import('@/platform/localStorageStore')
   initializeStorageForTests()
   installCredentialBridge()
   window.localStorage.clear()

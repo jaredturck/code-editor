@@ -15,7 +15,12 @@ function read(rel: string) {
 
 describe('tool catalog ↔ broker contract', () => {
   it('every catalog tool has a handler reference in the broker or sub-agent runtime', () => {
-    const dispatch = read('src/platform/agent/runtime/toolBroker.ts') + '\n' + read('src/platform/subAgentRuntime.ts')
+    const dispatch =
+      read('src/platform/agent/runtime/toolBroker.ts') +
+      '\n' +
+      read('src/platform/agent/runtime/toolBrokerLegacy.ts') +
+      '\n' +
+      read('src/platform/subAgentRuntime.ts')
 
     const names = getToolDefinitions().map((tool) => tool.name)
     expect(names.length).toBeGreaterThan(0)
@@ -25,7 +30,7 @@ describe('tool catalog ↔ broker contract', () => {
   })
 
   it('keeps the generic missing-handler fallback after all concrete broker handlers', () => {
-    const broker = read('src/platform/agent/runtime/toolBroker.ts')
+    const broker = read('src/platform/agent/runtime/toolBrokerLegacy.ts')
     const fallback = broker.lastIndexOf('Tool handler not implemented: ${toolName}')
     const lastSingleQuotedHandler = broker.lastIndexOf("if (toolName === '")
     const lastDoubleQuotedHandler = broker.lastIndexOf('if (toolName === "')

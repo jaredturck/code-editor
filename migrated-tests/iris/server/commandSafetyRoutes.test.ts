@@ -9,7 +9,7 @@ import { invokeBridgeRoute } from './bridgeRouteTestHarness'
 const temporaryRoots: string[] = []
 
 async function invokeBridge(baseDir: string, url: string, body: Record<string, unknown>) {
-  const response = await invokeBridgeRoute({ baseDir, url, body })
+  const response = await invokeBridgeRoute({ baseDir, url, method: 'POST', body })
   return { status: response.status, json: response.json || {} }
 }
 
