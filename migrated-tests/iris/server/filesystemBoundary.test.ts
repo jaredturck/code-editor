@@ -1,37 +1,10 @@
-/**
- * Verifies that bridge filesystem routes cannot cross their configured working root through
- * traversal or symlinked path segments, while ordinary paths inside the root still work.
- */
+/** Verifies filesystem boundary behavior through the current bridge router. */
 
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { Readable } from 'node:stream'
-
-interface TestRequest extends Readable {
-  url?: string
-  method?: string
-  headers: Record<string, string>
-}
-
-interface TestResponse {
-  statusCode: number
-  setHeader: (name: string, value: string) => void
-  end: (value?: unknown) => void
-}
-
-type TestMiddleware = (req: TestRequest, res: TestResponse, next: () => void) => void | Promise<void>
-
-interface TestPlugin {
-  configureServer: (server: { middlewares: { use: (callback: TestMiddleware) => void } }) => void
-}
-
-interface BridgeInvocation {
-  status: number
-  json: Record<string, any>
-}
 import { afterEach, describe, expect, it } from 'vitest'
-import { desktopBridgePlugin } from '../../server/desktopBridgePlugin'
+import { invokeBridgeRoute } from './bridgeRouteTestHarness'
 import {
   ensureInternalStorageDirectory,
   resolveExistingPathWithinRoots,
@@ -40,37 +13,9 @@ import {
 
 const temporaryRoots: string[] = []
 
-// Creates middleware with the state and dependencies required by the surrounding test scenario.
-function createMiddleware(baseDir: string): TestMiddleware {
-  let middleware: TestMiddleware | null = null
-  const plugin = desktopBridgePlugin({ baseDir }) as unknown as TestPlugin
-  plugin.configureServer({
-    middlewares: {
-      use(callback: TestMiddleware) {
-        middleware = callback
-      },
-    },
-  })
-  if (!middleware) throw new Error('Desktop bridge middleware was not registered')
-  return middleware
-}
-
-// Invokes bridge through the boundary owned by the surrounding test scenario.
-async function invokeBridge(baseDir: string, url: string, body: Record<string, unknown>): Promise<BridgeInvocation> {
-  const req = Readable.from([Buffer.from(JSON.stringify(body))]) as TestRequest
-  req.url = url
-  req.method = 'POST'
-  req.headers = {}
-  let responseBody = ''
-  const res: TestResponse = {
-    statusCode: 200,
-    setHeader() {},
-    end(value = '') {
-      responseBody += String(value)
-    },
-  }
-  await createMiddleware(baseDir)(req, res, () => {})
-  return { status: res.statusCode, json: JSON.parse(responseBody) }
+async function invokeBridge(baseDir: string, url: string, body: Record<string, unknown>) {
+  const response = await invokeBridgeRoute({ baseDir, url, body })
+  return { status: response.status, json: response.json || {} }
 }
 
 afterEach(async () => {
