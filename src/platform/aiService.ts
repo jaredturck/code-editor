@@ -6,7 +6,6 @@
 
 import { proxyAIRequest, proxyAIStream, pullLocalOllamaModel } from '@/platform/desktopBridge'
 import { getKey } from '@/platform/keyStore'
-import { logAI, logError } from '@/platform/logger'
 import { enforceLocalOnlyProvider } from '@/platform/agent/localOnlyPolicy'
 import { consumeCloudRequest, getCloudUsageState, isCloudProvider } from '@/platform/agent/cloudUsagePolicy'
 
@@ -361,16 +360,7 @@ export async function callAIWithMeta(
   const _cloudState = getCloudUsageState(_settings)
   if (isCloudProvider(ai_provider) && _cloudState) {
     if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    const requestNumber = consumeCloudRequest(_cloudState, options.cloudPurpose || 'agent')
-    try {
-      logAI(`cloud budget ${requestNumber}/${_cloudState.max}`, {
-        provider: ai_provider,
-        model: ai_model || '',
-        purpose: options.cloudPurpose || 'agent',
-      })
-    } catch {
-      /* non-fatal */
-    }
+    consumeCloudRequest(_cloudState, options.cloudPurpose || 'agent')
   }
 
   // An optional AbortSignal (e.g. the chat Stop button) is woven into every
@@ -401,19 +391,6 @@ export async function callAIWithMeta(
   // takes settings as its own parameter.
   _options = { ..._options, settings: _settings }
 
-  // Passive activity logging — record every AI API request + its outcome into the
-  // session log without altering routing, timing, or the returned promise.
-  const _startedAt = Date.now()
-  try {
-    logAI(`request → ${ai_provider}/${ai_model || ''}`, {
-      messages: Array.isArray(messages) ? messages.length : 0,
-      tools: Array.isArray(_options.tools) ? _options.tools.length : 0,
-      streaming: Boolean(_options.onToken || _options.onThinkingToken),
-    })
-  } catch {
-    /* non-fatal */
-  }
-
   // Registry handlers are deliberately thin: provider-specific request,
   // streaming, and response logic remains in each existing adapter file.
   const _registration = getAIProvider(ai_provider)
@@ -433,49 +410,11 @@ export async function callAIWithMeta(
     _dispatch = _dispatch.catch(async (error) => {
       if (!_isMissingLocalModelError(error)) throw error
       if (_signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-      try {
-        logAI(`pulling configured local model → ${_model}`)
-      } catch {
-        /* non-fatal */
-      }
       await _pullConfiguredLocalModel(_settings, _model)
       if (_signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       return _invoke()
     })
   }
-
-  _dispatch.then(
-    (meta) => {
-      try {
-        logAI(`response ← ${ai_provider}/${ai_model || ''}`, {
-          ms: Date.now() - _startedAt,
-          toolCalls: Array.isArray(meta?.toolCalls) ? meta.toolCalls.length : 0,
-          stopReason: meta?.stopReason || '',
-          promptTokens: meta?.usage?.promptTokens,
-          completionTokens: meta?.usage?.completionTokens,
-          totalMs: meta?.timings?.totalMs,
-          loadMs: meta?.timings?.loadMs,
-          promptEvalMs: meta?.timings?.promptEvalMs,
-          firstThinkingMs: meta?.timings?.firstThinkingMs,
-          firstAnswerMs: meta?.timings?.firstAnswerMs,
-          thinkingStreamMs: meta?.timings?.thinkingStreamMs,
-          answerStreamMs: meta?.timings?.answerStreamMs,
-        })
-      } catch {
-        /* non-fatal */
-      }
-    },
-    (err: unknown) => {
-      try {
-        logError('ai', `error ${ai_provider}/${ai_model || ''}`, {
-          ms: Date.now() - _startedAt,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      } catch {
-        /* non-fatal */
-      }
-    },
-  )
 
   return _dispatch
 }

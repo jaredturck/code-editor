@@ -12,7 +12,6 @@ vi.mock('@/platform/desktopBridge', () => ({
 }))
 
 vi.mock('@/platform/keyStore', () => ({ getKey: vi.fn(() => '') }))
-vi.mock('@/platform/logger', () => ({ logAI: vi.fn(), logError: vi.fn() }))
 vi.mock('@/platform/agent/localOnlyPolicy', () => ({
   enforceLocalOnlyProvider: (settings: unknown) => settings,
 }))
