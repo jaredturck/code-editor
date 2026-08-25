@@ -21,7 +21,6 @@ describe('autonomous-run security policy integration', () => {
     expect(DEFAULT_IRIS_SETTINGS.agent_web_site_guard).toBe(true)
     expect(DEFAULT_IRIS_SETTINGS.agent_package_install_guard).toBe(true)
     expect(DEFAULT_IRIS_SETTINGS.agent_package_require_venv).toBe(true)
-    expect(DEFAULT_IRIS_SETTINGS.vision_auto_execute).toBe(false)
   })
 
   it('advertises workspace capabilities without treating tool exposure as authority', () => {

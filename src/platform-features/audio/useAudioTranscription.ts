@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useOrbSettings } from '@/platform-context/AgentSettingsContext'
+import { useAgentSettings } from '@/platform-context/AgentSettingsContext'
 import {
   getAudioTranscriptionStatus,
   installAudioTranscriptionModel,
@@ -49,7 +49,7 @@ function isMicrophonePermissionError(error: unknown): boolean {
 }
 
 export function useAudioTranscription<T>({ activeTarget, onTranscript }: UseAudioTranscriptionOptions<T>) {
-  const { settings, updateSettings, grantPermissions } = useOrbSettings()
+  const { settings, updateSettings, grantPermissions } = useAgentSettings()
   const binding = useMemo(() => resolveAudioTranscriptionBinding(settings), [settings])
   const [phase, setPhase] = useState<AudioTranscriptionPhase>('idle')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)

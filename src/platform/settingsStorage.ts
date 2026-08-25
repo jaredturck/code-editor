@@ -55,10 +55,6 @@ export const DEFAULT_IRIS_SETTINGS = {
   // retained for compatibility with older settings objects, but normalization always
   // forces it on and the settings UI does not offer an insecure in-memory mode.
   chat_persistence_enabled: true,
-  // Auto-generate a one-sentence AI title per chat from its first exchange.
-  chat_auto_title: true,
-  // Max chats retained on disk before the oldest are pruned (future use).
-  chat_max_retained: 200,
   // Stateful conversational agent loop (the real multi-turn loop: persistent
   // messages[], the model sees its own tool_use turns + full tool_result outputs,
   // reasons across steps, recovers from truncation/errors, streams thinking live).
@@ -136,10 +132,6 @@ export const DEFAULT_IRIS_SETTINGS = {
   // gives an up-front complexity read. With this ON it ALSO runs in the background during a
   // session (event-driven — on drift) to keep steering the active agent.
   agent_overwatch_continuous: false,
-  // Developer mode: when ON the timeline also shows the machinery — the Overwatcher supervisor's
-  // thinking and any steer text injected into a model's prompt. OFF (default) hides them so the
-  // timeline shows only the agent's own work.
-  agent_dev_mode: false,
   // Planning mode (toggled by /plan): forces every task to be planned first. The configured
   // loaded agents co-plan the task, the plan awaits the user's approval, then it executes. Replaces
   // the old teamwork mode. Persists until /plan turns it off.
@@ -163,8 +155,6 @@ export const DEFAULT_IRIS_SETTINGS = {
   audio_key_id: '1',
   audio_local_fallback: true,
   audio_cloud_notice_ack: false,
-  // Notes — maximum characters per agent-written note before truncation
-  max_note_chars: 600,
   // Extended thinking — Anthropic claude-3-5+ only
   extended_thinking: false,
   thinking_budget_tokens: 8000,
@@ -207,11 +197,6 @@ export const DEFAULT_IRIS_SETTINGS = {
   search_web_serper_api_key: '',
   search_web_serpapi_api_key: '',
   search_web_brave_api_key: '',
-  orb_size: 'medium',
-  appearance_theme: 'dark',
-  appearance_accent: 'auto',
-  orb_texture: 'desert',
-  hotkey: 'ctrl+space',
   connection_status: 'untested',
   permissions_file_read: false,
   permissions_file_write: false,
@@ -220,7 +205,6 @@ export const DEFAULT_IRIS_SETTINGS = {
   permissions_mouse_control: false,
   permissions_microphone: false,
   _permission_consent_v1: true,
-  vision_auto_execute: false,
   // Agent filesystem root. Empty = the user's home (~). Set via the /dir chat
   // command to scope agent file/terminal operations to a working directory.
   agent_working_dir: '',
@@ -333,6 +317,19 @@ const LEGACY_AGENT_SETTING_KEYS = new Set([
   'agent_role_tags_disabled',
 ])
 
+const RETIRED_SETTING_KEYS = new Set([
+  'chat_auto_title',
+  'chat_max_retained',
+  'agent_dev_mode',
+  'max_note_chars',
+  'orb_size',
+  'appearance_theme',
+  'appearance_accent',
+  'orb_texture',
+  'hotkey',
+  'vision_auto_execute',
+])
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
@@ -420,7 +417,7 @@ function normalizeSettings(settings: PartialOrbSettings): OrbSettings {
 
   // Preserve forward-compatible extra keys, while deliberately dropping retired role fields.
   for (const key of Object.keys(settings)) {
-    if (!LEGACY_AGENT_SETTING_KEYS.has(key) && !(key in normalized) && settings[key] !== undefined) {
+    if (!LEGACY_AGENT_SETTING_KEYS.has(key) && !RETIRED_SETTING_KEYS.has(key) && !(key in normalized) && settings[key] !== undefined) {
       normalized[key] = settings[key]
     }
   }
@@ -501,6 +498,7 @@ export function readOrbSettings(): OrbSettings {
 }
 
 // ── Immediate-apply broadcast ──────────────────────────────────────────────────
+
 // Module-level subscribers notified the instant settings are written, so live runtime state
 // (e.g. the sub-agent standby loops) can re-resolve provider/model/key/tier WITHOUT an app
 // restart. The React settings context already re-renders consumers; this covers the
