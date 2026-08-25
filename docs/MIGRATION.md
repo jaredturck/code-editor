@@ -42,15 +42,15 @@ The migration followed a **copy-before-rewrite** philosophy. Working IRIS implem
 
 The major migrated implementation areas are:
 
-| Current area | Role |
-| --- | --- |
-| `src/platform/` | Renderer-side agent runtime, providers, model policy, orchestration, skills, persistence clients, RAG and compatibility services |
-| `src/platform-features/` | Reusable non-shell feature controllers/hooks extracted from IRIS presentation areas |
-| `backend/` | Privileged local bridge/backend: encrypted persistence, filesystem/semantic services, web, agents, launcher, automation, audio, screen services and security boundaries |
-| `electron/platform/` | Trusted Electron infrastructure: local bridge bootstrap, credential/storage-key handling, security, screen permissions, logging and hidden browser search support |
-| `migrated-tests/iris/` | Preserved and adapted IRIS runtime/backend tests |
-| `benchmarks/iris/` | Preserved IRIS benchmark harness |
-| `docs/iris-reference/` | Historical documentation copied from the source IRIS project |
+| Current area             | Role                                                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/platform/`          | Renderer-side agent runtime, providers, model policy, orchestration, skills, persistence clients, RAG and compatibility services                                        |
+| `src/platform-features/` | Reusable non-shell feature controllers/hooks extracted from IRIS presentation areas                                                                                     |
+| `backend/`               | Privileged local bridge/backend: encrypted persistence, filesystem/semantic services, web, agents, launcher, automation, audio, screen services and security boundaries |
+| `electron/platform/`     | Trusted Electron infrastructure: local bridge bootstrap, credential/storage-key handling, security, screen permissions, logging and hidden browser search support       |
+| `migrated-tests/iris/`   | Preserved and adapted IRIS runtime/backend tests                                                                                                                        |
+| `benchmarks/iris/`       | Preserved IRIS benchmark harness                                                                                                                                        |
+| `docs/iris-reference/`   | Historical documentation copied from the source IRIS project                                                                                                            |
 
 The initial exact migration ledger recorded **376 explicit source-to-destination mappings**. **320 source IRIS files were not copied as implementation source**, primarily because they were presentation-only UI, generated output, or configuration replaced by Code Editor equivalents.
 
@@ -1003,18 +1003,18 @@ because they may depend on configured local model/runtime state and retained ben
 
 At the time this migration documentation was consolidated, the latest recorded installed-project verification snapshot showed:
 
-| Check | Result |
-| --- | --- |
-| Formatting | Passed |
-| Lint | Passed with **161 warnings / 0 errors** |
-| TypeScript typecheck | Passed |
-| Backend build | Passed |
-| Electron build | Passed |
-| Code Editor Vitest phase | **156 passed / 2 failed** |
-| Editor/agent collision tests | **2 passed** |
-| Electron runtime smoke | Passed |
-| Production Vite build | Passed |
-| Migrated IRIS Vitest phase | Not reached in that chained run because the preceding Vitest phase failed |
+| Check                        | Result                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| Formatting                   | Passed                                                                    |
+| Lint                         | Passed with **161 warnings / 0 errors**                                   |
+| TypeScript typecheck         | Passed                                                                    |
+| Backend build                | Passed                                                                    |
+| Electron build               | Passed                                                                    |
+| Code Editor Vitest phase     | **156 passed / 2 failed**                                                 |
+| Editor/agent collision tests | **2 passed**                                                              |
+| Electron runtime smoke       | Passed                                                                    |
+| Production Vite build        | Passed                                                                    |
+| Migrated IRIS Vitest phase   | Not reached in that chained run because the preceding Vitest phase failed |
 
 The two recorded failing Code Editor tests were:
 

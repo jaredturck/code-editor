@@ -264,25 +264,120 @@
 }
 
 /* Explicit accents override a theme's coordinated default. Auto intentionally has no declarations. */
-.accent-blue { --accent: #6c9eff; --accent-soft: #8db4ff; --accent-rgb: 108, 158, 255; --accent-secondary: #22d3ee; }
-.accent-purple { --accent: #a855f7; --accent-soft: #c084fc; --accent-rgb: 168, 85, 247; --accent-secondary: #6c9eff; }
-.accent-cyan { --accent: #22d3ee; --accent-soft: #67e8f9; --accent-rgb: 34, 211, 238; --accent-secondary: #6c9eff; }
-.accent-green { --accent: #34d399; --accent-soft: #6ee7b7; --accent-rgb: 52, 211, 153; --accent-secondary: #22d3ee; }
-.accent-rose { --accent: #f472b6; --accent-soft: #f9a8d4; --accent-rgb: 244, 114, 182; --accent-secondary: #a855f7; }
-.accent-amber { --accent: #f59e0b; --accent-soft: #fbbf24; --accent-rgb: 245, 158, 11; --accent-secondary: #fb7185; }
-.accent-clay { --accent: #c96442; --accent-soft: #d98368; --accent-rgb: 201, 100, 66; --accent-secondary: #d9a066; }
-.accent-red { --accent: #ef4444; --accent-soft: #f87171; --accent-rgb: 239, 68, 68; --accent-secondary: #fb923c; }
-.accent-orange { --accent: #fb923c; --accent-soft: #fdba74; --accent-rgb: 251, 146, 60; --accent-secondary: #f59e0b; }
-.accent-yellow { --accent: #facc15; --accent-soft: #fde047; --accent-rgb: 250, 204, 21; --accent-secondary: #fb923c; }
-.accent-lime { --accent: #a6e22e; --accent-soft: #c6f25e; --accent-rgb: 166, 226, 46; --accent-secondary: #34d399; }
-.accent-emerald { --accent: #10b981; --accent-soft: #34d399; --accent-rgb: 16, 185, 129; --accent-secondary: #22d3ee; }
-.accent-teal { --accent: #2dd4bf; --accent-soft: #5eead4; --accent-rgb: 45, 212, 191; --accent-secondary: #22d3ee; }
-.accent-sky { --accent: #38bdf8; --accent-soft: #7dd3fc; --accent-rgb: 56, 189, 248; --accent-secondary: #6c9eff; }
-.accent-indigo { --accent: #6366f1; --accent-soft: #818cf8; --accent-rgb: 99, 102, 241; --accent-secondary: #a855f7; }
-.accent-violet { --accent: #8b5cf6; --accent-soft: #a78bfa; --accent-rgb: 139, 92, 246; --accent-secondary: #6c9eff; }
-.accent-fuchsia { --accent: #d946ef; --accent-soft: #e879f9; --accent-rgb: 217, 70, 239; --accent-secondary: #f472b6; }
-.accent-magenta { --accent: #ec4899; --accent-soft: #f472b6; --accent-rgb: 236, 72, 153; --accent-secondary: #a855f7; }
-.accent-slate { --accent: #94a3b8; --accent-soft: #cbd5e1; --accent-rgb: 148, 163, 184; --accent-secondary: #64748b; }
+.accent-blue {
+  --accent: #6c9eff;
+  --accent-soft: #8db4ff;
+  --accent-rgb: 108, 158, 255;
+  --accent-secondary: #22d3ee;
+}
+.accent-purple {
+  --accent: #a855f7;
+  --accent-soft: #c084fc;
+  --accent-rgb: 168, 85, 247;
+  --accent-secondary: #6c9eff;
+}
+.accent-cyan {
+  --accent: #22d3ee;
+  --accent-soft: #67e8f9;
+  --accent-rgb: 34, 211, 238;
+  --accent-secondary: #6c9eff;
+}
+.accent-green {
+  --accent: #34d399;
+  --accent-soft: #6ee7b7;
+  --accent-rgb: 52, 211, 153;
+  --accent-secondary: #22d3ee;
+}
+.accent-rose {
+  --accent: #f472b6;
+  --accent-soft: #f9a8d4;
+  --accent-rgb: 244, 114, 182;
+  --accent-secondary: #a855f7;
+}
+.accent-amber {
+  --accent: #f59e0b;
+  --accent-soft: #fbbf24;
+  --accent-rgb: 245, 158, 11;
+  --accent-secondary: #fb7185;
+}
+.accent-clay {
+  --accent: #c96442;
+  --accent-soft: #d98368;
+  --accent-rgb: 201, 100, 66;
+  --accent-secondary: #d9a066;
+}
+.accent-red {
+  --accent: #ef4444;
+  --accent-soft: #f87171;
+  --accent-rgb: 239, 68, 68;
+  --accent-secondary: #fb923c;
+}
+.accent-orange {
+  --accent: #fb923c;
+  --accent-soft: #fdba74;
+  --accent-rgb: 251, 146, 60;
+  --accent-secondary: #f59e0b;
+}
+.accent-yellow {
+  --accent: #facc15;
+  --accent-soft: #fde047;
+  --accent-rgb: 250, 204, 21;
+  --accent-secondary: #fb923c;
+}
+.accent-lime {
+  --accent: #a6e22e;
+  --accent-soft: #c6f25e;
+  --accent-rgb: 166, 226, 46;
+  --accent-secondary: #34d399;
+}
+.accent-emerald {
+  --accent: #10b981;
+  --accent-soft: #34d399;
+  --accent-rgb: 16, 185, 129;
+  --accent-secondary: #22d3ee;
+}
+.accent-teal {
+  --accent: #2dd4bf;
+  --accent-soft: #5eead4;
+  --accent-rgb: 45, 212, 191;
+  --accent-secondary: #22d3ee;
+}
+.accent-sky {
+  --accent: #38bdf8;
+  --accent-soft: #7dd3fc;
+  --accent-rgb: 56, 189, 248;
+  --accent-secondary: #6c9eff;
+}
+.accent-indigo {
+  --accent: #6366f1;
+  --accent-soft: #818cf8;
+  --accent-rgb: 99, 102, 241;
+  --accent-secondary: #a855f7;
+}
+.accent-violet {
+  --accent: #8b5cf6;
+  --accent-soft: #a78bfa;
+  --accent-rgb: 139, 92, 246;
+  --accent-secondary: #6c9eff;
+}
+.accent-fuchsia {
+  --accent: #d946ef;
+  --accent-soft: #e879f9;
+  --accent-rgb: 217, 70, 239;
+  --accent-secondary: #f472b6;
+}
+.accent-magenta {
+  --accent: #ec4899;
+  --accent-soft: #f472b6;
+  --accent-rgb: 236, 72, 153;
+  --accent-secondary: #a855f7;
+}
+.accent-slate {
+  --accent: #94a3b8;
+  --accent-soft: #cbd5e1;
+  --accent-rgb: 148, 163, 184;
+  --accent-secondary: #64748b;
+}
 
 [class*='accent-']:not(.accent-auto) {
   --selected: color-mix(in srgb, var(--accent) 17%, var(--surface-2));

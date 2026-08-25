@@ -959,14 +959,14 @@ function SettingsModal({ settings, onChange, onClose }: SettingsModalProps) {
                 diagnostics: {
                   ...settings.diagnostics,
                   delay: Number(event.target.value),
-                  },
+                },
               })
             }
             step={250}
             type="number"
             value={settings.diagnostics.delay}
           />,
-      )}
+        )}
       </Section>
       <Section title="Display">
         {row(

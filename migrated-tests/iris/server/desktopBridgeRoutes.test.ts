@@ -5,7 +5,10 @@ import path from 'node:path'
 import os from 'node:os'
 import { randomBytes } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { closeEncryptedDatabase, initializeEncryptedDatabase } from '../../server/desktopBridge/storage/encryptedDatabase'
+import {
+  closeEncryptedDatabase,
+  initializeEncryptedDatabase,
+} from '../../server/desktopBridge/storage/encryptedDatabase'
 import { invokeBridgeRoute } from './bridgeRouteTestHarness'
 
 const fixtureRoot = path.resolve('tests/fixtures/workspace')

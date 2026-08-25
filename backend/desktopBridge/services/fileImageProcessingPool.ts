@@ -19,9 +19,7 @@ interface PendingJob {
   timer?: NodeJS.Timeout
 }
 
-type ImageProcessor =
-  | { kind: 'thread'; process: Worker }
-  | { kind: 'child'; process: ChildProcess }
+type ImageProcessor = { kind: 'thread'; process: Worker } | { kind: 'child'; process: ChildProcess }
 
 interface WorkerSlot {
   processor: ImageProcessor

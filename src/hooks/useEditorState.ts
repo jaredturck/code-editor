@@ -621,7 +621,9 @@ function useEditorState() {
 
   const close_documents = (document_ids: number[]) => {
     const current_ids = new Set(documents_ref.current.map((document) => document.id))
-    const next_queue = document_ids.filter((document_id, index) => current_ids.has(document_id) && document_ids.indexOf(document_id) === index)
+    const next_queue = document_ids.filter(
+      (document_id, index) => current_ids.has(document_id) && document_ids.indexOf(document_id) === index,
+    )
 
     if (next_queue.length === 0) {
       return

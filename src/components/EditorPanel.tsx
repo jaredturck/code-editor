@@ -325,14 +325,18 @@ function EditorPanel({
         <EditorTabContextMenu
           canCloseOthers={documents.length > 1}
           canCloseSaved={documents.some(document_is_saved)}
-          canCloseToRight={documents.findIndex((document) => document.id === context_document.id) < documents.length - 1}
+          canCloseToRight={
+            documents.findIndex((document) => document.id === context_document.id) < documents.length - 1
+          }
           canCopyPath={Boolean(context_document_path)}
           canCopyRelativePath={context_path_in_workspace}
           onClose={close_tab_menu}
           onCloseAll={() => run_tab_menu_action(() => onCloseDocuments(documents.map((document) => document.id)))}
           onCloseOthers={() =>
             run_tab_menu_action(() =>
-              onCloseDocuments(documents.filter((document) => document.id !== context_document.id).map((document) => document.id)),
+              onCloseDocuments(
+                documents.filter((document) => document.id !== context_document.id).map((document) => document.id),
+              ),
             )
           }
           onCloseSaved={() =>

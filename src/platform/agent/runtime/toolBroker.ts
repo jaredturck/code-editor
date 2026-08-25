@@ -181,11 +181,7 @@ function isWorkspaceAutonomousCommandChain(command: unknown, workspaceRoot: stri
   return true
 }
 
-async function requestWorkspaceEscapeApproval(
-  options: LegacyBrokerOptions,
-  toolName: string,
-  description: string,
-) {
+async function requestWorkspaceEscapeApproval(options: LegacyBrokerOptions, toolName: string, description: string) {
   if (typeof options?.onApprovalRequest !== 'function') return false
   const response = await options.onApprovalRequest({
     requestType: 'approval',

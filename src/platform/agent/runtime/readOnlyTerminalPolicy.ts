@@ -173,7 +173,8 @@ function safeProjectCommand(name: string, words: string[]) {
   if (name === 'npx') return safeNpx(words)
   if (safePython(name, words)) return true
   if (name === 'uv') return ['run', 'sync', 'add', 'remove', 'lock', 'venv'].includes(String(words[1] || ''))
-  if (name === 'cargo') return ['build', 'check', 'test', 'run', 'fmt', 'clippy', 'add', 'remove'].includes(String(words[1] || ''))
+  if (name === 'cargo')
+    return ['build', 'check', 'test', 'run', 'fmt', 'clippy', 'add', 'remove'].includes(String(words[1] || ''))
   if (name === 'go') return ['build', 'test', 'run', 'fmt', 'vet', 'get', 'mod'].includes(String(words[1] || ''))
   if (name === 'node') {
     return !words.some((word) => ['-e', '--eval', '-p', '--print'].includes(word)) && words.length >= 2

@@ -10,16 +10,8 @@
 import { markUntrustedExternalContent, UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
 import { callAIWithMeta } from '@/platform/aiService'
 import { scoreSession, recordReward, recordToolHeatmap } from '@/platform/skillRewards'
-import {
-  listSkillDefinitions,
-  chatsReadMemory,
-  pullLocalOllamaModel,
-} from '@/platform/desktopBridge'
-import {
-  recallRelevantNotes,
-  recordUserPreferenceNote,
-  clearSessionScopedNotes,
-} from '@/platform/notesStorage'
+import { listSkillDefinitions, chatsReadMemory, pullLocalOllamaModel } from '@/platform/desktopBridge'
+import { recallRelevantNotes, recordUserPreferenceNote, clearSessionScopedNotes } from '@/platform/notesStorage'
 import { inferModelFamily } from '@/platform/skillProfiles'
 import { supportsNativeTools } from '@/platform/modelProfiles'
 import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
@@ -33,27 +25,15 @@ import {
 } from '@/platform/agent/controllerDecision'
 import { createUsageTracker, trackUsageSample, buildUsageSummary } from '@/platform/agent/usageMetrics'
 import { writeOrbSettings } from '@/platform/settingsStorage'
-import {
-  syncStandbyPool,
-  detectOrchestrationMode,
-  subscribeSubAgentEvents,
-} from '@/platform/orchestrationClient'
+import { syncStandbyPool, detectOrchestrationMode, subscribeSubAgentEvents } from '@/platform/orchestrationClient'
 import {
   applyAgentIdentityToSettings,
   getAgentRoleBinding,
   resolveAgentRoleSettings,
 } from '@/platform/agent/agentIdentity'
-import {
-  extractJsonObject,
-  toPreview,
-} from '@/platform/agent/agentJsonUtils'
-import {
-  checkReflexSkills,
-  loadSkillContext,
-} from '@/platform/agent/agentSkillEngine'
-import {
-  TOOL_BY_NAME,
-} from '@/platform/agent/toolCatalog'
+import { extractJsonObject, toPreview } from '@/platform/agent/agentJsonUtils'
+import { checkReflexSkills, loadSkillContext } from '@/platform/agent/agentSkillEngine'
+import { TOOL_BY_NAME } from '@/platform/agent/toolCatalog'
 
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
 import { createModuleBroker } from '@/platform/agent/runtime/toolBroker'

@@ -444,7 +444,9 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
       return false
     }
 
-    const delete_paths = get_workspace_top_level_paths(target_paths).filter((target_path) => target_path !== current_root_path)
+    const delete_paths = get_workspace_top_level_paths(target_paths).filter(
+      (target_path) => target_path !== current_root_path,
+    )
 
     if (delete_paths.length === 0) {
       return false

@@ -93,7 +93,6 @@ describe('EditorPanel tabs', () => {
     expect(on_close_documents).toHaveBeenCalledWith([1, 3])
   })
 
-
   it('closes tabs to the right of the context tab', () => {
     const on_close_documents = vi.fn()
     render_editor({ onCloseDocuments: on_close_documents })

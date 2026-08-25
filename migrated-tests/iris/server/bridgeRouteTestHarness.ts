@@ -52,14 +52,9 @@ export async function invokeBridgeRoute({
 
   let handled = false
   try {
-    handled = await handleBridgeRequest(
-      request as IncomingMessage,
-      response as unknown as ServerResponse,
-      baseDir,
-      {
-        permissions: { ...DEVELOPMENT_BRIDGE_PERMISSIONS, ...permissions },
-      },
-    )
+    handled = await handleBridgeRequest(request as IncomingMessage, response as unknown as ServerResponse, baseDir, {
+      permissions: { ...DEVELOPMENT_BRIDGE_PERMISSIONS, ...permissions },
+    })
   } catch (error) {
     const candidate = error as { statusCode?: unknown; message?: unknown }
     response.statusCode = Number.isInteger(candidate.statusCode) ? Number(candidate.statusCode) : 500

@@ -120,17 +120,7 @@ function ActivityDetail({ detail, tool }: { detail: string; tool: string }) {
   const content = string_value(fields.content)
   const is_terminal = tool.includes('terminal') || Boolean(command)
   const is_edit = Boolean(old_text || new_text) || /edit|write|patch/.test(tool)
-  const excluded = [
-    'command',
-    'path',
-    'file_path',
-    'filePath',
-    'oldText',
-    'old_text',
-    'newText',
-    'new_text',
-    'content',
-  ]
+  const excluded = ['command', 'path', 'file_path', 'filePath', 'oldText', 'old_text', 'newText', 'new_text', 'content']
 
   return (
     <div className="min-w-0 select-text">

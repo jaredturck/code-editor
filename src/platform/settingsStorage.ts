@@ -417,7 +417,12 @@ function normalizeSettings(settings: PartialOrbSettings): OrbSettings {
 
   // Preserve forward-compatible extra keys, while deliberately dropping retired role fields.
   for (const key of Object.keys(settings)) {
-    if (!LEGACY_AGENT_SETTING_KEYS.has(key) && !RETIRED_SETTING_KEYS.has(key) && !(key in normalized) && settings[key] !== undefined) {
+    if (
+      !LEGACY_AGENT_SETTING_KEYS.has(key) &&
+      !RETIRED_SETTING_KEYS.has(key) &&
+      !(key in normalized) &&
+      settings[key] !== undefined
+    ) {
       normalized[key] = settings[key]
     }
   }

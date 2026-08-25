@@ -297,9 +297,9 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function CodeEd
   const active_document_ref = useRef(activeDocument)
   const initial_document_ref = useRef(activeDocument)
   const create_editor_state_ref = useRef<((document: TextEditorDocument) => EditorState) | null>(null)
-  const schedule_parser_diagnostics_ref = useRef<
-    ((view: EditorView, document: TextEditorDocument) => void) | null
-  >(null)
+  const schedule_parser_diagnostics_ref = useRef<((view: EditorView, document: TextEditorDocument) => void) | null>(
+    null,
+  )
   const apply_diagnostics_ref = useRef<
     ((view: EditorView, document_id: number, editor_diagnostics: EditorDiagnostic[]) => void) | null
   >(null)

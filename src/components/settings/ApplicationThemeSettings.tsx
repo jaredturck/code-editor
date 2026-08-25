@@ -27,9 +27,7 @@ function ApplicationThemeSettings({ settings, onChange }: ApplicationThemeSettin
                 <button
                   aria-pressed={active}
                   className={`min-w-0 rounded-xl border p-2 text-left transition hover:bg-[var(--hover)] ${
-                    active
-                      ? 'border-[var(--accent)] bg-[var(--selected)]'
-                      : 'border-[var(--border)] bg-black/[0.025]'
+                    active ? 'border-[var(--accent)] bg-[var(--selected)]' : 'border-[var(--border)] bg-black/[0.025]'
                   }`}
                   key={option.id}
                   onClick={() => select_theme(option.id)}

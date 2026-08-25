@@ -322,7 +322,9 @@ function ExplorerPanel({
     const selectable_nodes = visible_nodes.filter((visible_node) => visible_node.path !== rootPath)
 
     if (event.shiftKey && selection_anchor_ref.current) {
-      const anchor_index = selectable_nodes.findIndex((visible_node) => visible_node.path === selection_anchor_ref.current)
+      const anchor_index = selectable_nodes.findIndex(
+        (visible_node) => visible_node.path === selection_anchor_ref.current,
+      )
       const target_index = selectable_nodes.findIndex((visible_node) => visible_node.path === node.path)
 
       if (anchor_index >= 0 && target_index >= 0) {
@@ -355,7 +357,8 @@ function ExplorerPanel({
       return
     }
 
-    const use_current_selection = selectedPaths.size > 0 && (selectedPaths.has(target_path) || target_path === selectedPath)
+    const use_current_selection =
+      selectedPaths.size > 0 && (selectedPaths.has(target_path) || target_path === selectedPath)
     const target_paths = use_current_selection ? [...selectedPaths] : [target_path]
     const deletable_paths = target_paths.filter((path) => path !== rootPath)
 
