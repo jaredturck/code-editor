@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Client-side SKILL.md (de)serialization — a faithful port of the bridge's canonical
  * serializeSkillToMarkdown / parseSkillMarkdown (server/desktopBridge/services/
@@ -12,7 +11,18 @@
  * edit → save → reload round-trip is lossless.
  */
 
-export function stripYamlScalar(value) {
+type SkillMarkdownRecord = Record<string, unknown>
+
+export interface ParsedSkillMarkdown extends SkillMarkdownRecord {
+  id: unknown
+  title: unknown
+  instructions: string
+  summary?: unknown
+  enabled?: boolean
+  guard?: boolean
+}
+
+export function stripYamlScalar(value: unknown): string {
   let v = String(value || '').trim()
   if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
     v = v.slice(1, -1)
@@ -32,7 +42,7 @@ const COMPLEX_KEYS = new Set([
 ])
 
 // Parses a SKILL.md string into the structured skill shape the upsert route accepts.
-export function parseSkillMarkdown(content, fallbackId = 'skill') {
+export function parseSkillMarkdown(content: unknown, fallbackId = 'skill'): ParsedSkillMarkdown {
   const text = String(content || '').replace(/^﻿/, '')
   const match = text.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
 
@@ -41,16 +51,17 @@ export function parseSkillMarkdown(content, fallbackId = 'skill') {
   }
 
   const [, fmBlock, body] = match
-  const meta = {}
-  let currentListKey = null
+  const meta: SkillMarkdownRecord = {}
+  let currentListKey: string | null = null
 
   for (const line of fmBlock.split('\n')) {
     if (!line.trim() || /^\s*#/.test(line)) continue
 
     const listItem = line.match(/^\s*-\s+(.*)$/)
     if (listItem && currentListKey) {
-      if (!Array.isArray(meta[currentListKey])) meta[currentListKey] = []
-      meta[currentListKey].push(stripYamlScalar(listItem[1]))
+      const current = meta[currentListKey]
+      if (!Array.isArray(current)) meta[currentListKey] = []
+      ;(meta[currentListKey] as unknown[]).push(stripYamlScalar(listItem[1]))
       continue
     }
 
@@ -70,7 +81,7 @@ export function parseSkillMarkdown(content, fallbackId = 'skill') {
       (rawValue.startsWith('[') && rawValue.endsWith(']')) || (rawValue.startsWith('{') && rawValue.endsWith('}'))
     if (COMPLEX_KEYS.has(key.toLowerCase()) && looksJson) {
       try {
-        meta[key] = JSON.parse(rawValue)
+        meta[key] = JSON.parse(rawValue) as unknown
         currentListKey = null
         continue
       } catch {
@@ -82,7 +93,7 @@ export function parseSkillMarkdown(content, fallbackId = 'skill') {
     if (inlineList) {
       meta[key] = inlineList[1]
         .split(',')
-        .map((s) => stripYamlScalar(s))
+        .map((value) => stripYamlScalar(value))
         .filter(Boolean)
     } else {
       meta[key] = stripYamlScalar(rawValue)
@@ -113,17 +124,20 @@ export function parseSkillMarkdown(content, fallbackId = 'skill') {
 }
 
 // Serializes a structured skill into the canonical SKILL.md string for editing.
-export function serializeSkillToMarkdown(skill) {
-  const s = skill && typeof skill === 'object' ? skill : {}
-  const fm = []
-  const scalar = (k, v) => {
-    if (v !== undefined && v !== null && v !== '') fm.push(`${k}: ${String(v)}`)
+export function serializeSkillToMarkdown(skill: unknown): string {
+  const s: SkillMarkdownRecord =
+    skill && typeof skill === 'object' && !Array.isArray(skill) ? (skill as SkillMarkdownRecord) : {}
+  const fm: string[] = []
+  const scalar = (key: string, value: unknown): void => {
+    if (value !== undefined && value !== null && value !== '') fm.push(`${key}: ${String(value)}`)
   }
-  const jsonArr = (k, v) => {
-    if (Array.isArray(v) && v.length) fm.push(`${k}: ${JSON.stringify(v)}`)
+  const jsonArr = (key: string, value: unknown): void => {
+    if (Array.isArray(value) && value.length) fm.push(`${key}: ${JSON.stringify(value)}`)
   }
-  const jsonObj = (k, v) => {
-    if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length) fm.push(`${k}: ${JSON.stringify(v)}`)
+  const jsonObj = (key: string, value: unknown): void => {
+    if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length) {
+      fm.push(`${key}: ${JSON.stringify(value)}`)
+    }
   }
 
   scalar('name', s.id)
@@ -155,7 +169,7 @@ export function serializeSkillToMarkdown(skill) {
 // Pitfalls. The `orbit-skill-authoring` built-in skill documents the standard in full. Keep it
 // terse — the `description` (a single WHEN sentence) is the discovery card the model matches the
 // task against before it loads the body, so that line carries the most weight.
-export function blankSkillMarkdown(id = 'new-skill') {
+export function blankSkillMarkdown(id = 'new-skill'): string {
   return serializeSkillToMarkdown({
     id,
     title: 'New Skill',
