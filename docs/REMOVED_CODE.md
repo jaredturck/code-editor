@@ -131,11 +131,14 @@ Old persisted objects still load safely; retired keys are simply dropped during 
 
 ---
 
-## 2026-08-25 — Unused root package declarations
+## 2026-08-25 — Unused package dependencies and lockfile synchronization
 
-**Commit:** `4f52037492493866a29aa180ca8c2fc9b47038a2` — `Remove unused package dependencies`
+**Commits:**
 
-Removed unused top-level manifest dependencies:
+- `4f52037492493866a29aa180ca8c2fc9b47038a2` — `Remove unused package dependencies`
+- `4a89ea93c12307a115dfbc1c5ed0819a2ed86747` — `Finish approved cleanup synchronization`
+
+Removed unused top-level dependencies and their generated lockfile entries:
 
 - `codemirror` (the editor uses individual `@codemirror/*` packages);
 - `clsx`;
@@ -143,7 +146,7 @@ Removed unused top-level manifest dependencies:
 - `lucide-react`;
 - `@vitest/coverage-v8`.
 
-The corresponding generated `package-lock.json` pruning is still tracked as a small synchronization item in `CODE_CLEANUP_REVIEW.md`; no claim is made here that the lockfile portion is complete yet.
+The second commit regenerated `package-lock.json` from the cleaned manifest so package metadata is synchronized rather than leaving stale root declarations behind.
 
 ---
 
@@ -170,6 +173,27 @@ These commits remove migrated type-check escape hatches only after the actual lo
 This was deliberately a **focused** reduction, not a mass removal of `@ts-nocheck`. Large runtime files remain untouched until their real type debt can be addressed without destabilizing agent behavior.
 
 Local strict/no-resolve checks found no non-import TypeScript diagnostics in the newly typed policy/helper files; `skillMarkdown.ts` also passed a standalone strict TypeScript check.
+
+---
+
+## 2026-08-25 — Final semantic-index dead declarations
+
+**Commit:** `4a89ea93c12307a115dfbc1c5ed0819a2ed86747` — `Finish approved cleanup synchronization`
+
+Removed the final two confirmed dead declarations from the active semantic-index implementation without changing indexing behavior:
+
+- unused `ExtractedFileText` and its now-unneeded `FileExtractionResult` type import;
+- unused local `relativePath` inside `shouldSkipProtectedPath()`.
+
+The same one-shot verification run regenerated the dependency lockfile and then completed successfully with:
+
+- `npm ci --ignore-scripts`;
+- Prettier verification for the changed source and lockfile;
+- `npm run lint`;
+- `npm run typecheck`;
+- `git diff --check`.
+
+The temporary cleanup workflow deleted itself in the resulting commit, so no maintenance-only automation remains in the repository. A repository-wide Prettier check was not claimed: an earlier attempt exposed unrelated pre-existing formatting drift in other files, so final verification was scoped to the files changed by this cleanup while lint and type checking still ran across their normal configured surfaces.
 
 ---
 
