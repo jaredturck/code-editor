@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Implements the continuity portion of an agent session. It is separated from the session
  * runner so policy, continuity, limits, tools, and finalization can be reasoned about
@@ -12,8 +11,37 @@ import { addNote, pruneNotesByCategory } from '@/platform/notesStorage'
 import * as config from '@/platform/agent/runtime/config'
 const { CONTINUITY_NOTE_CHAR_LIMIT, MAX_CONTINUITY_NOTES } = Object.assign({}, config)
 
+interface StepHistoryEntry {
+  ok?: boolean
+  tool?: unknown
+}
+
+interface ContinuityContext {
+  resumeIntent?: boolean
+  dateKey?: string
+}
+
+interface SkillContext {
+  profile?: unknown
+}
+
+interface ContinuityInput {
+  userInput: unknown
+}
+
+interface ContinuityPersistenceDecisionInput extends ContinuityInput {
+  stepHistory?: StepHistoryEntry[] | null
+  continuityContext?: ContinuityContext | null
+  chatMemoryActive?: boolean
+}
+
+interface PersistContinuityNoteInput extends ContinuityPersistenceDecisionInput {
+  reply: unknown
+  skillContext?: SkillContext | null
+}
+
 // Formats date key for stable display or serialization without changing its underlying meaning.
-export function formatDateKey(timestamp = Date.now()) {
+export function formatDateKey(timestamp = Date.now()): string {
   const date = new Date(timestamp)
   const yyyy = String(date.getFullYear())
   const mm = String(date.getMonth() + 1).padStart(2, '0')
@@ -22,7 +50,7 @@ export function formatDateKey(timestamp = Date.now()) {
 }
 
 // Formats time key for stable display or serialization without changing its underlying meaning.
-export function formatTimeKey(timestamp = Date.now()) {
+export function formatTimeKey(timestamp = Date.now()): string {
   const date = new Date(timestamp)
   const hh = String(date.getHours()).padStart(2, '0')
   const mm = String(date.getMinutes()).padStart(2, '0')
@@ -30,7 +58,7 @@ export function formatTimeKey(timestamp = Date.now()) {
 }
 
 // Normalizes text into one bounded line before it is stored as continuity metadata.
-export function cleanSingleLine(text, maxLength = 200) {
+export function cleanSingleLine(text: unknown, maxLength = 200): string {
   const value = String(text || '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -39,7 +67,7 @@ export function cleanSingleLine(text, maxLength = 200) {
 }
 
 // Evaluates whether is resume intent for the supplied value and current runtime state.
-export function isResumeIntent(text) {
+export function isResumeIntent(text: unknown): boolean {
   const value = String(text || '').toLowerCase()
   if (!value) return false
 
@@ -58,7 +86,7 @@ export function isResumeIntent(text) {
 // today's date key for titling per-task continuity notes. What memory the model
 // actually SEES is decided by relevance-gated recall (recallRelevantNotes), not by
 // a daily-blob injection keyed off prompt length / conversation depth.
-export function getContinuityContext({ userInput }) {
+export function getContinuityContext({ userInput }: ContinuityInput): { resumeIntent: boolean; dateKey: string } {
   return {
     resumeIntent: isResumeIntent(userInput),
     dateKey: formatDateKey(),
@@ -67,7 +95,12 @@ export function getContinuityContext({ userInput }) {
 
 // Evaluates whether should persist continuity note for the supplied value and current runtime
 // state.
-export function shouldPersistContinuityNote({ userInput, stepHistory, continuityContext, chatMemoryActive = false }) {
+export function shouldPersistContinuityNote({
+  userInput,
+  stepHistory,
+  continuityContext,
+  chatMemoryActive = false,
+}: ContinuityPersistenceDecisionInput): boolean {
   // Continuity now lives in the per-chat chat_memory (memory.md) the agent maintains
   // via chat.remember, plus the persisted transcript. So a cross-session continuity
   // NOTE is only worth writing when (a) the user is explicitly resuming earlier work,
@@ -78,12 +111,12 @@ export function shouldPersistContinuityNote({ userInput, stepHistory, continuity
   if (continuityContext?.resumeIntent) return true
   if (chatMemoryActive) return false
   if (!String(userInput || '').trim()) return false
-  const okToolSteps = Array.isArray(stepHistory) ? stepHistory.filter((s) => s?.ok && s.tool).length : 0
+  const okToolSteps = Array.isArray(stepHistory) ? stepHistory.filter((step) => step?.ok && step.tool).length : 0
   return okToolSteps >= 2
 }
 
 // Seed keyword tags for recall from the request text (drops common stopwords).
-export function deriveContinuityTags(text, max = 6) {
+export function deriveContinuityTags(text: unknown, max = 6): string[] {
   const stop = new Set([
     'the',
     'and',
@@ -127,7 +160,7 @@ export function deriveContinuityTags(text, max = 6) {
 
 // Assembles step history label from lower-level state so callers receive one consistent
 // representation.
-export function buildStepHistoryLabel(stepHistory) {
+export function buildStepHistoryLabel(stepHistory: StepHistoryEntry[] | null | undefined): string {
   if (!Array.isArray(stepHistory) || !stepHistory.length) return 'none'
   const tools = stepHistory
     .filter((step) => step?.ok)
@@ -145,7 +178,7 @@ export function persistContinuityNote({
   skillContext,
   continuityContext,
   chatMemoryActive = false,
-}) {
+}: PersistContinuityNoteInput) {
   if (!shouldPersistContinuityNote({ userInput, stepHistory, continuityContext, chatMemoryActive })) {
     return null
   }
