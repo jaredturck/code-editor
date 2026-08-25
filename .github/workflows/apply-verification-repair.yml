@@ -73,20 +73,13 @@ jobs:
               "    const broker = read('src/platform/agent/runtime/toolBroker.ts')\n",
               "    const broker = read('src/platform/agent/runtime/toolBrokerLegacy.ts')\n",
           )
-
-          replace_once(
-              '.github/workflows/verify.yml',
-              "      - name: Verify repository\n        run: npm run verify:full\n",
-              "      - name: Verify repository\n        env:\n          ELECTRON_DISABLE_SANDBOX: '1'\n        run: npm run verify:full\n",
-          )
           PY
 
           npx prettier --write \
             migrated-tests/iris/setup.ts \
             migrated-tests/iris/server/filesystemBoundary.test.ts \
             migrated-tests/iris/server/commandSafetyRoutes.test.ts \
-            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts \
-            .github/workflows/verify.yml
+            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts
 
       - name: Verify repaired failures
         run: |
@@ -110,8 +103,7 @@ jobs:
             migrated-tests/iris/setup.ts \
             migrated-tests/iris/server/filesystemBoundary.test.ts \
             migrated-tests/iris/server/commandSafetyRoutes.test.ts \
-            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts \
-            .github/workflows/verify.yml
+            migrated-tests/iris/lib/toolCatalogBrokerContract.test.ts
           git diff --cached --check
-          git commit -m "Repair migrated verification contracts" -m "Align migrated route tests with POST-only bridge handlers, keep broker contract checks aware of the active legacy dispatcher, and defer shared storage loading so per-test model mocks remain effective. Disable Chromium sandbox only for the hosted Electron native-module smoke test." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
+          git commit -m "Repair migrated verification contracts" -m "Align migrated route tests with POST-only bridge handlers, keep broker contract checks aware of the active legacy dispatcher, and defer shared storage loading so per-test model mocks remain effective." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
           git push origin HEAD:main
