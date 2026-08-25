@@ -1,8 +1,8 @@
-export { OrbSettingsProvider as AgentSettingsProvider } from './orb/SettingsContext'
 export {
-  useOrbSettings as useAgentSettings,
-  useOrbSettings,
-  type OrbSettingsContextValue as AgentSettingsContextValue,
+  useAgentSettings,
+  useAgentSettings as useOrbSettings,
+  type AgentSettings,
+  type AgentSettingsContextValue,
   type SettingsPatch,
   type SettingsUpdater,
-} from './orb/useOrbSettings'
+} from './useAgentSettings'

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildBridgePermissionState,
   buildPersistentPermissionPatch,
@@ -8,19 +8,26 @@ import {
   type OrbSettings,
   type PersistentPermissionKey,
 } from '@/platform/settingsStorage'
-export type SettingsPatch = Partial<OrbSettings>
-export type SettingsUpdater = SettingsPatch | ((previous: OrbSettings) => SettingsPatch)
 
-export interface OrbSettingsContextValue {
-  settings: OrbSettings
+export type AgentSettings = OrbSettings
+export type SettingsPatch = Partial<AgentSettings>
+export type SettingsUpdater = SettingsPatch | ((previous: AgentSettings) => SettingsPatch)
+
+export interface AgentSettingsContextValue {
+  settings: AgentSettings
   updateSettings: (updates: SettingsUpdater) => void
-  grantPermissions: (permissionKeys: PersistentPermissionKey | PersistentPermissionKey[]) => Promise<OrbSettings>
+  grantPermissions: (permissionKeys: PersistentPermissionKey | PersistentPermissionKey[]) => Promise<AgentSettings>
 }
 
-export const OrbSettingsContext = createContext<OrbSettingsContextValue | null>(null)
-
-function useStandaloneOrbSettings(): OrbSettingsContextValue {
-  const [settings, setSettings] = useState<OrbSettings>(readOrbSettings)
+/**
+ * Provides the live agent/platform settings used by Code Editor.
+ *
+ * The old IRIS provider layer was never mounted by Code Editor, so settings are intentionally
+ * sourced from the shared persistent store and its module-level change subscription instead of
+ * a presentation-specific React context.
+ */
+export function useAgentSettings(): AgentSettingsContextValue {
+  const [settings, setSettings] = useState<AgentSettings>(readOrbSettings)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
@@ -30,6 +37,7 @@ function useStandaloneOrbSettings(): OrbSettingsContextValue {
     const previous = settingsRef.current
     const patch = typeof updates === 'function' ? updates(previous) : updates
     if (!patch || typeof patch !== 'object') return
+
     const next = writeOrbSettings({ ...previous, ...patch })
     settingsRef.current = next
     setSettings(next)
@@ -39,11 +47,11 @@ function useStandaloneOrbSettings(): OrbSettingsContextValue {
   }, [])
 
   const grantPermissions = useCallback(
-    async (permissionKeys: PersistentPermissionKey | PersistentPermissionKey[]): Promise<OrbSettings> => {
+    async (permissionKeys: PersistentPermissionKey | PersistentPermissionKey[]): Promise<AgentSettings> => {
       const patch = buildPersistentPermissionPatch(permissionKeys)
       if (!Object.keys(patch).length) return settingsRef.current
 
-      const next = { ...settingsRef.current, ...patch } as OrbSettings
+      const next = { ...settingsRef.current, ...patch } as AgentSettings
       const updateBridgePermissions = window.orbitDesktop?.security?.updateBridgePermissions
       if (!updateBridgePermissions) {
         throw new Error('The trusted desktop permission bridge is unavailable.')
@@ -65,10 +73,4 @@ function useStandaloneOrbSettings(): OrbSettingsContextValue {
   )
 
   return useMemo(() => ({ settings, updateSettings, grantPermissions }), [grantPermissions, settings, updateSettings])
-}
-
-export function useOrbSettings(): OrbSettingsContextValue {
-  const context = useContext(OrbSettingsContext)
-  const standalone = useStandaloneOrbSettings()
-  return context || standalone
 }
