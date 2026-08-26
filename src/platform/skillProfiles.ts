@@ -57,7 +57,13 @@ export function inferModelFamily(modelName: unknown): string {
   if (m.includes('deepseek-r1')) return 'deepseek-r1'
   if (m.includes('deepseek-v4')) return 'deepseek-v4'
   if (m.includes('deepseek')) return 'deepseek'
-  if (m.includes('qwen3.6') || m.includes('qwen3-6') || m.includes('qwen3.5') || m.includes('qwen3-5')) return 'qwen35'
+  if (
+    m.includes('qwen3.6') ||
+    m.includes('qwen3-6') ||
+    m.includes('qwen3.5') ||
+    m.includes('qwen3-5')
+  )
+    return 'qwen35'
   if (m.includes('qwen2.5') || m.includes('qwen2-5')) return 'qwen25'
   if (m.includes('qwen')) return 'qwen'
   if (m.includes('grok')) return 'grok'
