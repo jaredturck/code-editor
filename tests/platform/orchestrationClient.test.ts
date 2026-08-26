@@ -46,6 +46,7 @@ import {
   handleAgentRoster,
   handleAgentStatus,
   handleAgentVerify,
+  inspectStandbyRoster,
   pickDelegateMember,
   reassignFailedPart,
   resolveCurrentRole,
@@ -55,11 +56,14 @@ import {
   syncStandbyPool,
 } from '@/platform/orchestrationClient'
 import { resetModelHealth } from '@/platform/agent/modelHealth'
-import { setKey } from '@/platform/keyStore'
+import { clearKey, setKey } from '@/platform/keyStore'
 
 describe('orchestrationClient', () => {
   beforeEach(() => {
     stopAllSubAgentLoops()
+    clearKey('openai')
+    clearKey('anthropic')
+    setKey('openai', 'test-openai-key')
     runtime.postTask.mockImplementation((stp) => stp.taskId)
     runtime.waitForTask.mockReset()
     runtime.waitForAllTasks.mockReset()
@@ -149,8 +153,8 @@ describe('orchestrationClient', () => {
         explicitlyAssigned: true,
       },
       subSettings: {
-        ai_provider: 'openrouter',
-        ai_model: 'deepseek/deepseek-r1',
+        ai_provider: 'anthropic',
+        ai_model: 'claude-sonnet',
       },
     })
   })
@@ -204,7 +208,10 @@ describe('orchestrationClient', () => {
   })
 
   it('can post without waiting for idle', async () => {
-    await handleAgentDelegate({ instructions: 'Task', waitForIdle: false }, {})
+    await handleAgentDelegate(
+      { instructions: 'Task', waitForIdle: false },
+      { ai_provider: 'local', ai_model: 'test-local' },
+    )
     expect(runtime.isAgentAvailable).not.toHaveBeenCalled()
   })
 
@@ -321,7 +328,7 @@ describe('orchestrationClient', () => {
         { instructions: 'One', toAgent: 'executor', waitForIdle: false },
         { instructions: 'Two', toAgent: 'scout', waitForIdle: false },
       ],
-      {},
+      { ai_provider: 'local', ai_model: 'test-local' },
       5000,
     )
     expect(results).toEqual([{ taskId: 'one' }, { taskId: 'two' }])
@@ -474,12 +481,11 @@ describe('standby pool (§2 — per-key, distributed)', () => {
       ],
     } as never)
     expect(pool.connected.map((m) => m.role)).toEqual(['executor'])
-    // The excluded orchestrator extra + scout are a choice, not a misconfiguration → not "dropped".
     expect(pool.dropped).toHaveLength(0)
   })
 
-  it('reports a configured member with no resolvable key as dropped (with a reason) instead of silently removing it', () => {
-    const pool = syncStandbyPool({
+  it('silently excludes a keyless cloud member at runtime while diagnostics retain the reason', () => {
+    const settings = {
       agent_multi_enabled: true,
       agent_standby_mode: 'eager',
       agent_models: [
@@ -497,14 +503,17 @@ describe('standby pool (§2 — per-key, distributed)', () => {
           keyId: '1',
           primary: true,
         },
-        // Cloud member with no stored key (no credential bridge in the test env) → unconnectable.
         { role: 'executor', provider: 'anthropic', model: 'opus', keyId: '1' },
       ],
-    } as never)
+    }
+    const pool = syncStandbyPool(settings as never)
     expect(pool.connected.map((m) => m.model).sort()).toEqual(['exec-a'])
-    expect(pool.dropped).toHaveLength(1)
-    expect(pool.dropped[0].member.model).toBe('opus')
-    expect(pool.dropped[0].reason).toMatch(/no api key saved for anthropic/i)
+    expect(pool.dropped).toEqual([])
+
+    const diagnostics = inspectStandbyRoster(settings as never)
+    expect(diagnostics.dropped).toHaveLength(1)
+    expect(diagnostics.dropped[0].member.model).toBe('opus')
+    expect(diagnostics.dropped[0].reason).toMatch(/no api key saved for anthropic/i)
   })
 
   it('tears the pool down and starts nothing when multi-agent is off', () => {
@@ -541,7 +550,6 @@ describe('standby pool (§2 — per-key, distributed)', () => {
 
   it('targets a specific member id directly (a teamwork part owner)', () => {
     syncStandbyPool(POOL_SETTINGS as never)
-    // Delegating to "executor#2" hits THAT member, not a round-robin of the role.
     expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2')
     expect(pickDelegateMember('executor#2', POOL_SETTINGS as never).agentId).toBe('executor#2')
   })
@@ -550,7 +558,7 @@ describe('standby pool (§2 — per-key, distributed)', () => {
     resetModelHealth()
     syncStandbyPool(POOL_SETTINGS as never)
     const reassign = reassignFailedPart('executor', POOL_SETTINGS as never)
-    expect(reassign?.memberId).toBe('executor#2') // a different healthy executor takes the part
+    expect(reassign?.memberId).toBe('executor#2')
   })
 
   it('keeps delegation and teammate reassignment local during enforced local-only runs', () => {
