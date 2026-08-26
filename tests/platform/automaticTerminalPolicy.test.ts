@@ -11,7 +11,9 @@ const workspace = '/workspace/project'
 describe('automatic terminal workspace policy', () => {
   it('treats normal HTTP(S) network targets as network resources rather than workspace paths', () => {
     expect(terminalCommandEscapesWorkspace('curl https://example.com/api', workspace)).toBe(false)
-    expect(terminalCommandEscapesWorkspace('wget https://example.com/archive.tgz -O ./archive.tgz', workspace)).toBe(false)
+    expect(terminalCommandEscapesWorkspace('wget https://example.com/archive.tgz -O ./archive.tgz', workspace)).toBe(
+      false,
+    )
   })
 
   it('detects filesystem output, shell expansion and working directories outside the workspace', () => {

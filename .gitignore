@@ -27,3 +27,4 @@ dist-ssr
 .vite/
 dist-electron/
 backend-dist/
+verify-output.txt

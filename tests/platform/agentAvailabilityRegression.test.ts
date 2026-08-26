@@ -123,16 +123,12 @@ describe('agent availability regressions', () => {
     expect(getAllowedCloudCandidates(settings as never)).toEqual([])
     expect(buildHybridExecutionPlan(settings as never)).toBeNull()
     expect(() =>
-      selectCloudConsultModel(
-        [],
-        'review this',
-        {
-          id: 'cloud:openai:gpt-5.1-codex-max:1',
-          provider: 'openai',
-          model: 'gpt-5.1-codex-max',
-          keyId: '1',
-        },
-      ),
+      selectCloudConsultModel([], 'review this', {
+        id: 'cloud:openai:gpt-5.1-codex-max:1',
+        provider: 'openai',
+        model: 'gpt-5.1-codex-max',
+        keyId: '1',
+      }),
     ).toThrow('No credential-ready cloud model is available.')
 
     setKey('openai', 'test-key')
