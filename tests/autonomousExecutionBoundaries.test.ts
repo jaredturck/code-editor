@@ -76,6 +76,8 @@ function hybrid_settings() {
     permissions_file_read: true,
     permissions_file_write: true,
     permissions_terminal: false,
+    permissions_screen_capture: false,
+    permissions_mouse_control: false,
     agent_permission_tier_orchestrator: 3,
     agent_multi_enabled: false,
     agent_peer_consult_enabled: false,
@@ -91,12 +93,65 @@ describe('autonomous execution boundaries', () => {
     expect(settings.agent_peer_consult_enabled).toBe(false)
   })
 
-  it('injects an iterative untrusted-evidence web research contract into project runs', () => {
+  it('grants routine project authority in automatic mode without granting screen control', () => {
+    const settings = build_core_agent_settings(
+      {
+        ...hybrid_settings(),
+        permissions_file_read: false,
+        permissions_file_write: false,
+        permissions_terminal: false,
+        agent_permission_tier_orchestrator: 1,
+        agent_permission_tier_executor: 1,
+        agent_require_explicit_approval: true,
+        agent_allow_network_commands: false,
+        agent_web_site_guard: true,
+      } as never,
+      '/workspace',
+      'automatic',
+    )
+
+    expect(settings.permissions_file_read).toBe(true)
+    expect(settings.permissions_file_write).toBe(true)
+    expect(settings.permissions_terminal).toBe(true)
+    expect(settings.agent_permission_tier_orchestrator).toBe(3)
+    expect(settings.agent_permission_tier_executor).toBe(3)
+    expect(settings.agent_allow_network_commands).toBe(true)
+    expect(settings.agent_require_explicit_approval).toBe(false)
+    expect(settings.agent_web_site_guard).toBe(false)
+    expect(settings.permissions_screen_capture).toBe(false)
+    expect(settings.permissions_mouse_control).toBe(false)
+    expect(settings.agent_tool_allowlist).toContain('search.web')
+    expect(settings.agent_tool_allowlist).toContain('terminal.exec')
+    expect(settings.agent_tool_allowlist).not.toContain('screen.capabilities')
+  })
+
+  it('keeps plan-first mode permission-driven', () => {
+    const settings = build_core_agent_settings(
+      {
+        ...hybrid_settings(),
+        permissions_file_read: false,
+        permissions_file_write: false,
+        permissions_terminal: false,
+        agent_require_explicit_approval: false,
+      } as never,
+      '/workspace',
+      'plan_first',
+    )
+
+    expect(settings.permissions_file_read).toBe(false)
+    expect(settings.permissions_file_write).toBe(false)
+    expect(settings.permissions_terminal).toBe(false)
+    expect(settings.agent_require_explicit_approval).toBe(true)
+  })
+
+  it('injects autonomous web research and no-routine-approval guidance into project runs', () => {
     const prompt = build_project_run_input('Research the current API and update the integration', 'automatic')
     expect(prompt).toContain('search.web')
     expect(prompt).toContain('web.fetch')
     expect(prompt).toContain('untrusted evidence')
     expect(prompt).toContain('preserve source titles/URLs')
+    expect(prompt).toContain('Do not ask the user to approve routine project-scoped development work')
+    expect(prompt).toContain('Screen capture and mouse/desktop control are never implied')
   })
 
   it('keeps hybrid local work single-agent when multi-agent mode is disabled', () => {
