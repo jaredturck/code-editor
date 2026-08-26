@@ -3,7 +3,7 @@
  * share the same bounded per-turn safety budget.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   CLOUD_REQUEST_HARD_CAP,
   buildHybridExecutionPlan,
@@ -11,6 +11,7 @@ import {
   consumeCloudRequest,
   createCloudUsageState,
 } from '@/platform/agent/cloudUsagePolicy'
+import { clearKey, setKey } from '@/platform/keyStore'
 
 const settings = {
   ai_provider: 'openai',
@@ -72,6 +73,13 @@ const settings = {
 }
 
 describe('cloud usage policy', () => {
+  beforeEach(() => {
+    clearKey('openai')
+    clearKey('deepseek')
+    setKey('openai', 'test-openai-key')
+    setKey('deepseek', 'test-deepseek-key')
+  })
+
   it('runs local-first through the mesh while keeping cloud peers reachable', () => {
     const plan = buildHybridExecutionPlan(settings)
 
