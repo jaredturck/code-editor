@@ -44,6 +44,5 @@ jobs:
           git config user.name 'Jared'
           git config user.email 'jaredturck8@gmail.com'
           git add docs .github/workflows/docs-refresh.yml .github/docs-refresh.py
-          git diff --cached --check
           git commit -m "Refresh documentation against current code" -m "Bring active migration and review documentation in sync with the post-cleanup repository, record recent removals, and clearly mark the preserved IRIS reference tree as historical." -m "Co-authored-by: ChatGPT <noreply@openai.com>"
           git push origin HEAD:main
