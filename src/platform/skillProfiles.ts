@@ -1,7 +1,7 @@
 /**
  * Builds and normalizes skill-profile names from the active provider, model, and user
  * selection. These rules keep persisted skill directories stable even when model
- * identifiers contain unsuitable path characters.
+ * identifiers contain unsuitable path characters, so agent skill lookup stays deterministic.
  */
 
 export interface SkillProfileSettings {
