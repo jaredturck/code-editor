@@ -1,0 +1,148 @@
+name: Test Cleanup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-cleanup.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Consolidate tests and remove benchmarks
+        run: |
+          set -euo pipefail
+
+          rm -rf benchmarks
+          rm -f tsconfig.benchmark.json vitest.iris.config.ts
+
+          rm -f \
+            migrated-tests/iris/lib/AuthContext.test.tsx \
+            migrated-tests/iris/lib/legacyApiRetirement.test.ts \
+            migrated-tests/iris/lib/localProfileClient.test.ts \
+            migrated-tests/iris/lib/orbTextures.test.ts \
+            migrated-tests/iris/lib/runtimeModularization.test.ts \
+            migrated-tests/iris/lib/workspaceResize.test.ts
+
+          mkdir -p tests/platform tests/backend tests/fixtures tests/helpers
+
+          for file in migrated-tests/iris/lib/*.test.ts; do
+            target="tests/platform/$(basename "$file")"
+            test ! -e "$target"
+            git mv "$file" "$target"
+          done
+
+          for file in migrated-tests/iris/server/*.test.ts; do
+            target="tests/backend/$(basename "$file")"
+            test ! -e "$target"
+            git mv "$file" "$target"
+          done
+
+          git mv migrated-tests/iris/server/bridgeRouteTestHarness.ts tests/backend/bridgeRouteTestHarness.ts
+          git mv migrated-tests/iris/fixtures/documentFixtures.ts tests/fixtures/documentFixtures.ts
+          git mv migrated-tests/iris/fixtures/workspace tests/fixtures/workspace
+          git mv migrated-tests/iris/helpers/http.ts tests/helpers/http.ts
+          git mv migrated-tests/iris/setup.ts tests/runtimeSetup.ts
+          rm -rf migrated-tests
+
+          python <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          for folder in [Path('tests/platform'), Path('tests/backend')]:
+              for path in sorted(folder.glob('*.test.ts')):
+                  text = path.read_text()
+                  text = text.replace("'../../../src/", "'../../src/")
+                  text = text.replace('"../../../src/', '"../../src/')
+                  text = text.replace("'../../../backend/", "'../../backend/")
+                  text = text.replace('"../../../backend/', '"../../backend/')
+                  text = text.replace("'../../../electron/", "'../../electron/")
+                  text = text.replace('"../../../electron/', '"../../electron/')
+                  text = text.replace("'../../server/", "'../../backend/")
+                  text = text.replace('"../../server/', '"../../backend/')
+                  text = text.replace("'../../src/lib/providers/", "'../../src/platform/providers/")
+                  text = text.replace('"../../src/lib/providers/', '"../../src/platform/providers/')
+                  text = re.sub(r"(['\"]\.\./\.\./backend/[^'\"]+)\.js(['\"])", r'\1\2', text)
+                  text = re.sub(r"(['\"]\.\./\.\./src/platform/providers/[^'\"]+)\.js(['\"])", r'\1\2', text)
+                  if not text.startswith("import '../runtimeSetup'"):
+                      text = "import '../runtimeSetup'\n" + text
+                  path.write_text(text)
+
+          package_path = Path('package.json')
+          package = json.loads(package_path.read_text())
+          package['scripts']['test'] = 'npm run build:backend && npm run build:electron && vitest run'
+          for script in ['test:iris', 'benchmark', 'benchmark:iris']:
+              package['scripts'].pop(script, None)
+          package.get('devDependencies', {}).pop('vite-node', None)
+          package_path.write_text(json.dumps(package, indent=2) + '\n')
+
+          migration_path = Path('docs/MIGRATION.md')
+          migration = migration_path.read_text()
+          migration = re.sub(
+              r'^\| `migrated-tests/iris/`.*$',
+              '| `tests/platform/`, `tests/backend/` | Consolidated runtime/backend regression tests retained from the migrated platform |',
+              migration,
+              flags=re.MULTILINE,
+          )
+          migration = re.sub(r'^\| `benchmarks/iris/`.*\n', '', migration, flags=re.MULTILINE)
+          migration = migration.replace(
+              '4. The important migrated runtime/backend tests and benchmark harness were retained.',
+              '4. The important migrated runtime/backend tests were retained and later consolidated into the normal `tests/` tree; the standalone benchmark harness was removed after migration because it was not part of the product or CI.',
+          )
+          migration_path.write_text(migration)
+          PY
+
+          npm install --package-lock-only --ignore-scripts
+
+          npx prettier --write \
+            package.json \
+            package-lock.json \
+            tests/platform \
+            tests/backend \
+            tests/runtimeSetup.ts \
+            docs/MIGRATION.md
+
+          if git grep -n -E 'migrated-tests/iris|vitest\.iris|test:iris|benchmarks/iris|npm run benchmark' -- ':!docs/iris-reference/**'; then
+            echo 'Stale migration-test or benchmark references remain.' >&2
+            exit 1
+          fi
+
+          if git grep -n -E "['\"]\.\./\.\./\.\./(src|backend|electron)/|['\"]\.\./\.\./server/|['\"]\.\./\.\./src/lib/providers/" -- tests/platform tests/backend; then
+            echo 'Moved tests still contain stale source paths.' >&2
+            exit 1
+          fi
+
+      - name: Verify repository
+        env:
+          ELECTRON_DISABLE_SANDBOX: '1'
+        run: npm run verify:full
+
+      - name: Commit cleanup
+        run: |
+          set -euo pipefail
+          git config user.name 'Jared'
+          git config user.email 'jaredturck8@gmail.com'
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m 'Consolidate tests and remove benchmarks' -m 'Move retained runtime and backend regression coverage into the normal tests tree, retire migration-only leftovers, and remove the unused benchmark harness and scripts.' -m 'Co-authored-by: ChatGPT <noreply@openai.com>'
+          git push origin HEAD:main
