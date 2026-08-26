@@ -290,15 +290,6 @@ function handleBridgeExit(code: number): void {
   }
 }
 
-function handleBridgeError(type: string, location: string, report: string): void {
-  console.error(
-    '[iris] local bridge utility process error:',
-    type,
-    location,
-    report ? '(diagnostic report available)' : '',
-  )
-}
-
 function startBridgeProcess(
   app: Pick<App, 'getPath' | 'isPackaged'>,
   storage: StorageKeyContext,
@@ -320,7 +311,6 @@ function startBridgeProcess(
     bridge_process = child
     child.on('message', handleBridgeMessage)
     child.on('exit', handleBridgeExit)
-    child.on('error', handleBridgeError)
 
     const devOrigin = process.env.CODE_EDITOR_DEV_SERVER_URL
       ? new URL(process.env.CODE_EDITOR_DEV_SERVER_URL).origin
