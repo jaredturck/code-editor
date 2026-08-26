@@ -93,8 +93,11 @@ describe('AIChatPanel agent integration', () => {
       }),
     )
 
-    expect(screen.getByText('Agent activity · 1 event')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('Agent activity · 1 event'))
+    const activity_summary = screen.getByText('Agent activity · 1 event')
+    const activity_details = activity_summary.closest('details') as HTMLDetailsElement
+    expect(activity_details).not.toBeNull()
+    activity_details.open = true
+    fireEvent(activity_details, new Event('toggle'))
     expect(screen.getByText('Read file')).toBeInTheDocument()
     expect(screen.getByText('src/app.ts')).toBeInTheDocument()
   })
