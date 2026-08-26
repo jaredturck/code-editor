@@ -40,7 +40,7 @@ vi.mock('@/platform/chatSessionStore', () => ({
 
 import { build_core_agent_settings, build_project_run_input } from '../src/chat/agentChat'
 import { buildHybridExecutionPlan } from '../src/platform/agent/cloudUsagePolicy'
-import { withAutonomousModelExecution } from '../src/platform/agentRuntime'
+import { withAutomaticApprovalPolicy, withAutonomousModelExecution } from '../src/platform/agentRuntime'
 
 function hybrid_settings() {
   const cloud_id = 'orchestrator:openai:gpt-test:1'
@@ -152,6 +152,44 @@ describe('autonomous execution boundaries', () => {
     expect(prompt).toContain('preserve source titles/URLs')
     expect(prompt).toContain('Do not ask the user to approve routine project-scoped development work')
     expect(prompt).toContain('Screen capture and mouse/desktop control are never implied')
+  })
+
+  it('auto-resolves limits and questions in automatic mode but forwards real approvals', async () => {
+    const realApproval = vi.fn(async () => ({ approved: false, decision: 'deny' }))
+    const prepared = withAutomaticApprovalPolicy({
+      userInput: 'Implement the task',
+      conversation: [],
+      settings: { agent_project_run_mode: 'automatic' },
+      onApprovalRequest: realApproval,
+    } as never)
+
+    await expect(
+      prepared.onApprovalRequest?.({ requestType: 'limit', limitKind: 'tool_timeout' } as never),
+    ).resolves.toMatchObject({ approved: true, decision: 'unlimited' })
+    await expect(
+      prepared.onApprovalRequest?.({
+        requestType: 'question',
+        requestedAction: 'continue the long-running task',
+      } as never),
+    ).resolves.toMatchObject({ answer: 'Continue' })
+    await expect(
+      prepared.onApprovalRequest?.({ requestType: 'question', planText: 'Do the work' } as never),
+    ).resolves.toMatchObject({ approved: true, answer: 'Approve' })
+    await expect(
+      prepared.onApprovalRequest?.({ requestType: 'approval', reason: 'outside workspace' } as never),
+    ).resolves.toMatchObject({ approved: false, decision: 'deny' })
+    expect(realApproval).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not replace plan-first approval handling', () => {
+    const realApproval = vi.fn()
+    const input = {
+      userInput: 'Plan the task',
+      conversation: [],
+      settings: { agent_project_run_mode: 'plan_first' },
+      onApprovalRequest: realApproval,
+    }
+    expect(withAutomaticApprovalPolicy(input as never)).toBe(input)
   })
 
   it('keeps hybrid local work single-agent when multi-agent mode is disabled', () => {
