@@ -82,6 +82,7 @@ jobs:
                   text = text.replace('"../../server/', '"../../backend/')
                   text = text.replace("'../../src/lib/providers/", "'../../src/platform/providers/")
                   text = text.replace('"../../src/lib/providers/', '"../../src/platform/providers/')
+                  text = text.replace('migrated-tests/iris/fixtures/workspace', 'tests/fixtures/workspace')
                   text = re.sub(r"(['\"]\.\./\.\./backend/[^'\"]+)\.js(['\"])", r'\1\2', text)
                   text = re.sub(r"(['\"]\.\./\.\./src/platform/providers/[^'\"]+)\.js(['\"])", r'\1\2', text)
                   if not text.startswith("import '../runtimeSetup'"):
@@ -96,6 +97,21 @@ jobs:
           package.get('devDependencies', {}).pop('vite-node', None)
           package_path.write_text(json.dumps(package, indent=2) + '\n')
 
+          readme_path = Path('README.md')
+          readme = readme_path.read_text()
+          readme = readme.replace('- Preserved local IRIS benchmark suite available through `npm run benchmark`\n', '')
+          readme = readme.replace(
+              '`npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The benchmark suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`.',
+              '`npm test` runs the complete Code Editor test suite, including platform and backend regression coverage. `npm run verify:full` runs the complete correctness/build verification sequence.',
+          )
+          readme_path.write_text(readme)
+
+          cleanup_path = Path('docs/CODE_CLEANUP_REVIEW.md')
+          cleanup = cleanup_path.read_text()
+          cleanup = cleanup.replace('- benchmark source under `benchmarks/iris/`;\n', '')
+          cleanup = cleanup.replace('active tests/benchmarks', 'active tests')
+          cleanup_path.write_text(cleanup)
+
           migration_path = Path('docs/MIGRATION.md')
           migration = migration_path.read_text()
           migration = re.sub(
@@ -109,6 +125,56 @@ jobs:
               '4. The important migrated runtime/backend tests and benchmark harness were retained.',
               '4. The important migrated runtime/backend tests were retained and later consolidated into the normal `tests/` tree; the standalone benchmark harness was removed after migration because it was not part of the product or CI.',
           )
+          migration = migration.replace(
+              """### Tests and benchmarks
+
+**IRIS source:** original IRIS tests and benchmarks  
+**Current destination:** `migrated-tests/iris/` and `benchmarks/iris/`
+
+The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. Compatible runtime/backend suites were later adapted and re-enabled through `vitest.iris.config.ts` and `npm run test:iris`.
+
+The benchmark suite remains separate from deterministic verification because some benchmark workloads depend on available local models or retained local benchmark state.
+""",
+              """### Tests
+
+**IRIS source:** original IRIS runtime/backend tests  
+**Current destination:** `tests/platform/` and `tests/backend/`
+
+The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree and now runs through the main Vitest configuration. Presentation-only and migration-only tests were retired.
+
+The standalone IRIS benchmark harness was removed during post-migration cleanup because it was not connected to product behavior or CI.
+""",
+          )
+          migration = migration.replace(
+              """### Preserved tests
+
+`migrated-tests/iris/` retains the original test heritage while current Code Editor tests cover integration-specific behavior.
+
+### Preserved benchmarks
+
+`benchmarks/iris/` retains the local benchmark framework and history-aware workloads.
+""",
+              """### Preserved tests
+
+`tests/platform/` and `tests/backend/` retain useful runtime/backend regression coverage from the original test heritage alongside the Code Editor's integration-specific tests.
+""",
+          )
+          migration = migration.replace(
+              """`npm test` performs backend/Electron builds, runs the normal Code Editor Vitest suite, and then runs the compatible migrated IRIS suite through `npm run test:iris`.
+
+Benchmarks are deliberately separate:
+
+```bash
+npm run benchmark
+```
+
+because they may depend on configured local model/runtime state and retained benchmark history.
+""",
+              """`npm test` performs backend/Electron builds and runs the unified Code Editor Vitest suite, including platform and backend regression coverage under `tests/`.
+""",
+          )
+          migration = migration.replace('- [x] Compatible migrated IRIS tests in `npm test`', '- [x] Consolidated platform/backend regression coverage in `npm test`')
+          migration = migration.replace('- [x] Preserved benchmark harness in `npm run benchmark`\n', '')
           migration_path.write_text(migration)
           PY
 
@@ -117,12 +183,17 @@ jobs:
           npx prettier --write \
             package.json \
             package-lock.json \
+            README.md \
             tests/platform \
             tests/backend \
             tests/runtimeSetup.ts \
-            docs/MIGRATION.md
+            docs/MIGRATION.md \
+            docs/CODE_CLEANUP_REVIEW.md
 
-          if git grep -n -E 'migrated-tests/iris|vitest\.iris|test:iris|benchmarks/iris|npm run benchmark' -- ':!docs/iris-reference/**'; then
+          if git grep -n -E 'migrated-tests/iris|vitest\.iris|test:iris|benchmarks/iris|npm run benchmark' -- \
+            ':!docs/iris-reference/**' \
+            ':!docs/REMOVED_CODE.md' \
+            ':!.github/workflows/test-cleanup.yml'; then
             echo 'Stale migration-test or benchmark references remain.' >&2
             exit 1
           fi
