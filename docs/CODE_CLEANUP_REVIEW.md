@@ -3,7 +3,7 @@
 **Status:** No approved cleanup pending  
 **Last updated:** 2026-08-26
 
-All items from the approved cleanup batch have been completed and moved to [`REMOVED_CODE.md`](./REMOVED_CODE.md). Migration provenance remains in [`MIGRATION.md`](./MIGRATION.md).
+All approved cleanup reviewed through 2026-08-26 has been completed and recorded in [`REMOVED_CODE.md`](./REMOVED_CODE.md). Migration provenance remains in [`MIGRATION.md`](./MIGRATION.md).
 
 What remains below requires a future product or architecture decision and is **not approved for deletion**.
 

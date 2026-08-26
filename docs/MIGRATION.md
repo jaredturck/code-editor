@@ -2,6 +2,7 @@
 
 **Status:** Complete for the defined Code Editor product scope  
 **Consolidated:** 2026-08-25  
+**Last reviewed against current source:** 2026-08-26  
 **Repository:** `jaredturck/code-editor`
 
 ## Purpose of this document
@@ -47,9 +48,8 @@ The major migrated implementation areas are:
 | `src/platform/`                     | Renderer-side agent runtime, providers, model policy, orchestration, skills, persistence clients, RAG and compatibility services                                        |
 | `src/platform-features/`            | Reusable non-shell feature controllers/hooks extracted from IRIS presentation areas                                                                                     |
 | `backend/`                          | Privileged local bridge/backend: encrypted persistence, filesystem/semantic services, web, agents, launcher, automation, audio, screen services and security boundaries |
-| `electron/platform/`                | Trusted Electron infrastructure: local bridge bootstrap, credential/storage-key handling, security, screen permissions, logging and hidden browser search support       |
+| `electron/platform/`                | Trusted credential/storage-key handling, local bridge bootstrap and hidden DuckDuckGo search support                                                                    |
 | `tests/platform/`, `tests/backend/` | Consolidated runtime/backend regression tests retained from the migrated platform                                                                                       |
-| `benchmarks/iris/`                  | Preserved IRIS benchmark harness                                                                                                                                        |
 | `docs/iris-reference/`              | Historical documentation copied from the source IRIS project                                                                                                            |
 
 The initial exact migration ledger recorded **376 explicit source-to-destination mappings**. **320 source IRIS files were not copied as implementation source**, primarily because they were presentation-only UI, generated output, or configuration replaced by Code Editor equivalents.
@@ -294,38 +294,36 @@ The backend is not a generic remote server. It is a local privileged capability 
 ### Trusted Electron infrastructure
 
 **IRIS source:** selected `electron-src/*.cts`  
-**Current destination:** `electron/platform/*.cts`
+**Current destination:** `electron/platform/*.cts` plus Code Editor-owned Electron security/navigation modules
 
-The migration retained:
+The retained migrated Electron platform is now intentionally small:
 
-- `credentialStore.cts`;
-- `storageKeyStore.cts`;
-- `linuxPasswordStore.cts`;
-- `localBridge.cts`;
-- `security.cts`;
-- `logger.cts`;
-- `screenCapturePermissions.cts`;
-- hidden DuckDuckGo browser search support.
+- `electron/platform/credentialStore.cts`;
+- `electron/platform/storageKeyStore.cts`;
+- `electron/platform/linuxPasswordStore.cts`;
+- `electron/platform/localBridge.cts`;
+- `electron/platform/duckDuckGoPageParser.cts`;
+- `electron/platform/duckDuckGoSearchWindow.cts`.
 
-The old IRIS window manager, Orb window, window-shape code and duplicate editor IPC were intentionally not carried into the live product.
+Code Editor-owned Electron modules now carry the surrounding renderer trust and media boundaries. In particular, `electron/navigationSecurity.cts` and `electron/navigationBootstrap.cts` keep the privileged renderer pinned to the trusted application URL and restrict media permission to explicitly enabled audio-only capture. The main process applies those checks around privileged IPC and window navigation.
+
+Older migrated Electron compatibility helpers for logging, screen-permission presentation and the old IRIS security/window shell were removed after the current boundaries were proven to replace them.
+
+The old IRIS window manager, Orb window, window-shape code and duplicate editor IPC remain intentionally absent from the live product.
 
 ### Feature-controller code extracted from the old IRIS presentation
 
-**IRIS source:** non-visual logic embedded in feature/panel areas  
+**IRIS source:** selected non-visual logic embedded in feature/panel areas  
 **Current destination:** `src/platform-features/**`
 
-Examples include:
+Post-migration cleanup removed the unmounted Files, Search, Skills, Launcher, Notes-panel and screen-capture presentation controllers. The feature helpers that still remain are the ones with current callers or current product value:
 
-- audio transcription hooks/configuration;
-- file panel/thumbnail helpers;
-- launcher controller helpers;
-- Notes/transcription helpers;
-- screen-capture strategies;
-- search progress/controller helpers;
-- skills controller helpers;
-- system monitor hooks.
+- `src/platform-features/audio/` — transcription configuration and renderer audio hooks;
+- `src/platform-features/chat/` — Chat attachment preparation;
+- `src/platform-features/chat-ui/` — approval/controller helpers still used by Agent Chat;
+- `src/platform-features/systemMonitor/` — runtime system-monitor hook.
 
-These files are deliberately separate from the Code Editor's visual component hierarchy. Some are actively reused; some remain compatibility/reference candidates.
+The underlying backend services for notes, launcher, semantic search, skills and screen capture still exist where the agent/runtime uses them. Their deleted old panel controllers should not be mistaken for missing functionality.
 
 ### Tests
 
@@ -808,47 +806,29 @@ A future cleanup should not reintroduce old IRIS UI merely to make the migration
 
 ## Retained compatibility and reference code
 
-Some migrated code remains even where there is no dedicated first-class Code Editor UI.
+Some inherited implementation still carries historical naming, but current reachability matters more than the name.
 
-Examples include:
+### Notes runtime
 
-### Notes helpers
+`src/platform/notesStorage.ts` remains active runtime infrastructure even though the old standalone Notes panel was removed. A new human-facing Notes product would be optional new functionality rather than migration completion work.
 
-- `src/platform/notesStorage.ts`
-- `src/platform-features/notes/`
+### Current feature helpers
 
-The old standalone Notes panel was omitted. Chat/project memory is already connected. A new human-facing Notes product would be optional new functionality.
+The remaining `src/platform-features/` tree is limited to current audio, Chat/approval and system-monitor helpers. Earlier unmounted Files/Search/Skills/Launcher/Notes/screen-capture controllers were removed during post-migration cleanup; their absence is intentional.
 
-### Historical Chat/controller helpers
+### Legacy-named runtime layers
 
-- `src/platform-features/chat-ui/`
-- compatibility paths such as legacy agent/chat helpers
+`src/platform/agentRuntimeLegacy.ts` and `src/platform/agent/runtime/toolBrokerLegacy.ts` are still active implementation layers. “Legacy” describes their provenance, not dead-code status.
 
-Some normalization/controller behavior is reused; other pieces may now be historical.
-
-### Feature-controller helpers
-
-Potentially unmounted or partially reused helpers exist under areas such as:
-
-- `src/platform-features/files/`
-- `src/platform-features/search/`
-- `src/platform-features/skills/`
-- `src/platform-features/launcher/`
-- `src/platform-features/screen-capture/`
-- selected audio helpers.
-
-### Legacy compatibility files
-
-The tree also contains explicit legacy/compatibility code such as `src/platform/agentRuntimeLegacy.ts`, along with historical names or controller utilities inherited from IRIS.
-
-These are reasonable cleanup candidates, but deletion should be evidence-based:
+These and other inherited runtime pieces should only be decomposed or deleted with evidence:
 
 1. prove no supported caller reaches the code;
 2. check dynamic/indirect registrations rather than only static imports;
-3. run the complete dependency-aware verification chain;
-4. remove in small changes rather than broad speculative sweeps.
+3. preserve security, storage-upgrade and worker/child-process boundaries;
+4. run the complete dependency-aware verification chain;
+5. make small, reviewable changes rather than speculative sweeps.
 
----
+Post-migration cleanup decisions and deleted paths are recorded in `REMOVED_CODE.md`.
 
 ## Historical migration sequence
 
@@ -920,13 +900,13 @@ Collision tests confirmed both human/agent revision protection and agent/agent l
 
 Fresh screen understanding, permissioned automation, system telemetry, launcher/tool discovery and development-environment controls completed the planned non-editor runtime integrations.
 
-### Test/benchmark/recovery restoration
+### Test/recovery restoration and later consolidation
 
-Compatible migrated IRIS runtime tests were re-enabled, the benchmark harness was wired into package scripts, and dedicated long-running recovery/collision regressions were added.
+Compatible IRIS runtime/backend tests were initially re-enabled, a standalone benchmark harness was temporarily wired into package scripts, and dedicated long-running recovery/collision regressions were added before the migration was declared complete.
 
-At this point the migration checklist was complete and further work became normal product maintenance.
+Post-migration review then simplified that scaffolding: useful IRIS-derived tests were folded into the single `tests/` tree, stale presentation/migration-only tests were retired, and the standalone benchmark harness was deleted because it was not part of the product or normal CI. Long-running recovery and collision coverage remain in the centralized suite.
 
----
+At that point the migration checklist was complete and further work became normal product maintenance.
 
 ## Migration evidence and audit trail
 
@@ -985,33 +965,13 @@ npm run verify:full
 
 `npm test` performs backend/Electron builds and runs the centralized Code Editor test tree as isolated app and platform/backend projects.
 
-### Verification state at documentation consolidation
+### Current verification state
 
-At the time this migration documentation was consolidated, the latest recorded installed-project verification snapshot showed:
+As of the 2026-08-26 documentation review, the persistent `.github/workflows/verify.yml` gate passes on `main` using a clean `npm ci` followed by `npm run verify:full`.
 
-| Check                        | Result                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| Formatting                   | Passed                                                                    |
-| Lint                         | Passed with **161 warnings / 0 errors**                                   |
-| TypeScript typecheck         | Passed                                                                    |
-| Backend build                | Passed                                                                    |
-| Electron build               | Passed                                                                    |
-| Code Editor Vitest phase     | **156 passed / 2 failed**                                                 |
-| Editor/agent collision tests | **2 passed**                                                              |
-| Electron runtime smoke       | Passed                                                                    |
-| Production Vite build        | Passed                                                                    |
-| Migrated IRIS Vitest phase   | Not reached in that chained run because the preceding Vitest phase failed |
+The centralized Vitest suite contains **142 test files / 844 tests**. The normal verification gate covers formatting, lint (including `backend/`), TypeScript type checking, backend/Electron builds, the centralized test suite, the Electron/node-pty runtime smoke check and the production Vite build.
 
-The two recorded failing Code Editor tests were:
-
-1. `tests/agentRuntimeContext.test.ts` — failed-tool recovery continuation expectation;
-2. `tests/chatEncryptionPersistence.test.ts` — restored attachment-content expectation.
-
-A React missing-`key` warning was also recorded during `AISettingsPanel.test.tsx`.
-
-These failures were explicitly classified as **post-migration correctness/cleanup work**, not evidence of a missing migration milestone.
-
-This verification snapshot will naturally become historical as fixes land. Future work should trust current test results over this dated snapshot.
+Older migration-time snapshots that recorded failing tests or large lint-warning counts are historical only. Git history retains them when forensic context is useful; current source and current CI are authoritative.
 
 ---
 
@@ -1056,7 +1016,7 @@ This checklist is retained only as a compact statement of scope, not as an activ
 - [x] Launcher/tool discovery
 - [x] Managed development-environment controls
 - [x] Consolidated platform/backend regression coverage in `npm test`
-- [x] Preserved benchmark harness in `npm run benchmark`
+- [x] Standalone benchmark harness reviewed and retired post-migration because it was not part of the product or normal CI
 - [x] Long-running recovery regression coverage
 - [x] Multi-agent/human-agent collision regression coverage
 
@@ -1064,33 +1024,18 @@ This checklist is retained only as a compact statement of scope, not as an activ
 
 ## What remains after migration
 
-The migration is not the same thing as repository perfection.
+The migration is complete, but normal maintenance continues. Current priorities should be described as product/repository work rather than migration debt.
 
-Normal post-migration engineering includes:
+Examples include:
 
-- fixing current or future regressions;
-- reducing lint warnings;
-- removing stale imports/helpers left by modularization;
-- validating and deleting genuinely unreachable compatibility code;
-- improving bundle splitting/performance;
-- improving test coverage;
-- refining UX;
-- adding new provider/model/runtime capabilities;
-- adding new product surfaces.
+- upgrading the pinned Electron runtime through a deliberate native-runtime/security verification pass;
+- decomposing active legacy-named runtime layers only where tested boundaries justify it;
+- reducing type/lint debt incrementally without weakening runtime behavior;
+- improving bundle splitting, performance, test coverage and UX;
+- adding new provider/model/runtime capabilities or new product surfaces when desired;
+- keeping documentation synchronized with current source and CI.
 
-At consolidation time, the immediate quality priorities were:
-
-1. fix the two recorded failing Code Editor tests;
-2. fix the React missing-key warning;
-3. reduce the large lint-warning set, especially stale runtime imports/helpers;
-4. run `npm run verify:full` until both current and migrated suites pass end-to-end;
-5. perform dependency-backed dead-export/reachability cleanup in small changes.
-
-These should not be relabeled as “finish the IRIS migration.”
-
-Likewise, features that were never part of the target—such as a new dedicated Notes UI, a new launcher/command-palette experience, or scheduled/background autonomous execution—should be treated as new product design rather than migration debt.
-
----
+There are no known missing IRIS migration milestones in the defined scope. Features that were never part of that scope—such as a dedicated Notes UI or autonomous background scheduling—remain new product design, not unfinished migration work.
 
 ## Guidance for future AI models and maintainers
 
@@ -1140,17 +1085,17 @@ The historical staging sequence deliberately mentions capabilities being unavail
 
 ## Documentation structure after consolidation
 
-The repository intentionally keeps migration documentation simple now that the work is complete:
+Current documentation is indexed in `docs/README.md`:
 
-- `docs/MIGRATION.md` — **this document**, the authoritative migration history, architecture and provenance guide;
-- `docs/iris-reference/` — preserved documentation from the original IRIS source project;
-- `README.md` — concise current product overview and entry point.
+- `docs/MIGRATION.md` — migration history plus current architecture/security invariants;
+- `docs/CODE_REVIEW_FINDINGS.md` — current open review findings and resolved review history;
+- `docs/CODE_CLEANUP_REVIEW.md` — cleanup boundaries and intentionally retained implementation;
+- `docs/REMOVED_CODE.md` — deliberate post-migration deletion ledger;
+- `docs/iris-reference/` — preserved historical documentation from the source IRIS project.
 
-The former `docs/migration/` directory and root `IRIS_MIGRATION.md` were removed because their checklist/patch-review structure had become redundant and misleading after completion.
+The `docs/iris-reference/` content is intentionally not rewritten to match current Code Editor behavior. Its local `README.md` marks it as an archive and points readers back to the current documentation.
 
-Detailed historical migration records remain available through Git history when forensic detail is needed.
-
----
+The former `docs/migration/` directory and root `IRIS_MIGRATION.md` were removed because their checklist/patch-review structure had become redundant after completion. Detailed historical migration records remain available through Git history.
 
 ## Final perspective
 

@@ -213,6 +213,14 @@ Removed six tests that no longer represented current product behavior: deleted A
 
 ---
 
+## 2026-08-26 — Obsolete IRIS agent helper scripts
+
+**Commit:** `07a1825407690a20bbf095dc6558f354f2efef60` — `Remove obsolete IRIS scripts`
+
+Removed the entire `scripts/` tree, which contained eight `scripts/iris/orbit-*.sh` agent-orientation helpers. Repository review confirmed they were not referenced by the application, tests, package scripts or CI, and their project/git/search/size discovery behavior is redundant with the current agent file and terminal tools.
+
+---
+
 ## Intentionally retained after review
 
 The cleanup process explicitly continues to protect:
