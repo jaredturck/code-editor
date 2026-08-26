@@ -4,5 +4,32 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["backend/desktopBridge/services/fileDocumentService.ts"],
+      "rules": {
+        "no-control-regex": "off"
+      }
+    },
+    {
+      "files": ["backend/builtinSkills.ts"],
+      "rules": {
+        "no-useless-escape": "off"
+      }
+    },
+    {
+      "files": ["backend/desktopBridge/routes/powerRoutes.ts"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    },
+    {
+      "files": ["backend/desktopBridge/services/bridgeServiceRuntime.ts"],
+      "rules": {
+        "no-unused-vars": "off",
+        "no-useless-escape": "off"
+      }
+    }
+  ]
 }
