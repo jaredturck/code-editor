@@ -20,6 +20,7 @@
  */
 import { buildAgentRoster, findPeers, deriveModelTags, type FindMatch } from '@/platform/agent/modelTags'
 import { getRoutingProfile } from '@/platform/agent/modelRouting'
+import { isModelCredentialReady } from '@/platform/agent/modelHealth'
 import { applyAgentIdentityToSettings, normalizeAgentRole, resolveAgentIdentity } from '@/platform/agent/agentIdentity'
 import { buildSTP } from '@/platform/stpBuilder'
 import { executeSTP } from '@/platform/subAgentRuntime'
@@ -30,6 +31,14 @@ const CONSULT_MAX_STEPS = 1
 const CONSULT_MAX_OUTPUT_CHARS = 1800
 const CONSULT_TIMEOUT_MS = 90000
 const CONSULT_CONTEXT_CHARS = 1500
+
+function isRunnablePeer(member: { provider: string; keyId?: string }): boolean {
+  return isModelCredentialReady(member.provider, member.keyId || '1')
+}
+
+function availableRoster(settings: SubAgentSettings) {
+  return buildAgentRoster(settings as Record<string, unknown>).filter(isRunnablePeer)
+}
 
 export interface FindArgs extends Record<string, unknown> {
   tags?: unknown
@@ -88,6 +97,9 @@ async function runMatchTask(
   emit?: (event: Record<string, unknown>) => void,
   signal?: AbortSignal,
 ): Promise<{ result: unknown; status: string }> {
+  if (!isRunnablePeer(match)) {
+    throw new Error(`Peer ${match.id} is unavailable because its provider credential is not configured.`)
+  }
   const stp = buildSTP({
     type: opts.type,
     goal: opts.instructions,
@@ -121,7 +133,7 @@ export function handleAgentFind(args: FindArgs, settings: SubAgentSettings): Fin
     topic: args?.topic,
     exclude: args?.exclude,
     limit: args?.limit,
-  })
+  }).filter(isRunnablePeer)
   return {
     matches: matches.map((m) => ({
       agentId: m.id,
@@ -133,7 +145,7 @@ export function handleAgentFind(args: FindArgs, settings: SubAgentSettings): Fin
       matchedTags: m.matchedTags,
       score: m.score,
     })),
-    roster: buildAgentRoster(settings as Record<string, unknown>).map((m) => ({
+    roster: availableRoster(settings).map((m) => ({
       id: m.id,
       role: m.role,
       provider: m.provider,
@@ -161,7 +173,7 @@ export function resolveConsultTarget(
   settings: SubAgentSettings,
   exclude: string[] = [],
 ): FindMatch | null {
-  const roster = buildAgentRoster(settings as Record<string, unknown>)
+  const roster = availableRoster(settings)
   const excludeSet = new Set(
     exclude.map((r) =>
       String(r || '')
@@ -180,7 +192,7 @@ export function resolveConsultTarget(
     if (member) {
       return { ...member, score: member.tags.length, matchedTags: member.tags }
     }
-    // Role configured but not in the de-duped roster (same model as caller) → no distinct peer.
+    // Role configured but unavailable or not in the de-duped roster → no distinct runnable peer.
     return null
   }
 
@@ -188,8 +200,8 @@ export function resolveConsultTarget(
     tags: args?.tags,
     topic: args?.topic ?? args?.question,
     exclude,
-    limit: 1,
-  })
+    limit: 8,
+  }).filter(isRunnablePeer)
   return matches[0] || null
 }
 
@@ -346,7 +358,7 @@ export interface ReviewResult {
  * families) — heterogeneous reviewers are the whole point. Excludes the owner role.
  */
 function pickReviewers(settings: SubAgentSettings, want: number): FindMatch[] {
-  const roster = buildAgentRoster(settings as Record<string, unknown>).filter((m) => m.role !== 'orchestrator')
+  const roster = availableRoster(settings).filter((m) => m.role !== 'orchestrator')
   const byTierDiversity: FindMatch[] = []
   const seenTiers = new Set<string>()
   // First pass: one per distinct cost tier for diversity.
@@ -515,12 +527,12 @@ export interface OverwatchResult {
 
 /** Resolve the configured Overwatcher peer (the role bound to a model), or null if none. */
 export function resolveOverwatcher(settings: SubAgentSettings): FindMatch | null {
-  const member = buildAgentRoster(settings as Record<string, unknown>).find((m) => m.role === 'overwatcher')
+  const member = availableRoster(settings).find((m) => m.role === 'overwatcher')
   if (!member) return null
   return { ...member, score: member.tags.length, matchedTags: member.tags }
 }
 
-/** True when a distinct Overwatcher model is configured (and reachable via the bridge). */
+/** True when a distinct Overwatcher model is configured and credential-ready. */
 export function hasOverwatcher(settings: SubAgentSettings): boolean {
   return resolveOverwatcher(settings) !== null
 }
@@ -679,7 +691,7 @@ export async function planTeamwork(
   settings: SubAgentSettings,
   emit?: (event: Record<string, unknown>) => void,
 ): Promise<TeamworkPlan> {
-  const roster = buildAgentRoster(settings as Record<string, unknown>).filter((m) => m.provider && m.model)
+  const roster = availableRoster(settings)
   if (roster.length < 2) return { ok: false, reason: 'insufficient_agents' }
 
   const plannerMember =
@@ -770,8 +782,8 @@ export interface TeamworkPlanV2 {
 
 /** The members that take part in teamwork: every bound model except the advisory Overwatcher. */
 function teamworkMembers(settings: SubAgentSettings): FindMatch[] {
-  return buildAgentRoster(settings as Record<string, unknown>)
-    .filter((member) => member.provider && member.model && member.role !== 'overwatcher')
+  return availableRoster(settings)
+    .filter((member) => member.role !== 'overwatcher')
     .map((member) => ({ ...member, score: member.tags.length, matchedTags: member.tags }))
 }
 
