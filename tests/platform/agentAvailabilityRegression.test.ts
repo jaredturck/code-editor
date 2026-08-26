@@ -6,7 +6,13 @@ import {
   recordModelFailure,
   resetModelHealth,
 } from '@/platform/agent/modelHealth'
+import {
+  buildHybridExecutionPlan,
+  getAllowedCloudCandidates,
+  selectCloudConsultModel,
+} from '@/platform/agent/cloudUsagePolicy'
 import { pickDelegateMember, stopAllSubAgentLoops } from '@/platform/orchestrationClient'
+import { handleAgentFind, resolveConsultTarget, resolveOverwatcher } from '@/platform/agent/meshClient'
 import { inferModelFamily } from '@/platform/skillProfiles'
 import { isReasoningModel } from '@/platform/modelProfiles'
 
@@ -14,6 +20,7 @@ beforeEach(() => {
   stopAllSubAgentLoops()
   resetModelHealth()
   clearKey('openai')
+  clearKey('anthropic')
 })
 
 describe('agent availability regressions', () => {
@@ -83,6 +90,83 @@ describe('agent availability regressions', () => {
     expect(() => pickDelegateMember('executor', settings as never)).toThrow(
       'No available executor agent is configured.',
     )
+  })
+
+  it('ignores stale provider validation when the actual cloud key is absent', () => {
+    const settings = {
+      agent_execution_policy: 'hybrid',
+      ai_provider: 'openai',
+      ai_model: 'gpt-5.1-codex-max',
+      provider_key_validation: {
+        openai: {
+          status: 'valid',
+          testedAt: Date.now(),
+          message: 'previously valid',
+          models: ['gpt-5.1-codex-max'],
+        },
+      },
+      provider_selected_models: {
+        openai: ['gpt-5.1-codex-max'],
+      },
+      agent_models: [
+        { role: 'executor', provider: 'local', model: 'qwen3.6:27b', keyId: '1', primary: true },
+        {
+          role: 'orchestrator',
+          provider: 'openai',
+          model: 'gpt-5.1-codex-max',
+          keyId: '1',
+          primary: true,
+        },
+      ],
+    }
+
+    expect(getAllowedCloudCandidates(settings as never)).toEqual([])
+    expect(buildHybridExecutionPlan(settings as never)).toBeNull()
+    expect(() =>
+      selectCloudConsultModel(
+        [],
+        'review this',
+        {
+          id: 'cloud:openai:gpt-5.1-codex-max:1',
+          provider: 'openai',
+          model: 'gpt-5.1-codex-max',
+          keyId: '1',
+        },
+      ),
+    ).toThrow('No credential-ready cloud model is available.')
+
+    setKey('openai', 'test-key')
+    expect(getAllowedCloudCandidates(settings as never).map((candidate) => candidate.provider)).toEqual(['openai'])
+    expect(buildHybridExecutionPlan(settings as never)).not.toBeNull()
+  })
+
+  it('keeps credentialless cloud peers out of discovery, consultation, and overwatch', () => {
+    const settings = {
+      agent_multi_enabled: true,
+      agent_models: [
+        { role: 'scout', provider: 'local', model: 'qwen3.6:27b', keyId: '1', primary: true },
+        {
+          role: 'executor',
+          provider: 'openai',
+          model: 'gpt-5.1-codex-max',
+          keyId: '1',
+          primary: true,
+        },
+        {
+          role: 'overwatcher',
+          provider: 'anthropic',
+          model: 'claude-opus-4-8',
+          keyId: '1',
+          primary: true,
+        },
+      ],
+    }
+
+    const found = handleAgentFind({}, settings as never)
+    expect(found.roster.map((member) => member.provider)).toEqual(['local'])
+    expect(found.matches.map((member) => member.provider)).toEqual(['local'])
+    expect(resolveConsultTarget({ toAgent: 'executor' }, settings as never)).toBeNull()
+    expect(resolveOverwatcher(settings as never)).toBeNull()
   })
 
   it('classifies Qwen 3.6 with the deliberative Qwen capability family', () => {
