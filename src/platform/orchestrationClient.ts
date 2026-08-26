@@ -22,8 +22,7 @@ import {
 } from '@/platform/agent/agentIdentity'
 import type { AgentRoleId } from '@/platform/agent/agentIdentity'
 import { buildAgentRoster, type RosterMember } from '@/platform/agent/modelTags'
-import { recordModelFailure, isModelHealthy } from '@/platform/agent/modelHealth'
-import { getKey } from '@/platform/keyStore'
+import { isModelCredentialReady, recordModelFailure, isModelHealthy } from '@/platform/agent/modelHealth'
 import { subscribeSettingsChanged } from '@/platform/settingsStorage'
 import type {
   BroadcastArgs,
@@ -383,7 +382,7 @@ function resolveMemberSettings(member: RosterMember, settings: SubAgentSettings)
 
 function isMemberConnectable(member: RosterMember): boolean {
   if (!member.provider || !member.model) return false
-  return member.provider === 'local' || Boolean(getKey(member.provider, member.keyId || '1'))
+  return isModelCredentialReady(member.provider, member.keyId || '1')
 }
 
 export interface DroppedMember {
@@ -410,10 +409,7 @@ function standbyRoster(settings: SubAgentSettings): { connected: RosterMember[];
     } else {
       dropped.push({
         member,
-        reason:
-          member.provider === 'local'
-            ? 'local server has no key/endpoint resolved'
-            : `no API key saved for ${member.provider} Key ${member.keyId || '1'}`,
+        reason: `no API key saved for ${member.provider} Key ${member.keyId || '1'}`,
       })
     }
   }
@@ -465,7 +461,7 @@ export function syncStandbyPool(settings: SubAgentSettings): StandbyPoolState {
     members: desired.map((m) => m.id),
     roles: Array.from(new Set(desired.map((m) => m.role))),
     connected: desired,
-    dropped: roster.dropped,
+    dropped: [],
   }
 }
 
@@ -508,6 +504,9 @@ export function pickDelegateMember(
   )
   if (!candidates.length) {
     const resolved = resolveAgentRoleSettings(role, settings)
+    if (!isModelCredentialReady(resolved.identity.provider, resolved.identity.keyId)) {
+      throw new Error(`No available ${role} agent is configured.`)
+    }
     return { agentId: role, identity: resolved.identity, subSettings: resolved.settings }
   }
   const idle = candidates.filter((c) => isAgentAvailable(c.member.id))
