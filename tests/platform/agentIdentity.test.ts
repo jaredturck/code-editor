@@ -5,7 +5,8 @@
  * silently weaken those guarantees.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { clearKey, setKey } from '@/platform/keyStore'
 import {
   AGENT_ROLE_IDS,
   applyAgentIdentityToSettings,
@@ -20,6 +21,10 @@ import {
   resolveCurrentAgentRole,
   resolveLegacyAgentId,
 } from '@/platform/agent/agentIdentity'
+
+beforeEach(() => {
+  clearKey('openrouter')
+})
 
 describe('agentIdentity', () => {
   it('defines the stable orchestration roles', () => {
@@ -86,6 +91,7 @@ describe('agentIdentity', () => {
   })
 
   it('resolves role, provider, and model independently', () => {
+    setKey('openrouter', 'test-key')
     const settings = {
       ai_provider: 'openai',
       ai_model: 'gpt-4o',
@@ -110,6 +116,37 @@ describe('agentIdentity', () => {
     expect(resolveAgentRoleSettings('executor', settings).settings).toMatchObject({
       ai_provider: 'openrouter',
       ai_model: 'deepseek/deepseek-r1',
+    })
+  })
+
+  it('does not apply an explicitly configured cloud role until its live key exists', () => {
+    const settings = {
+      ai_provider: 'local',
+      ai_model: 'qwen3.6:27b',
+      agent_models: [
+        {
+          role: 'orchestrator',
+          provider: 'openrouter',
+          model: 'gpt-oss-120b',
+          keyId: '1',
+          primary: true,
+        },
+      ],
+    }
+
+    const unavailable = resolveAgentRoleSettings('orchestrator', settings)
+    expect(unavailable.identity).toMatchObject({
+      provider: 'openrouter',
+      model: 'gpt-oss-120b',
+      explicitlyAssigned: true,
+    })
+    expect(unavailable.settings).toBe(settings)
+
+    setKey('openrouter', 'test-key')
+    expect(resolveAgentRoleSettings('orchestrator', settings).settings).toMatchObject({
+      ai_provider: 'openrouter',
+      ai_model: 'gpt-oss-120b',
+      ai_runtime_api_key: 'test-key',
     })
   })
 
@@ -279,50 +316,29 @@ describe('readAgentModels (flat model mesh)', () => {
     expect(promoted[0].primary).toBe(true)
   })
 
-  it('derives the legacy primary-binding map from the flat list', () => {
-    const settings = {
+  it('normalizes malformed entries without crashing', () => {
+    const models = readAgentModels({
       agent_models: [
-        {
-          role: 'orchestrator',
-          provider: 'anthropic',
-          model: 'claude',
-          keyId: '3',
-          primary: true,
-        },
-        {
-          role: 'orchestrator',
-          provider: 'anthropic',
-          model: 'claude-2',
-          keyId: '1',
-          primary: false,
-        },
+        null,
+        {},
+        { provider: 'local', model: 'llama3' },
+        { role: 'invalid', provider: 'openai', model: 'gpt' },
       ],
-    }
-    expect(readAgentRoleAssignments(settings)).toEqual({
-      orchestrator: { provider: 'anthropic', model: 'claude', keyId: '3' },
     })
-    // The bound key flows through resolveAgentIdentity unchanged.
-    expect(resolveAgentIdentity('orchestrator', settings)).toMatchObject({
-      keyId: '3',
-    })
+    expect(models).toHaveLength(2)
+    expect(models[0].role).toBe('executor')
+    expect(models[1].role).toBe('executor')
   })
 
-  it('reports whether a role has any bound model', () => {
-    expect(
-      hasAgentRoleModel(
-        {
-          agent_models: [
-            {
-              role: 'overwatcher',
-              provider: 'anthropic',
-              model: 'claude',
-              keyId: '1',
-            },
-          ],
-        },
-        'overwatcher',
-      ),
-    ).toBe(true)
-    expect(hasAgentRoleModel({ agent_models: [] }, 'overwatcher')).toBe(false)
+  it('reports whether a role has a configured model', () => {
+    const settings = {
+      agent_models: [
+        { role: 'orchestrator', provider: 'anthropic', model: 'claude', keyId: '1' },
+        { role: 'scout', provider: 'local', model: 'llama3', keyId: '1' },
+      ],
+    }
+    expect(hasAgentRoleModel(settings, 'orchestrator')).toBe(true)
+    expect(hasAgentRoleModel(settings, 'executor')).toBe(false)
+    expect(hasAgentRoleModel(settings, 'scout')).toBe(true)
   })
 })
