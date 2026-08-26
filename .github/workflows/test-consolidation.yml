@@ -261,8 +261,8 @@ jobs:
             exit 1
           fi
 
-          if git grep -n -E '(describe|it|test)\.(only|skip|todo)' -- tests; then
-            echo 'Focused, skipped, or todo tests remain in the centralized suite.' >&2
+          if git grep -n -E '(describe|it|test)\.(only|skip|todo)\(' -- tests; then
+            echo 'Focused, unconditionally skipped, or todo tests remain in the centralized suite.' >&2
             exit 1
           fi
 
@@ -271,7 +271,9 @@ jobs:
       - name: Verify repository
         env:
           ELECTRON_DISABLE_SANDBOX: '1'
-        run: npm run verify:full
+        run: |
+          npm ci
+          npm run verify:full
 
       - name: Commit consolidation
         run: |
