@@ -5,7 +5,6 @@ import path from 'node:path'
 import { resolveExistingPathWithinRoots } from '../shared/filesystemBoundary.js'
 import { getFileIndexAccessRoots } from './fileIndexSourceService.js'
 import { extractDocumentText } from './fileDocumentService.js'
-import { extractPdfText } from './filePdfService.js'
 import { hasZipSignature } from './fileArchiveService.js'
 
 const SIGNATURE_BYTES = 8
@@ -50,6 +49,7 @@ export async function inspectIndexedDocument(
   const controller = new AbortController()
 
   if (hasPdfSignature(signature)) {
+    const { extractPdfText } = await import('./filePdfService.js')
     const extracted = await extractPdfText(targetPath, controller.signal)
     if (!extracted) throw new Error('IRIS could not extract searchable text from this PDF.')
     return {

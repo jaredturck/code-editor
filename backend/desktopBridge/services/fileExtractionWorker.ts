@@ -2,19 +2,23 @@
 
 import { parentPort } from 'node:worker_threads'
 import { extractDocumentText } from './fileDocumentService.js'
-import { extractPdfText } from './filePdfService.js'
 import type { FileExtractionWorkerRequest, FileExtractionWorkerResponse } from './fileExtractionWorkerTypes.js'
 
 const workerPort = parentPort
 if (!workerPort) throw new Error('File extraction worker requires a parent port')
 
+async function extractRequestedFile(request: FileExtractionWorkerRequest, signal: AbortSignal) {
+  if (request.kind === 'pdf') {
+    const { extractPdfText } = await import('./filePdfService.js')
+    return extractPdfText(request.filePath, signal)
+  }
+  return extractDocumentText(request.filePath, signal)
+}
+
 workerPort.on('message', async (request: FileExtractionWorkerRequest) => {
   const controller = new AbortController()
   try {
-    const result =
-      request.kind === 'pdf'
-        ? await extractPdfText(request.filePath, controller.signal)
-        : await extractDocumentText(request.filePath, controller.signal)
+    const result = await extractRequestedFile(request, controller.signal)
     const response: FileExtractionWorkerResponse = {
       id: request.id,
       result,
