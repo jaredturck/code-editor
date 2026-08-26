@@ -10,12 +10,15 @@ import {
   buildPersistentPermissionPatch,
   normalizePersistentPermissionKeys,
   readOrbSettings,
-  writeOrbSettings,
   type OrbSettings,
   type PersistentPermissionKey,
 } from '@/platform/settingsStorage'
 import type { ApprovalRequest, ApprovalResolver, ApprovalResolution } from '../types'
-import { isApprovalDecisionApproved, normalizeApprovalDecision } from '../utils/approvals'
+import {
+  formatApprovalRequestForDisplay,
+  isApprovalDecisionApproved,
+  normalizeApprovalDecision,
+} from '../utils/approvals'
 
 export interface ResolveApprovalOptions {
   timedOut?: boolean
@@ -128,24 +131,17 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     const requestType = String(request?.requestType || 'permission').toLowerCase()
     const permissionKeys = normalizePersistentPermissionKeys(request?.permissionKeys)
     const explicitPermissionDecision =
-      requestType === 'permission' &&
-      permissionKeys.length > 0 &&
-      (normalizedDecision === 'allow_once' || normalizedDecision === 'allow_always')
+      requestType === 'permission' && permissionKeys.length > 0 && normalizedDecision === 'allow_once'
     let approved = isApprovalDecisionApproved(normalizedDecision) || explicitPermissionDecision
 
     if (approved && explicitPermissionDecision) {
       const current = readOrbSettings()
-      const requestedPatch = buildPersistentPermissionPatch(permissionKeys)
       const transientKeys = Array.from(transientPermissionKeysRef.current)
       const activePatch = buildPersistentPermissionPatch([...transientKeys, ...permissionKeys])
       const activeSettings = { ...current, ...activePatch } as OrbSettings
       try {
         await syncBridgePermissions(activeSettings)
-        if (normalizedDecision === 'allow_always') {
-          writeOrbSettings({ ...current, ...requestedPatch })
-        } else {
-          for (const key of permissionKeys) transientPermissionKeysRef.current.add(key)
-        }
+        for (const key of permissionKeys) transientPermissionKeysRef.current.add(key)
       } catch (error) {
         approved = false
         setStatus(error instanceof Error ? error.message : 'The requested permission could not be enabled.')
@@ -185,9 +181,7 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     }
 
     if (permissionKeys.length > 0) {
-      if (!approved) setStatus('Permission denied.')
-      else if (normalizedDecision === 'allow_always') setStatus('Permission enabled in Settings.')
-      else setStatus('Permission allowed for this project run.')
+      setStatus(approved ? 'Permission allowed for this project run.' : 'Permission denied.')
       return
     }
 
@@ -208,21 +202,7 @@ export function useApprovalController(setStatus: React.Dispatch<React.SetStateAc
     if (options.timedOut) setStatus('Question timed out — the agent will continue with its best judgment.')
   }
 
-  const displayApprovalRequests = approvalRequests.map((request) => {
-    const requestType = String(request.requestType || '').toLowerCase()
-    const expiresAt = Number(request.expiresAt || 0)
-    if (requestType === 'question' || !expiresAt) return request
-
-    const secondsRemaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000))
-    const description = String(
-      request.requestedAction || request.reason || 'The agent is requesting permission before continuing.',
-    )
-
-    return {
-      ...request,
-      requestedAction: `${description}\nAuto-denies in ${secondsRemaining}s if you do not respond.`,
-    }
-  })
+  const displayApprovalRequests = approvalRequests.map((request) => formatApprovalRequestForDisplay(request))
 
   return {
     approvalRequests: displayApprovalRequests,

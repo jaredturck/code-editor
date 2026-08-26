@@ -1,6 +1,6 @@
 /** Normalizes interactive approval choices before they are returned to an active agent run. */
 
-import type { ApprovalOption, ApprovalRequest } from '../types'
+import type { ApprovalOption, ApprovalRequest, UnknownRecord } from '../types'
 
 export function normalizeApprovalDecision(value: unknown): string {
   const token = String(value || '')
@@ -21,6 +21,63 @@ export function normalizeApprovalDecision(value: unknown): string {
 
 export function isApprovalDecisionApproved(decision: unknown): boolean {
   return ['approve', 'continue', 'extend', 'unlimited'].includes(normalizeApprovalDecision(decision))
+}
+
+function approvalStepAction(request: Partial<ApprovalRequest> | null | undefined): UnknownRecord {
+  const stepAction = request?.stepAction
+  if (!stepAction || typeof stepAction !== 'object' || Array.isArray(stepAction)) return {}
+  return stepAction
+}
+
+export function approvalCommand(request: Partial<ApprovalRequest> | null | undefined): string {
+  const stepAction = approvalStepAction(request)
+  const direct = String(request?.command || stepAction.command || '').trim()
+  if (direct) return direct
+
+  const requestedAction = String(request?.requestedAction || '').trim()
+  const tool = String(request?.requestedTool || request?.tool || '').toLowerCase()
+  if (tool === 'terminal.exec') {
+    return requestedAction.replace(/^run command\s+/i, '').trim()
+  }
+  if (tool === 'launch.run') {
+    return requestedAction.replace(/^launch\s+/i, '').trim()
+  }
+  return ''
+}
+
+export function approvalWorkingDirectory(request: Partial<ApprovalRequest> | null | undefined): string {
+  const stepAction = approvalStepAction(request)
+  return String(request?.cwd || stepAction.cwd || '').trim()
+}
+
+export function formatApprovalRequestForDisplay(request: ApprovalRequest, now = Date.now()): ApprovalRequest {
+  const requestType = String(request.requestType || '').toLowerCase()
+  if (requestType === 'question') return request
+
+  const command = approvalCommand(request)
+  const cwd = approvalWorkingDirectory(request)
+  const defaultDescription = 'The agent is requesting permission before continuing.'
+  const description = String(
+    command
+      ? request.reason || request.requestedAction || defaultDescription
+      : request.requestedAction || request.reason || defaultDescription,
+  ).trim()
+  const sections: string[] = []
+
+  if (description && description !== command) sections.push(description)
+  if (command) sections.push(`Command:\n${command}`)
+  if (command && cwd) sections.push(`Working directory:\n${cwd}`)
+
+  const expiresAt = Number(request.expiresAt || 0)
+  if (expiresAt) {
+    const secondsRemaining = Math.max(0, Math.ceil((expiresAt - now) / 1000))
+    sections.push(`Auto-denies in ${secondsRemaining}s if you do not respond.`)
+  }
+
+  return {
+    ...request,
+    requestedAction: sections.join('\n\n') || defaultDescription,
+  }
 }
 
 function getDefaultApprovalOptions(requestType: unknown): ApprovalOption[] {
@@ -78,12 +135,6 @@ export function normalizeApprovalOptions(request: Partial<ApprovalRequest> | nul
         label: 'Allow once',
         description: 'Enable this capability for the current project run only.',
         recommended: true,
-      },
-      {
-        id: 'allow_always',
-        label: 'Always allow',
-        description: 'Enable this capability in Settings for future runs.',
-        recommended: false,
       },
       {
         id: 'deny',

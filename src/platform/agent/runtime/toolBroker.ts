@@ -48,6 +48,12 @@ const workspaceFileTools = new Set([
 
 type LegacyBrokerOptions = Parameters<typeof createLegacyModuleBroker>[0]
 
+interface ApprovalExecutionContext {
+  toolName: string
+  command: string
+  cwd: string
+}
+
 function verificationState(options: LegacyBrokerOptions) {
   const state = options?.settings?.agent_verification_state
   if (!state || typeof state !== 'object' || Array.isArray(state)) return null
@@ -112,12 +118,34 @@ function approvalGranted(response: unknown) {
   )
 }
 
+function withApprovalExecutionContext(options: LegacyBrokerOptions, context: ApprovalExecutionContext) {
+  const onApprovalRequest = options?.onApprovalRequest
+  if (typeof onApprovalRequest !== 'function') return options
+
+  return {
+    ...options,
+    onApprovalRequest: (request: Record<string, unknown>) => {
+      const record = request && typeof request === 'object' && !Array.isArray(request) ? request : {}
+      const command = String(record.command || context.command || '').trim()
+      const cwd = String(record.cwd || context.cwd || '').trim()
+      const tool = String(record.tool || record.requestedTool || context.toolName || '').trim()
+      return onApprovalRequest({
+        ...record,
+        ...(tool ? { tool } : {}),
+        ...(command ? { command } : {}),
+        ...(cwd ? { cwd } : {}),
+      })
+    },
+  }
+}
+
 async function requestWorkspaceEscapeApproval(options: LegacyBrokerOptions, toolName: string, description: string) {
   if (typeof options?.onApprovalRequest !== 'function') return false
   const response = await options.onApprovalRequest({
     requestType: 'approval',
     reason: `${toolName} is attempting to access outside the open project workspace.`,
     requestedAction: description,
+    requestedTool: toolName,
     tool: toolName,
     recommendedDecision: 'deny',
     options: [
@@ -139,13 +167,19 @@ async function requestWorkspaceEscapeApproval(options: LegacyBrokerOptions, tool
 }
 
 export function createModuleBroker(options: LegacyBrokerOptions) {
-  const legacy = createLegacyModuleBroker(options)
   const workspaceRoot = String(options?.settings?.agent_working_dir || '').trim()
   const approvalState = options?.approvalState || {}
+  const approvalContext: ApprovalExecutionContext = {
+    toolName: '',
+    command: '',
+    cwd: workspaceRoot,
+  }
+  const contextualOptions = withApprovalExecutionContext(options, approvalContext)
+  const legacy = createLegacyModuleBroker(contextualOptions)
   const workspaceAutonomousLegacy = createLegacyModuleBroker({
-    ...options,
+    ...contextualOptions,
     settings: {
-      ...(options?.settings || {}),
+      ...(contextualOptions?.settings || {}),
       agent_require_explicit_approval: false,
     },
     approvalState: {
@@ -167,6 +201,9 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
     async execute(toolName: string, args: Record<string, unknown> = {}) {
       const state = verificationState(options)
       const automaticMode = String(options?.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
+      approvalContext.toolName = toolName
+      approvalContext.command = String(args.command || '').trim()
+      approvalContext.cwd = String(args.cwd || workspaceRoot || '').trim()
 
       if (toolName === 'approval.request' && automaticMode) {
         return {
@@ -205,7 +242,11 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         if (workspaceRoot && workspaceFileTools.has(toolName)) {
           const targetPath = String(args.path || '.')
           if (!isWorkspacePath(targetPath, workspaceRoot)) {
-            const approved = await requestWorkspaceEscapeApproval(options, toolName, `${toolName} ${targetPath}`)
+            const approved = await requestWorkspaceEscapeApproval(
+              contextualOptions,
+              toolName,
+              `${toolName} ${targetPath}`,
+            )
             if (!approved) {
               return {
                 error: 'Workspace boundary access was denied. Continue using files inside the open project.',
@@ -225,7 +266,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
 
           if (workspaceRoot && terminalCommandEscapesWorkspace(args.command, workspaceRoot, args.cwd)) {
             const approved = await requestWorkspaceEscapeApproval(
-              options,
+              contextualOptions,
               toolName,
               String(args.command || 'terminal command'),
             )

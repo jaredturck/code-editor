@@ -120,4 +120,56 @@ describe('tool broker permission grants', () => {
     expect(approvalState.sessionPermissionOverrides).toEqual({ file_write: true })
     expect(approvalState.granted).toBe(true)
   })
+
+  it('includes the exact terminal command and working directory in boundary approvals', async () => {
+    const onApprovalRequest = vi.fn().mockResolvedValue({
+      approved: false,
+      decision: 'deny',
+    })
+    const broker = createModuleBroker({
+      settings: {
+        ...DEFAULT_ORB_SETTINGS,
+        agent_project_run_mode: 'automatic',
+        agent_working_dir: '/workspace/project',
+      },
+      todoTool: {
+        list: () => [],
+        applyUpdates: () => [],
+      },
+      traceTool: {
+        thinking: vi.fn(),
+      },
+      safetyConfig: {
+        profile: 'strict',
+        requireExplicitApproval: false,
+        maxSteps: 12,
+      },
+      approvalState: {
+        granted: false,
+        sessionPermissionOverrides: {},
+      },
+      webSearchState: {},
+      userInput: 'inspect an outside file',
+      requestAI: vi.fn(),
+      onApprovalRequest,
+      stepHistory: [],
+    })
+
+    await expect(
+      broker.execute('terminal.exec', {
+        command: 'cat /tmp/outside.txt',
+        cwd: '/workspace/project',
+      }),
+    ).resolves.toMatchObject({ denied: true })
+
+    expect(onApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestType: 'approval',
+        requestedTool: 'terminal.exec',
+        tool: 'terminal.exec',
+        command: 'cat /tmp/outside.txt',
+        cwd: '/workspace/project',
+      }),
+    )
+  })
 })

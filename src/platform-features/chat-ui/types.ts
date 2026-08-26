@@ -20,6 +20,12 @@ export interface ApprovalRequest extends UnknownRecord {
   id: string
   requestType?: string
   reason?: string
+  requestedAction?: string
+  requestedTool?: string
+  tool?: string
+  command?: string
+  cwd?: string
+  stepAction?: UnknownRecord
   options?: ApprovalOption[]
   question?: string
   questionOptions?: string[]
