@@ -1,11 +1,12 @@
 /**
  * Tier-exhaustion recovery (WS6): recommends a model that is RECOMMENDED (best role fit) AND
- * AVAILABLE (valid key / installed locally) and healthy, excluding the failing model — so the chat
+ * AVAILABLE (saved key / installed locally) and healthy, excluding the failing model — so the chat
  * can offer to load it instead of stopping.
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { recommendRecoveryModel } from '@/platform/agent/modelRecovery'
 import { resetModelHealth, recordModelFailure } from '@/platform/agent/modelHealth'
+import { clearKey, setKey } from '@/platform/keyStore'
 
 const settings = {
   discovered_models: { local: ['qwen3:8b', 'llama3.1:8b'] },
@@ -21,7 +22,10 @@ const settings = {
 }
 
 describe('modelRecovery', () => {
-  beforeEach(() => resetModelHealth())
+  beforeEach(() => {
+    resetModelHealth()
+    clearKey('openai')
+  })
 
   it('recommends an available, healthy model and excludes the failing one', async () => {
     const rec = await recommendRecoveryModel(settings, 'orchestrator', [
@@ -29,6 +33,17 @@ describe('modelRecovery', () => {
     ])
     expect(rec).toBeTruthy()
     expect(`${rec!.provider}:${rec!.model}`).not.toBe('openai:gpt-4.1')
+  })
+
+  it('does not offer a cloud recovery model from stale validation when its key is absent', async () => {
+    const cloudOnly = { ...settings, discovered_models: { local: [] } }
+    await expect(recommendRecoveryModel(cloudOnly, 'orchestrator')).resolves.toBeNull()
+
+    setKey('openai', 'test-key')
+    await expect(recommendRecoveryModel(cloudOnly, 'orchestrator')).resolves.toMatchObject({
+      provider: 'openai',
+      requiresDownload: false,
+    })
   })
 
   it('skips models that are currently suspended', async () => {
