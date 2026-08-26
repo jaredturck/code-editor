@@ -7,7 +7,12 @@
  */
 import { buildAgentRoster } from '@/platform/agent/modelTags'
 import { discoverModelsForProvider } from '@/platform/aiService'
-import { clearModelHealth, listSuspendedModelKeys, modelHealthKey } from '@/platform/agent/modelHealth'
+import {
+  clearModelHealth,
+  isModelCredentialReady,
+  listSuspendedModelKeys,
+  modelHealthKey,
+} from '@/platform/agent/modelHealth'
 import { subscribeSettingsChanged } from '@/platform/settingsStorage'
 
 type Settings = Record<string, unknown>
@@ -42,7 +47,10 @@ function suspendedRoster(settings: Settings) {
   const suspended = new Set(listSuspendedModelKeys())
   return buildAgentRoster(settings).filter(
     (member) =>
-      member.provider && member.model && suspended.has(modelHealthKey(member.provider, member.model, member.keyId)),
+      member.provider &&
+      member.model &&
+      isModelCredentialReady(member.provider, member.keyId) &&
+      suspended.has(modelHealthKey(member.provider, member.model, member.keyId)),
   )
 }
 
