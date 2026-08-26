@@ -9,6 +9,10 @@ vi.mock('../src/components/CodeEditor', () => ({
   default: () => <div data-testid="code-editor" />,
 }))
 
+vi.mock('../src/components/viewers/MediaViewer', () => ({
+  default: () => <div data-testid="media-viewer" />,
+}))
+
 function text_document(id: number, name: string, file_path: string, dirty = false): TextEditorDocument {
   return {
     kind: 'text',
