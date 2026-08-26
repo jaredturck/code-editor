@@ -86,28 +86,53 @@ jobs:
 
           for folder in [Path('tests/platform'), Path('tests/backend')]:
               for path in sorted(folder.glob('*.test.ts')):
-                  text = rewrite_source_paths(path.read_text())
-                  if not text.startswith("import '../runtimeSetup'"):
-                      text = "import '../runtimeSetup'\n" + text
-                  path.write_text(text)
+                  path.write_text(rewrite_source_paths(path.read_text()))
 
           harness_path = Path('tests/backend/bridgeRouteTestHarness.ts')
           harness_path.write_text(rewrite_source_paths(harness_path.read_text()))
 
           package_path = Path('package.json')
           package = json.loads(package_path.read_text())
-          package['scripts']['test'] = 'npm run build:backend && npm run build:electron && vitest run --exclude "tests/platform/**" --exclude "tests/backend/**" && vitest run --dir tests/platform && vitest run --dir tests/backend'
+          package['scripts']['test'] = 'npm run build:backend && npm run build:electron && vitest run'
           for script in ['test:iris', 'benchmark', 'benchmark:iris']:
               package['scripts'].pop(script, None)
           package.get('devDependencies', {}).pop('vite-node', None)
           package_path.write_text(json.dumps(package, indent=2) + '\n')
+
+          config_path = Path('vitest.config.ts')
+          config = config_path.read_text()
+          old_test_config = "  test: {\n    environment: 'jsdom',\n    setupFiles: ['./tests/setup.ts'],\n    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],\n  },"
+          new_test_config = (
+              "  test: {\n"
+              "    environment: 'jsdom',\n"
+              "    projects: [\n"
+              "      {\n"
+              "        test: {\n"
+              "          name: 'editor',\n"
+              "          setupFiles: ['./tests/setup.ts'],\n"
+              "          include: ['tests/*.test.ts', 'tests/*.test.tsx'],\n"
+              "        },\n"
+              "      },\n"
+              "      {\n"
+              "        test: {\n"
+              "          name: 'runtime',\n"
+              "          setupFiles: ['./tests/runtimeSetup.ts'],\n"
+              "          include: ['tests/platform/**/*.test.ts', 'tests/backend/**/*.test.ts'],\n"
+              "        },\n"
+              "      },\n"
+              "    ],\n"
+              "  },"
+          )
+          if old_test_config not in config:
+              raise SystemExit('Expected Vitest test configuration was not found')
+          config_path.write_text(config.replace(old_test_config, new_test_config))
 
           readme_path = Path('README.md')
           readme = readme_path.read_text()
           readme = readme.replace('- Preserved local IRIS benchmark suite available through `npm run benchmark`\n', '')
           readme = readme.replace(
               '`npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The benchmark suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`.',
-              '`npm test` runs the complete centralized Code Editor test tree, with platform/backend runtime coverage isolated from editor tests. `npm run verify:full` runs the complete correctness/build verification sequence.',
+              '`npm test` runs the complete centralized Code Editor test tree through isolated editor and runtime test projects. `npm run verify:full` runs the complete correctness/build verification sequence.',
           )
           readme_path.write_text(readme)
 
@@ -134,7 +159,7 @@ jobs:
               '### Tests\n\n'
               '**IRIS source:** original IRIS runtime/backend tests  \n'
               '**Current destination:** `tests/platform/` and `tests/backend/`\n\n'
-              'The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree. Platform/backend tests run in isolated Vitest passes so their shared runtime guards cannot alter editor-test globals. Presentation-only and migration-only tests were retired.\n\n'
+              'The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree. The normal Vitest configuration isolates editor tests from runtime/backend tests so their shared setup does not leak between groups. Presentation-only and migration-only tests were retired.\n\n'
               'The standalone IRIS benchmark harness was removed during post-migration cleanup because it was not connected to product behavior or CI.\n\n'
               '### Historical IRIS documentation'
           )
@@ -145,7 +170,7 @@ jobs:
               '### Git history'
           )
           migration = re.sub(r'### Preserved tests\n.*?### Git history', preserved_tests, migration, flags=re.DOTALL)
-          unified_test_text = '`npm test` performs backend/Electron builds and runs the centralized Code Editor tests in isolated Vitest passes, including platform and backend regression coverage under `tests/`.\n\n### Verification state at documentation consolidation'
+          unified_test_text = '`npm test` performs backend/Electron builds and runs the centralized Code Editor tests as isolated editor and runtime projects, including platform and backend regression coverage under `tests/`.\n\n### Verification state at documentation consolidation'
           migration = re.sub(r'`npm test` performs backend/Electron builds,.*?### Verification state at documentation consolidation', unified_test_text, migration, flags=re.DOTALL)
           migration = migration.replace('- [x] Compatible migrated IRIS tests in `npm test`', '- [x] Consolidated platform/backend regression coverage in `npm test`')
           migration = migration.replace('- [x] Preserved benchmark harness in `npm run benchmark`\n', '')
@@ -157,6 +182,7 @@ jobs:
           npx prettier --write \
             package.json \
             package-lock.json \
+            vitest.config.ts \
             README.md \
             tests/platform \
             tests/backend \
