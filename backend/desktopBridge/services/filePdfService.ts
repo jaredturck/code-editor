@@ -56,10 +56,7 @@ function abortError(): Error {
 }
 
 function normalizePdfText(value: string): string {
-  return value
-    .replace(/\u0000/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return value.split('\u0000').join('').replace(/\s+/g, ' ').trim()
 }
 
 function hasUsefulPdfText(value: string): boolean {
