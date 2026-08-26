@@ -7,7 +7,7 @@
  * selection remains independently configurable.
  */
 
-import { getKey, normalizeKeyId } from '@/platform/keyStore'
+import { getKey, hasKeyFor, normalizeKeyId } from '@/platform/keyStore'
 
 export const AGENT_ROLE_IDS = ['orchestrator', 'executor', 'scout', 'overwatcher'] as const
 
@@ -17,7 +17,7 @@ export interface AgentRoleBinding {
   provider: string
   model: string
   /** Which of the provider's keys this role uses (Key 1/2/…); defaults to "1". Lets concurrent
-   *  agents use DIFFERENT keys so they don't share one provider's rate limit. */
+   *  agents use DIFFERENT keys so they don't share a rate limit. */
   keyId?: string
 }
 
@@ -95,6 +95,14 @@ function roleLookupText(value: unknown): string {
 // without changing whitespace or the persisted assignment values.
 function legacyComparableText(value: unknown): string {
   return String(value || '').toLowerCase()
+}
+
+function isIdentityRunnable(identity: AgentIdentity): boolean {
+  if (!identity.explicitlyAssigned) return true
+  const provider = identity.provider.trim().toLowerCase()
+  if (!provider) return false
+  if (provider === 'local') return true
+  return hasKeyFor(provider, identity.keyId)
 }
 
 // Evaluates whether is agent role id for the supplied value and current runtime state.
@@ -263,7 +271,7 @@ export function resolveAgentRoleSettings<T extends SettingsLike>(
   const identity = resolveAgentIdentity(roleInput, settings)
   return {
     identity,
-    settings: applyAgentIdentityToSettings(settings, identity),
+    settings: isIdentityRunnable(identity) ? applyAgentIdentityToSettings(settings, identity) : settings,
   }
 }
 
