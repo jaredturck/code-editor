@@ -10,6 +10,7 @@
 
 import { getKey } from '@/platform/keyStore'
 import { readAgentModels, type AgentModelEntry, type AgentRoleId } from '@/platform/agent/agentIdentity'
+import { isModelCredentialReady } from '@/platform/agent/modelHealth'
 import { evaluateModel, type ModelEvaluation } from '@/platform/autoSetup/modelSelectionRules'
 import {
   getValidProviderKeyIds,
@@ -109,7 +110,7 @@ function resolveFinalResponder(settings: SettingsLike): CloudResponder | null {
   const provider = String(assigned?.provider || settings.ai_provider || '').trim()
   const model = String(assigned?.model || settings.ai_model || '').trim()
   const keyId = String(assigned?.keyId || '1')
-  if (!provider || !model || isLocalProvider(provider)) return null
+  if (!provider || !model || isLocalProvider(provider) || !isModelCredentialReady(provider, keyId)) return null
   return {
     id: assigned?.id || `orchestrator:${provider}:${model}:${keyId}`.toLowerCase(),
     provider,
@@ -123,7 +124,13 @@ export function getAllowedCloudCandidates(settings: SettingsLike): CloudResponde
   const result: CloudResponder[] = []
   const addCandidate = (candidate: CloudResponder): void => {
     const identity = `${candidate.provider}:${candidate.model}:${candidate.keyId}`.toLowerCase()
-    if (!candidate.provider || !candidate.model || isLocalProvider(candidate.provider) || seen.has(identity)) {
+    if (
+      !candidate.provider ||
+      !candidate.model ||
+      isLocalProvider(candidate.provider) ||
+      !isModelCredentialReady(candidate.provider, candidate.keyId) ||
+      seen.has(identity)
+    ) {
       return
     }
     seen.add(identity)
@@ -276,7 +283,13 @@ export function selectCloudConsultModel(
   question: string,
   finalResponder: CloudResponder,
 ): CloudResponder {
-  const pool = candidates.length ? candidates : [finalResponder]
+  const available = candidates.filter((candidate) => isModelCredentialReady(candidate.provider, candidate.keyId))
+  const pool = available.length
+    ? available
+    : isModelCredentialReady(finalResponder.provider, finalResponder.keyId)
+      ? [finalResponder]
+      : []
+  if (!pool.length) throw new Error('No credential-ready cloud model is available.')
   const role = inferredRole(question)
   return [...pool].sort((left, right) => {
     const score = scoreCandidate(right, role) - scoreCandidate(left, role)
@@ -288,6 +301,9 @@ export function selectCloudConsultModel(
 }
 
 export function buildCloudRequestSettings(settings: SettingsLike, candidate: CloudResponder): Record<string, any> {
+  if (!isModelCredentialReady(candidate.provider, candidate.keyId)) {
+    throw new Error(`No API key is saved for ${candidate.provider} Key ${candidate.keyId || '1'}.`)
+  }
   return {
     ...settings,
     ai_provider: candidate.provider,
