@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AgentActivityItem } from '../types/editor'
 
 interface AgentActivityTimelineProps {
@@ -142,54 +143,60 @@ function row_title(row: ActivityRow) {
 }
 
 function AgentActivityTimeline({ activity }: AgentActivityTimelineProps) {
-  const rows = pair_activity(activity)
+  const [expanded, set_expanded] = useState(false)
+  const rows = expanded ? pair_activity(activity) : []
 
   return (
-    <details className="mb-2 rounded-lg border border-[var(--border)] bg-black/[0.05] px-2 py-1.5">
+    <details
+      className="mb-2 rounded-lg border border-[var(--border)] bg-black/[0.05] px-2 py-1.5"
+      onToggle={(event) => set_expanded(event.currentTarget.open)}
+    >
       <summary className="cursor-pointer select-none text-[9px] font-medium text-[var(--muted)]">
-        Agent activity · {rows.length} action{rows.length === 1 ? '' : 's'}
+        Agent activity · {activity.length} event{activity.length === 1 ? '' : 's'}
       </summary>
-      <div className="mt-2 space-y-1">
-        {rows.map((row) => {
-          const state = activity_state(row)
-          const result_detail = row.result && row.result !== row.item ? row.result.detail : ''
-          const label = state_label(state)
+      {expanded && (
+        <div className="mt-2 space-y-1">
+          {rows.map((row) => {
+            const state = activity_state(row)
+            const result_detail = row.result && row.result !== row.item ? row.result.detail : ''
+            const label = state_label(state)
 
-          return (
-            <div
-              className="group flex min-w-0 gap-2 rounded-md px-1 py-1 hover:bg-white/[0.025]"
-              key={`${row.item.id}-${row.result?.id || ''}`}
-            >
-              <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${state_dot_class(state)}`} />
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-baseline gap-1.5 text-[9px]">
-                  <span className="truncate font-medium text-[var(--text)]">{row_title(row)}</span>
-                  {label && (
-                    <span
-                      className={
-                        state === 'failed'
-                          ? 'shrink-0 text-red-300'
-                          : state === 'warning'
-                            ? 'shrink-0 text-amber-300'
-                            : 'shrink-0 text-[var(--muted)]'
-                      }
-                    >
-                      ({label})
-                    </span>
+            return (
+              <div
+                className="group flex min-w-0 gap-2 rounded-md px-1 py-1 hover:bg-white/[0.025]"
+                key={`${row.item.id}-${row.result?.id || ''}`}
+              >
+                <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${state_dot_class(state)}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-baseline gap-1.5 text-[9px]">
+                    <span className="truncate font-medium text-[var(--text)]">{row_title(row)}</span>
+                    {label && (
+                      <span
+                        className={
+                          state === 'failed'
+                            ? 'shrink-0 text-red-300'
+                            : state === 'warning'
+                              ? 'shrink-0 text-amber-300'
+                              : 'shrink-0 text-[var(--muted)]'
+                        }
+                      >
+                        ({label})
+                      </span>
+                    )}
+                  </div>
+                  {row.call?.detail && <ActivityDetail detail={row.call.detail} tool={row.call.tool} />}
+                  {!row.call && row.item.detail && <ActivityDetail detail={row.item.detail} tool={row.item.tool} />}
+                  {result_detail && result_detail !== row.call?.detail && (
+                    <div className="mt-1 border-l border-[var(--border)] pl-2">
+                      <ActivityDetail detail={result_detail} tool={row.result?.tool || row.item.tool} />
+                    </div>
                   )}
                 </div>
-                {row.call?.detail && <ActivityDetail detail={row.call.detail} tool={row.call.tool} />}
-                {!row.call && row.item.detail && <ActivityDetail detail={row.item.detail} tool={row.item.tool} />}
-                {result_detail && result_detail !== row.call?.detail && (
-                  <div className="mt-1 border-l border-[var(--border)] pl-2">
-                    <ActivityDetail detail={result_detail} tool={row.result?.tool || row.item.tool} />
-                  </div>
-                )}
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </details>
   )
 }

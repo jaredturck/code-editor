@@ -26,6 +26,69 @@ import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/
 
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const MAX_VERIFICATION_REMEDIATION_PASSES = 2
+const STREAM_EVENT_INTERVAL_MS = 80
+
+type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
+
+class StreamEventCoalescer {
+  private pending: AgentRuntimeEvent | null = null
+  private timer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(
+    private readonly on_event: NonNullable<AgentSessionInput['onEvent']>,
+    private readonly interval_ms: number,
+  ) {}
+
+  emit(event: AgentRuntimeEvent) {
+    const record = event as unknown as Record<string, unknown>
+    if (String(record.type || '').toLowerCase() !== 'stream') {
+      this.flush()
+      this.on_event(event)
+      return
+    }
+
+    const step = String(record.step ?? '')
+    const pending_record = this.pending as unknown as Record<string, unknown> | null
+    const pending_step = pending_record ? String(pending_record.step ?? '') : ''
+    if (this.pending && step !== pending_step) this.flush()
+
+    const current_record = this.pending as unknown as Record<string, unknown> | null
+    const delta = `${String(current_record?.delta || '')}${String(record.delta || '')}`
+    this.pending = {
+      ...(current_record || {}),
+      ...record,
+      delta,
+    } as unknown as AgentRuntimeEvent
+
+    if (!this.timer) this.timer = setTimeout(() => this.flush(), this.interval_ms)
+  }
+
+  flush() {
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = null
+    const pending = this.pending
+    this.pending = null
+    if (pending) this.on_event(pending)
+  }
+}
+
+export function withThrottledStreamEvents(input: AgentSessionInput, interval_ms = STREAM_EVENT_INTERVAL_MS) {
+  if (typeof input.onEvent !== 'function') {
+    return {
+      input,
+      flush: () => undefined,
+    }
+  }
+
+  const coalescer = new StreamEventCoalescer(input.onEvent, Math.max(16, Math.round(interval_ms)))
+  return {
+    input: {
+      ...input,
+      onEvent: (event: AgentRuntimeEvent) => coalescer.emit(event),
+    },
+    flush: () => coalescer.flush(),
+  }
+}
 
 function cleanLine(value: unknown, maxChars = 500) {
   const clean = String(value || '')
@@ -298,7 +361,8 @@ async function persistOriginalProjectContext(
 /** Runs the established project lifecycle, then enforces model-defined verification evidence. */
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const taskInput = await withModelTaskContract(input)
-  const executionInput = withAutomaticApprovalPolicy(withVerificationState(taskInput))
+  const stream_events = withThrottledStreamEvents(withAutomaticApprovalPolicy(withVerificationState(taskInput)))
+  const executionInput = stream_events.input
   const state = activeVerificationState(executionInput)
   let priorCompacted = ''
 
@@ -310,7 +374,12 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     }
   }
 
-  let combined = await runLegacyAgentSession(executionInput)
+  let combined: AgentSessionResult
+  try {
+    combined = await runLegacyAgentSession(executionInput)
+  } finally {
+    stream_events.flush()
+  }
   let gate = state ? evaluateVerificationGate(state) : null
   let remediationPasses = 0
 
@@ -337,7 +406,12 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
       conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-80),
       todos: withoutVerificationTodo(combined.todos),
     }
-    const next = await runLegacyAgentSession(remediationInput)
+    let next: AgentSessionResult
+    try {
+      next = await runLegacyAgentSession(remediationInput)
+    } finally {
+      stream_events.flush()
+    }
     combined = mergeAgentResults(combined, next)
     gate = state ? evaluateVerificationGate(state) : null
   }
