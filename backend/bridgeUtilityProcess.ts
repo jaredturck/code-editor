@@ -16,10 +16,6 @@ interface ParentPortLike {
   postMessage: (message: unknown) => void
 }
 
-interface UtilityProcessLike extends NodeJS.Process {
-  parentPort?: ParentPortLike | null
-}
-
 interface BridgeHandle {
   port: number
   host: string
@@ -49,13 +45,18 @@ interface StartMessage {
 }
 
 const SCREEN_CAPTURE_PROVIDER_KEY = '__irisScreenCaptureProvider'
-const parent_port = (process as UtilityProcessLike).parentPort
 const pending_requests = new Map<string, PendingRequest>()
 let bridge_handle: BridgeHandle | null = null
 let request_sequence = 0
 let closing = false
 
-if (!parent_port) throw new Error('The local bridge utility process requires an Electron parentPort.')
+function get_parent_port(): ParentPortLike {
+  const candidate = (process as unknown as { parentPort?: ParentPortLike | null }).parentPort
+  if (!candidate) throw new Error('The local bridge utility process requires an Electron parentPort.')
+  return candidate
+}
+
+const parent_port = get_parent_port()
 
 function error_message(value: unknown) {
   return value instanceof Error ? value.message : String(value || 'Unknown utility-process error')
