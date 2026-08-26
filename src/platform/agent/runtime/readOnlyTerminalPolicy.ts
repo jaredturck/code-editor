@@ -102,11 +102,30 @@ export function isWorkspacePath(value: unknown, workspaceRoot: unknown) {
   return normalized === root || normalized.startsWith(`${root}/`)
 }
 
-function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string) {
+function stripRedirectionPrefix(value: string) {
+  return value.replace(/^\d*(?:>>?|<<?)/, '')
+}
+
+function hasOutsideShellExpansion(value: string) {
+  if (/`|\$\(/.test(value)) return true
+  return /\$(?:HOME|USERPROFILE|HOMEPATH)(?:[\\/]|$)|\$\{(?:HOME|USERPROFILE|HOMEPATH)\}(?:[\\/]|$)/i.test(value)
+}
+
+function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string): boolean {
   if (!value) return false
-  const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  let candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  candidate = stripRedirectionPrefix(candidate)
   if (!candidate || candidate === '--') return false
   if (/^https?:\/\//i.test(candidate)) return false
+  if (hasOutsideShellExpansion(candidate)) return true
+
+  if (/\s/.test(candidate)) {
+    const nested = splitWords(candidate)
+    if (nested && nested.length > 1 && nested.some((word) => argumentEscapesKnownWorkspace(word, workspaceRoot))) {
+      return true
+    }
+  }
+
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
   if (candidate.startsWith('-') && !candidate.includes('=')) return false
   return !isWorkspacePath(candidate, workspaceRoot)
@@ -114,9 +133,11 @@ function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string) {
 
 function argumentObviouslyEscapesWorkspace(value: string) {
   if (!value) return false
-  const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  let candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
+  candidate = stripRedirectionPrefix(candidate)
   if (!candidate || candidate === '--') return false
   if (/^https?:\/\//i.test(candidate)) return false
+  if (hasOutsideShellExpansion(candidate)) return true
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
   if (candidate.startsWith('-') && !candidate.includes('=')) return false
 
@@ -133,6 +154,23 @@ function commandArgumentsEscapeWorkspace(words: string[], workspaceRoot: string)
 function commandName(value: string) {
   const clean = value.replace(/\\/g, '/')
   return clean.slice(clean.lastIndexOf('/') + 1)
+}
+
+function commandMutatesOutsideWorkspace(words: string[]) {
+  const name = commandName(String(words[0] || '')).toLowerCase()
+  const args = words.slice(1).map((word) => word.toLowerCase())
+  const hasGlobalFlag = args.some((word) => word === '-g' || word === '--global' || word === '--system')
+
+  if (['npm', 'pnpm', 'bun'].includes(name) && (hasGlobalFlag || args[0] === 'link')) return true
+  if (name === 'yarn' && (hasGlobalFlag || args[0] === 'global')) return true
+  if (name === 'cargo' && ['install', 'uninstall'].includes(args[0] || '')) return true
+  if (name === 'go' && args[0] === 'install') return true
+  if (name === 'uv' && args[0] === 'tool') return true
+  if (name === 'pipx' && ['install', 'uninstall', 'upgrade'].includes(args[0] || '')) return true
+  if (name === 'gem' && ['install', 'uninstall', 'update'].includes(args[0] || '')) return true
+  if (name === 'composer' && args[0] === 'global') return true
+  if (name === 'corepack' && ['enable', 'disable'].includes(args[0] || '')) return true
+  return false
 }
 
 function safeGit(words: string[]) {
@@ -217,6 +255,7 @@ export function terminalCommandEscapesWorkspace(command: unknown, workspaceRoot:
   if (requestedCwd && !isWorkspacePath(requestedCwd, root)) return true
   const words = splitWords(String(command || '').trim())
   if (!words?.length) return false
+  if (commandMutatesOutsideWorkspace(words)) return true
   return commandArgumentsEscapeWorkspace(words, root)
 }
 
