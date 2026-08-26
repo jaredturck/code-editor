@@ -1,9 +1,10 @@
 # Documentation
 
-Current Code Editor documentation lives here. Current source and the passing `npm run verify:full` / GitHub `Verify` workflow are authoritative when documentation and implementation ever disagree.
+Current Code Editor documentation lives here. Current source and local `npm run verify:full` results are authoritative when documentation and implementation ever disagree. GitHub Actions workflows are intentionally absent; development and verification should not recreate them unless the maintainer explicitly requests CI.
 
 ## Current documentation
 
+- [`AI_DEVELOPMENT_INSTRUCTIONS.md`](./AI_DEVELOPMENT_INSTRUCTIONS.md) — required operating rules for future AI-assisted development, including direct `main` edits, conservative bug fixing, local verification, and prohibited workflow abuse.
 - [`MIGRATION.md`](./MIGRATION.md) — IRIS migration history, current architecture, authority boundaries and security invariants.
 - [`CODE_REVIEW_FINDINGS.md`](./CODE_REVIEW_FINDINGS.md) — current open repository-review finding plus resolved review history.
 - [`CODE_CLEANUP_REVIEW.md`](./CODE_CLEANUP_REVIEW.md) — cleanup boundaries and implementation that must not be deleted merely because it looks historical.
