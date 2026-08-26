@@ -284,12 +284,19 @@ function handleBridgeExit(code: number): void {
   rejectBridgeStart(new Error(`Local bridge utility process exited before startup completed (code ${code}).`))
   settleBridgeClose()
   if (unexpected) {
-    console.error(`[iris] local bridge utility process exited unexpectedly with code ${code}; the desktop window remains isolated.`)
+    console.error(
+      `[iris] local bridge utility process exited unexpectedly with code ${code}; the desktop window remains isolated.`,
+    )
   }
 }
 
 function handleBridgeError(type: string, location: string, report: string): void {
-  console.error('[iris] local bridge utility process error:', type, location, report ? '(diagnostic report available)' : '')
+  console.error(
+    '[iris] local bridge utility process error:',
+    type,
+    location,
+    report ? '(diagnostic report available)' : '',
+  )
 }
 
 function startBridgeProcess(

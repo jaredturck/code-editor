@@ -93,9 +93,7 @@ function handle_rpc_response(message: Record<string, unknown>) {
   pending.resolve(message.result)
 }
 
-function request_screen_capture(
-  request: ScreenCaptureProviderRequest = {},
-): Promise<ScreenCaptureProviderResult> {
+function request_screen_capture(request: ScreenCaptureProviderRequest = {}): Promise<ScreenCaptureProviderResult> {
   const id = next_request_id('screen')
   return new Promise<ScreenCaptureProviderResult>((resolve, reject) => {
     pending_requests.set(id, {
@@ -106,9 +104,7 @@ function request_screen_capture(
   })
 }
 
-function request_browser_search(
-  request: DuckDuckGoBrowserSearchRequest,
-): Promise<DuckDuckGoBrowserSearchResponse> {
+function request_browser_search(request: DuckDuckGoBrowserSearchRequest): Promise<DuckDuckGoBrowserSearchResponse> {
   const id = next_request_id('ddg')
   return new Promise<DuckDuckGoBrowserSearchResponse>((resolve, reject) => {
     const handle_abort = () => parent_port.postMessage({ type: 'ddg-cancel', id })
@@ -172,9 +168,7 @@ async function start_bridge(message: StartMessage) {
 
 function update_permissions(message: Record<string, unknown>) {
   if (!bridge_handle?.updatePermissions) return
-  const permissions = bridge_handle.updatePermissions(
-    (message.permissions || {}) as Partial<BridgePermissionState>,
-  )
+  const permissions = bridge_handle.updatePermissions((message.permissions || {}) as Partial<BridgePermissionState>)
   parent_port.postMessage({ type: 'permissions-state', permissions })
 }
 
