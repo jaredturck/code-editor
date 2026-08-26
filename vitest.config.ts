@@ -29,7 +29,23 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'app',
+          setupFiles: ['./tests/setup.ts'],
+          include: ['tests/*.test.ts', 'tests/*.test.tsx'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'platform',
+          setupFiles: ['./tests/runtimeSetup.ts'],
+          include: ['tests/platform/**/*.test.ts', 'tests/backend/**/*.test.ts'],
+        },
+      },
+    ],
   },
 })

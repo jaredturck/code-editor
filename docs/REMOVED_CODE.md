@@ -205,6 +205,14 @@ Also removed `.github/workflows/test-cleanup.yml`, a one-shot post-migration cle
 
 ---
 
+## 2026-08-26 — Centralized test tree and stale migration tests
+
+Consolidated the retained IRIS-derived runtime/backend regression tests into the normal `tests/` tree, removed the separate `migrated-tests/` hierarchy and `vitest.iris.config.ts`, and moved the Electron runtime smoke check under `tests/`.
+
+Removed six tests that no longer represented current product behavior: deleted Auth/local-profile/Orb/workspace-resize surfaces, an obsolete runtime-modularization test targeting removed paths, and a migration-only hosted-API retirement assertion. Renamed the still-useful provider helper and autonomous-execution tests to remove migration-batch naming.
+
+---
+
 ## Intentionally retained after review
 
 The cleanup process explicitly continues to protect:

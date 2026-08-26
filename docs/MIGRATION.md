@@ -42,15 +42,15 @@ The migration followed a **copy-before-rewrite** philosophy. Working IRIS implem
 
 The major migrated implementation areas are:
 
-| Current area             | Role                                                                                                                                                                    |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/platform/`          | Renderer-side agent runtime, providers, model policy, orchestration, skills, persistence clients, RAG and compatibility services                                        |
-| `src/platform-features/` | Reusable non-shell feature controllers/hooks extracted from IRIS presentation areas                                                                                     |
-| `backend/`               | Privileged local bridge/backend: encrypted persistence, filesystem/semantic services, web, agents, launcher, automation, audio, screen services and security boundaries |
-| `electron/platform/`     | Trusted Electron infrastructure: local bridge bootstrap, credential/storage-key handling, security, screen permissions, logging and hidden browser search support       |
-| `migrated-tests/iris/`   | Preserved and adapted IRIS runtime/backend tests                                                                                                                        |
-| `benchmarks/iris/`       | Preserved IRIS benchmark harness                                                                                                                                        |
-| `docs/iris-reference/`   | Historical documentation copied from the source IRIS project                                                                                                            |
+| Current area                        | Role                                                                                                                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/platform/`                     | Renderer-side agent runtime, providers, model policy, orchestration, skills, persistence clients, RAG and compatibility services                                        |
+| `src/platform-features/`            | Reusable non-shell feature controllers/hooks extracted from IRIS presentation areas                                                                                     |
+| `backend/`                          | Privileged local bridge/backend: encrypted persistence, filesystem/semantic services, web, agents, launcher, automation, audio, screen services and security boundaries |
+| `electron/platform/`                | Trusted Electron infrastructure: local bridge bootstrap, credential/storage-key handling, security, screen permissions, logging and hidden browser search support       |
+| `tests/platform/`, `tests/backend/` | Consolidated runtime/backend regression tests retained from the migrated platform                                                                                       |
+| `benchmarks/iris/`                  | Preserved IRIS benchmark harness                                                                                                                                        |
+| `docs/iris-reference/`              | Historical documentation copied from the source IRIS project                                                                                                            |
 
 The initial exact migration ledger recorded **376 explicit source-to-destination mappings**. **320 source IRIS files were not copied as implementation source**, primarily because they were presentation-only UI, generated output, or configuration replaced by Code Editor equivalents.
 
@@ -69,7 +69,7 @@ Migration completion means:
 1. The reusable IRIS runtime/backend implementation required by the Code Editor has been moved into the repository.
 2. The planned Code Editor-native product integrations are connected.
 3. Security properties that mattered to IRIS were preserved or strengthened at the new boundaries.
-4. The important migrated runtime/backend tests and benchmark harness were retained.
+4. The important runtime/backend tests were retained and later consolidated into the normal `tests/` tree; stale presentation and migration-only tests were retired.
 5. Presentation-only IRIS code that duplicated the Code Editor or belonged specifically to the old IRIS shell was deliberately omitted.
 6. Remaining old controller/compatibility helpers are treated as cleanup candidates only after reachability and dependency-backed verification, not as evidence of unfinished migration.
 
@@ -327,14 +327,12 @@ Examples include:
 
 These files are deliberately separate from the Code Editor's visual component hierarchy. Some are actively reused; some remain compatibility/reference candidates.
 
-### Tests and benchmarks
+### Tests
 
-**IRIS source:** original IRIS tests and benchmarks  
-**Current destination:** `migrated-tests/iris/` and `benchmarks/iris/`
+**IRIS source:** original IRIS runtime/backend tests  
+**Current destination:** `tests/platform/` and `tests/backend/`
 
-The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. Compatible runtime/backend suites were later adapted and re-enabled through `vitest.iris.config.ts` and `npm run test:iris`.
-
-The benchmark suite remains separate from deterministic verification because some benchmark workloads depend on available local models or retained local benchmark state.
+The original runtime/backend tests were initially preserved outside the normal Code Editor test tree so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful coverage was consolidated into `tests/`. The normal Vitest configuration isolates app tests from platform/backend tests so their setup does not leak between groups. Presentation-only, dead-module, and migration-only tests were retired.
 
 ### Historical IRIS documentation
 
@@ -958,11 +956,7 @@ That file was removed from the active documentation after migration completion b
 
 ### Preserved tests
 
-`migrated-tests/iris/` retains the original test heritage while current Code Editor tests cover integration-specific behavior.
-
-### Preserved benchmarks
-
-`benchmarks/iris/` retains the local benchmark framework and history-aware workloads.
+`tests/platform/` and `tests/backend/` retain useful runtime/backend regression coverage from the original test heritage alongside the Code Editor integration tests.
 
 ### Git history
 
@@ -989,15 +983,7 @@ or simply:
 npm run verify:full
 ```
 
-`npm test` performs backend/Electron builds, runs the normal Code Editor Vitest suite, and then runs the compatible migrated IRIS suite through `npm run test:iris`.
-
-Benchmarks are deliberately separate:
-
-```bash
-npm run benchmark
-```
-
-because they may depend on configured local model/runtime state and retained benchmark history.
+`npm test` performs backend/Electron builds and runs the centralized Code Editor test tree as isolated app and platform/backend projects.
 
 ### Verification state at documentation consolidation
 
@@ -1069,7 +1055,7 @@ This checklist is retained only as a compact statement of scope, not as an activ
 - [x] Model/token/context/cache/agent telemetry
 - [x] Launcher/tool discovery
 - [x] Managed development-environment controls
-- [x] Compatible migrated IRIS tests in `npm test`
+- [x] Consolidated platform/backend regression coverage in `npm test`
 - [x] Preserved benchmark harness in `npm run benchmark`
 - [x] Long-running recovery regression coverage
 - [x] Multi-agent/human-agent collision regression coverage
