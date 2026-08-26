@@ -1,7 +1,7 @@
 # Code Cleanup Review
 
 **Status:** No approved cleanup pending  
-**Last updated:** 2026-08-25
+**Last updated:** 2026-08-26
 
 All items from the approved cleanup batch have been completed and moved to [`REMOVED_CODE.md`](./REMOVED_CODE.md). Migration provenance remains in [`MIGRATION.md`](./MIGRATION.md).
 
@@ -25,11 +25,10 @@ Future cleanup should continue to protect:
 - upgrade and legacy encrypted-storage cleanup while old user data remains supported;
 - notes, launcher and skills runtime services used by agents even without dedicated panels;
 - provider adapters and routing/failover infrastructure;
-- benchmark source under `benchmarks/iris/`;
 - the mirrored renderer/backend `agentBusShared.ts` helpers while their TypeScript build roots remain separate; `tests/agentBusSharedParity.test.ts` prevents silent behavioral drift;
 - thin backend route/service seams that are useful future decomposition boundaries;
 - layered security, permission and workspace-containment checks where duplication is defense-in-depth.
 
 ## Safe deletion standard
 
-Before deletion, verify static and indirect callers, IPC/tool/route registrations, worker filename launches, product fit, compatibility duties, security boundaries, active tests/benchmarks and the availability of meaningful verification. Ambiguous code stays until the ambiguity is resolved.
+Before deletion, verify static and indirect callers, IPC/tool/route registrations, worker filename launches, product fit, compatibility duties, security boundaries, active tests and the availability of meaningful verification. Ambiguous code stays until the ambiguity is resolved.

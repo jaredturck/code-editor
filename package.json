@@ -22,9 +22,7 @@
     "preview": "vite preview",
     "postinstall": "electron-rebuild -f -w node-pty",
     "build:backend": "tsc -p tsconfig.backend.json",
-    "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit",
-    "benchmark": "vite-node benchmarks/iris/run.ts",
-    "benchmark:iris": "npm run benchmark"
+    "typecheck:backend": "tsc -p tsconfig.backend.json --noEmit"
   },
   "dependencies": {
     "@astral-sh/ruff-wasm-nodejs": "^0.15.20",

@@ -26,7 +26,6 @@ The IRIS migration is complete for the defined product scope. The Code Editor re
 - Permission-scoped autonomous tool exposure with broker, workspace-containment, approval, bridge, and per-role checks
 - Fail-closed defaults for machine permissions, sudo, shell networking, web ingestion, package installation, screen capture, and desktop automation
 - Compatible migrated IRIS runtime tests included in `npm test`
-- Preserved local IRIS benchmark suite available through `npm run benchmark`
 - Dedicated long-running recovery and multi-agent collision coverage
 - OS-protected credential storage and encrypted local SQLite persistence
 - Authenticated loopback capability bridge with emergency-stop support
@@ -72,7 +71,7 @@ npm run test:electron-runtime
 npm run build
 ```
 
-`npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence. The benchmark suite is intentionally separate and can be run with `npm run benchmark`; it may use configured loopback Ollama models and writes retained benchmark history under `~/.iris-ai/`.
+`npm test` runs the Code Editor integration suite and then the compatible migrated IRIS runtime suite. `npm run verify:full` runs the complete correctness/build verification sequence.
 
 Migration-era validation context is recorded in [`docs/MIGRATION.md`](./docs/MIGRATION.md). Current source and current verification results are authoritative when they differ from historical snapshots.
 

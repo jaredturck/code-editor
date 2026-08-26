@@ -197,6 +197,14 @@ The temporary cleanup workflow deleted itself in the resulting commit, so no mai
 
 ---
 
+## 2026-08-26 — Standalone IRIS benchmark harness and stale cleanup workflow
+
+Removed the standalone `benchmarks/iris/` harness, `tsconfig.benchmark.json`, and the `benchmark` / `benchmark:iris` package scripts after confirming the application, production builds, and normal verification path do not import or execute them.
+
+Also removed `.github/workflows/test-cleanup.yml`, a one-shot post-migration cleanup workflow whose only remaining purpose was repository maintenance. The normal `.github/workflows/verify.yml` CI workflow remains active.
+
+---
+
 ## Intentionally retained after review
 
 The cleanup process explicitly continues to protect:
@@ -206,7 +214,6 @@ The cleanup process explicitly continues to protect:
 - upgrade/legacy encrypted-storage cleanup;
 - notes, launcher and skills runtime services;
 - provider adapters and routing/failover infrastructure;
-- `benchmarks/iris/` source;
 - layered security, permission and workspace-containment checks.
 
 Automatic model setup/hardware-fit code, duplicate agent-bus shared code and large runtime decomposition remain product/architecture decisions rather than dead-code deletions.
