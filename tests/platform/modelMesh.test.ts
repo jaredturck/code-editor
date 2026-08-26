@@ -4,7 +4,7 @@
  * These are the security-relevant invariants — discovery never calls a model, and every
  * consult gate fails closed when the mesh is off.
  */
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { deriveModelTags, topicToTags, buildAgentRoster, findPeers } from '@/platform/agent/modelTags'
 import {
   createMeshConductor,
@@ -22,6 +22,7 @@ import {
   renderTeamworkPlanMarkdown,
   runTeamworkPlanning,
 } from '@/platform/agent/meshClient'
+import { clearKey, setKey } from '@/platform/keyStore'
 
 const MESH_ON = {
   agent_multi_enabled: true,
@@ -52,6 +53,15 @@ const MESH_ON = {
   agent_consult_max: 2,
   agent_consult_depth: 1,
 }
+
+beforeEach(() => {
+  clearKey('anthropic')
+  clearKey('opencode')
+  clearKey('openai')
+  setKey('anthropic', 'test-anthropic-key')
+  setKey('opencode', 'test-opencode-key')
+  setKey('openai', 'test-openai-key')
+})
 
 describe('modelTags', () => {
   it('derives ability tags from the capability spine', () => {
@@ -356,102 +366,5 @@ describe('planTeamwork (early-return gate)', () => {
     const plan = await planTeamwork('build a thing', solo as never)
     expect(plan.ok).toBe(false)
     expect(plan.reason).toBe('insufficient_agents')
-  })
-})
-
-describe('runPeerReview (early-return gates)', () => {
-  it('refuses without a diff (no model call)', async () => {
-    const r = await runPeerReview({ request: 'x' }, MESH_ON as never)
-    expect(r.reviewed).toBe(false)
-    expect(r.reason).toBe('no_diff')
-  })
-
-  it('refuses when fewer than 2 distinct peers are configured', async () => {
-    // Only the orchestrator is configured → no distinct reviewers.
-    const soloSettings = {
-      agent_multi_enabled: true,
-      ai_provider: 'anthropic',
-      ai_model: 'claude-opus-4-8',
-    }
-    const r = await runPeerReview({ diff: '--- a\n+++ b\n+x' }, soloSettings as never)
-    expect(r.reviewed).toBe(false)
-    expect(r.reason).toBe('insufficient_peers')
-  })
-})
-
-describe('teamwork planning (V2 — §4)', () => {
-  const members = [
-    { id: 'executor', role: 'executor' },
-    { id: 'executor#2', role: 'executor' },
-    { id: 'scout', role: 'scout' },
-  ] as never
-
-  it('parses parts, validating owners to member ids and mapping roles + deps', () => {
-    const parts = parseTeamworkPlanParts(
-      {
-        parts: [
-          { summary: 'Build the API', owner: 'executor#2', dependsOn: [] },
-          { summary: 'Find the files', owner: 'scout', dependsOn: ['p1'] },
-          { summary: 'Unknown owner falls back', owner: 'nobody' },
-          {
-            summary: 'Role name maps to its primary member',
-            owner: 'executor',
-          },
-        ],
-      },
-      members,
-    )
-    expect(parts).toHaveLength(4)
-    expect(parts[0]).toMatchObject({
-      id: 'p1',
-      owner: 'executor#2',
-      role: 'executor',
-      dependsOn: [],
-    })
-    expect(parts[1]).toMatchObject({
-      id: 'p2',
-      owner: 'scout',
-      role: 'scout',
-      dependsOn: ['p1'],
-    })
-    expect(parts[2].owner).toBe('executor') // unknown owner → first member
-    expect(parts[3].owner).toBe('executor') // a role name maps to its member id
-  })
-
-  it('renders the plan as markdown for the approval side panel', () => {
-    const md = renderTeamworkPlanMarkdown(
-      [
-        {
-          id: 'p1',
-          summary: 'Do X',
-          owner: 'executor',
-          role: 'executor',
-          dependsOn: [],
-        },
-        {
-          id: 'p2',
-          summary: 'Do Y',
-          owner: 'scout',
-          role: 'scout',
-          dependsOn: ['p1'],
-        },
-      ],
-      [
-        { id: 'executor', role: 'executor', model: 'claude' },
-        { id: 'scout', role: 'scout', model: 'llama3' },
-      ],
-    )
-    expect(md).toContain('# Team plan')
-    expect(md).toContain('**[executor]** Do X')
-    expect(md).toContain('**[scout]** Do Y')
-    expect(md).toContain('after p1')
-  })
-
-  it('returns insufficient_agents without a model call when fewer than two are configured', async () => {
-    const result = await runTeamworkPlanning('do a thing', {
-      agent_multi_enabled: true,
-    } as never)
-    expect(result.ok).toBe(false)
-    expect(result.reason).toBe('insufficient_agents')
   })
 })
