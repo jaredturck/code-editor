@@ -125,54 +125,23 @@ jobs:
               '4. The important migrated runtime/backend tests and benchmark harness were retained.',
               '4. The important migrated runtime/backend tests were retained and later consolidated into the normal `tests/` tree; the standalone benchmark harness was removed after migration because it was not part of the product or CI.',
           )
-          migration = migration.replace(
-              """### Tests and benchmarks
-
-**IRIS source:** original IRIS tests and benchmarks  
-**Current destination:** `migrated-tests/iris/` and `benchmarks/iris/`
-
-The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. Compatible runtime/backend suites were later adapted and re-enabled through `vitest.iris.config.ts` and `npm run test:iris`.
-
-The benchmark suite remains separate from deterministic verification because some benchmark workloads depend on available local models or retained local benchmark state.
-""",
-              """### Tests
-
-**IRIS source:** original IRIS runtime/backend tests  
-**Current destination:** `tests/platform/` and `tests/backend/`
-
-The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree and now runs through the main Vitest configuration. Presentation-only and migration-only tests were retired.
-
-The standalone IRIS benchmark harness was removed during post-migration cleanup because it was not connected to product behavior or CI.
-""",
+          tests_section = (
+              '### Tests\n\n'
+              '**IRIS source:** original IRIS runtime/backend tests  \n'
+              '**Current destination:** `tests/platform/` and `tests/backend/`\n\n'
+              'The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree and now runs through the main Vitest configuration. Presentation-only and migration-only tests were retired.\n\n'
+              'The standalone IRIS benchmark harness was removed during post-migration cleanup because it was not connected to product behavior or CI.\n\n'
+              '### Historical IRIS documentation'
           )
-          migration = migration.replace(
-              """### Preserved tests
-
-`migrated-tests/iris/` retains the original test heritage while current Code Editor tests cover integration-specific behavior.
-
-### Preserved benchmarks
-
-`benchmarks/iris/` retains the local benchmark framework and history-aware workloads.
-""",
-              """### Preserved tests
-
-`tests/platform/` and `tests/backend/` retain useful runtime/backend regression coverage from the original test heritage alongside the Code Editor's integration-specific tests.
-""",
+          migration = re.sub(r'### Tests and benchmarks\n.*?### Historical IRIS documentation', tests_section, migration, flags=re.DOTALL)
+          preserved_tests = (
+              '### Preserved tests\n\n'
+              '`tests/platform/` and `tests/backend/` retain useful runtime/backend regression coverage from the original test heritage alongside the Code Editor\'s integration-specific tests.\n\n'
+              '### Git history'
           )
-          migration = migration.replace(
-              """`npm test` performs backend/Electron builds, runs the normal Code Editor Vitest suite, and then runs the compatible migrated IRIS suite through `npm run test:iris`.
-
-Benchmarks are deliberately separate:
-
-```bash
-npm run benchmark
-```
-
-because they may depend on configured local model/runtime state and retained benchmark history.
-""",
-              """`npm test` performs backend/Electron builds and runs the unified Code Editor Vitest suite, including platform and backend regression coverage under `tests/`.
-""",
-          )
+          migration = re.sub(r'### Preserved tests\n.*?### Git history', preserved_tests, migration, flags=re.DOTALL)
+          unified_test_text = '`npm test` performs backend/Electron builds and runs the unified Code Editor Vitest suite, including platform and backend regression coverage under `tests/`.\n\n### Verification state at documentation consolidation'
+          migration = re.sub(r'`npm test` performs backend/Electron builds,.*?### Verification state at documentation consolidation', unified_test_text, migration, flags=re.DOTALL)
           migration = migration.replace('- [x] Compatible migrated IRIS tests in `npm test`', '- [x] Consolidated platform/backend regression coverage in `npm test`')
           migration = migration.replace('- [x] Preserved benchmark harness in `npm run benchmark`\n', '')
           migration_path.write_text(migration)
