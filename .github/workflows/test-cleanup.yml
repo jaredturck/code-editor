@@ -96,7 +96,7 @@ jobs:
 
           package_path = Path('package.json')
           package = json.loads(package_path.read_text())
-          package['scripts']['test'] = 'npm run build:backend && npm run build:electron && vitest run --exclude "tests/platform/**" --exclude "tests/backend/**" && vitest run tests/platform tests/backend'
+          package['scripts']['test'] = 'npm run build:backend && npm run build:electron && vitest run --exclude "tests/platform/**" --exclude "tests/backend/**" && vitest run --dir tests/platform && vitest run --dir tests/backend'
           for script in ['test:iris', 'benchmark', 'benchmark:iris']:
               package['scripts'].pop(script, None)
           package.get('devDependencies', {}).pop('vite-node', None)
@@ -134,7 +134,7 @@ jobs:
               '### Tests\n\n'
               '**IRIS source:** original IRIS runtime/backend tests  \n'
               '**Current destination:** `tests/platform/` and `tests/backend/`\n\n'
-              'The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree. Platform/backend tests run in an isolated Vitest pass so their shared runtime guards cannot alter editor-test globals. Presentation-only and migration-only tests were retired.\n\n'
+              'The original tests were initially preserved outside the normal Code Editor Vitest include path so migration did not pretend old presentation tests remained valid against a different UI. After migration completion, useful runtime/backend coverage was consolidated into the normal `tests/` tree. Platform/backend tests run in isolated Vitest passes so their shared runtime guards cannot alter editor-test globals. Presentation-only and migration-only tests were retired.\n\n'
               'The standalone IRIS benchmark harness was removed during post-migration cleanup because it was not connected to product behavior or CI.\n\n'
               '### Historical IRIS documentation'
           )
