@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
+import { clearKey, setKey } from '@/platform/keyStore'
 import {
   recordModelFailure,
   recordModelSuccess,
@@ -23,7 +24,13 @@ const POOL = {
 }
 
 describe('modelHealth', () => {
-  beforeEach(() => resetModelHealth())
+  beforeEach(() => {
+    resetModelHealth()
+    clearKey('anthropic', '1')
+    clearKey('anthropic', '2')
+    setKey('anthropic', 'test-key-1', '1')
+    setKey('anthropic', 'test-key-2', '2')
+  })
 
   it('suspends a model after consecutive failures and a success clears it', () => {
     expect(isModelHealthy('anthropic', 'opus', '1')).toBe(true)
