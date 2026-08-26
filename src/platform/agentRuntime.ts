@@ -132,6 +132,55 @@ function withVerificationState(input: AgentSessionInput): AgentSessionInput {
   }
 }
 
+export function withAutomaticApprovalPolicy(input: AgentSessionInput): AgentSessionInput {
+  if (String(input.settings?.agent_project_run_mode || 'automatic') === 'plan_first') return input
+
+  const originalApprovalRequest = input.onApprovalRequest
+  return {
+    ...input,
+    onApprovalRequest: async (request) => {
+      const record = request && typeof request === 'object' ? (request as Record<string, unknown>) : {}
+      const requestType = String(record.requestType || '').toLowerCase()
+      const requestedAction = String(record.requestedAction || '').toLowerCase()
+
+      if (requestType === 'limit') {
+        return {
+          approved: true,
+          decision: 'unlimited',
+        }
+      }
+
+      if (requestType === 'question') {
+        if (record.planText) {
+          return {
+            approved: true,
+            decision: 'approve',
+            answer: 'Approve',
+          }
+        }
+        if (requestedAction === 'continue the long-running task') {
+          return {
+            approved: true,
+            decision: 'continue',
+            answer: 'Continue',
+          }
+        }
+        return {
+          approved: true,
+          decision: 'autonomous',
+          answer: 'Proceed using your best reasonable judgment from the existing project context.',
+        }
+      }
+
+      if (typeof originalApprovalRequest === 'function') return originalApprovalRequest(request)
+      return {
+        approved: false,
+        decision: 'deny',
+      }
+    },
+  }
+}
+
 function activeVerificationState(input: AgentSessionInput): VerificationState | null {
   const state = input.settings?.agent_verification_state
   if (!state || typeof state !== 'object' || Array.isArray(state)) return null
@@ -249,7 +298,7 @@ async function persistOriginalProjectContext(
 /** Runs the established project lifecycle, then enforces model-defined verification evidence. */
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const taskInput = await withModelTaskContract(input)
-  const executionInput = withVerificationState(taskInput)
+  const executionInput = withAutomaticApprovalPolicy(withVerificationState(taskInput))
   const state = activeVerificationState(executionInput)
   let priorCompacted = ''
 
