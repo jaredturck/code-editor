@@ -15,7 +15,7 @@ import {
   type ProviderConfigurationSettings,
 } from '@/platform/providers/providerConfiguration'
 import { chooseAutomaticLocalModel, RECOMMENDED_LOCAL_MODELS } from '@/platform/providers/localModelCatalog'
-import { isModelHealthy } from '@/platform/agent/modelHealth'
+import { isModelCredentialReady, isModelHealthy } from '@/platform/agent/modelHealth'
 
 export interface RecoveryRecommendation {
   provider: string
@@ -120,6 +120,7 @@ export async function recommendRecoveryModel(
   const hardware = await systemStats().catch(() => null)
   const candidates = listAvailableCandidates(settings)
     .filter((candidate) => !excludeSet.has(identity(candidate.provider, candidate.model, candidate.keyId)))
+    .filter((candidate) => isModelCredentialReady(candidate.provider, candidate.keyId))
     .filter((candidate) => isModelHealthy(candidate.provider, candidate.model, candidate.keyId))
     .map(evaluateModel)
     .filter((evaluation) => isRoleSuitable(evaluation, role))
@@ -136,7 +137,7 @@ export async function recommendRecoveryModel(
       label: `${best.local ? 'Local' : best.provider} · ${best.model}`,
       reason: best.local
         ? 'Already installed, healthy, and suitable for this role on the detected hardware.'
-        : 'Already available through a validated provider key and suitable for this role.',
+        : 'Already available through a saved provider key and suitable for this role.',
       requiresDownload: false,
     }
   }
