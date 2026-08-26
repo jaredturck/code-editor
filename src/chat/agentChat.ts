@@ -51,6 +51,8 @@ export function build_core_agent_settings(
     agent_allow_network_commands: project_scoped || base.agent_allow_network_commands === true,
     agent_require_explicit_approval: false,
     agent_web_site_guard: false,
+    search_web_require_paid_fallback_confirmation: false,
+    agent_search_web_budget: 4,
     agent_tool_allowlist: autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled),
   }
 }
