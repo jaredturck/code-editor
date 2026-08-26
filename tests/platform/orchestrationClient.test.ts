@@ -542,8 +542,8 @@ describe('standby pool (§2 — per-key, distributed)', () => {
 
   it('falls back to the role primary when no members are pooled', () => {
     const target = pickDelegateMember('executor', {
-      ai_provider: 'openai',
-      ai_model: 'gpt-4o',
+      ai_provider: 'local',
+      ai_model: 'test-local',
     } as never)
     expect(target.agentId).toBe('executor')
   })

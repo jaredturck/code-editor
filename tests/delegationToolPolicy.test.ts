@@ -37,6 +37,7 @@ vi.mock('@/platform/agent/modelTags', () => ({
 vi.mock('@/platform/agent/modelHealth', () => ({
   recordModelFailure: vi.fn(),
   isModelHealthy: () => true,
+  isModelCredentialReady: () => true,
 }))
 
 vi.mock('@/platform/keyStore', () => ({
