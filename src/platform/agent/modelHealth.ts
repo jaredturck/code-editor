@@ -7,6 +7,7 @@
  * available — it never burns completion tokens or turns an empty model list into a false failure.
  */
 import { buildAgentRoster } from '@/platform/agent/modelTags'
+import { hasKeyFor } from '@/platform/keyStore'
 import { readStorageJson, writeStorageJson, canUseLocalStorage } from '@/platform/localStorageStore'
 
 export type ModelHealthStatus = 'healthy' | 'degraded' | 'temporarily_unavailable' | 'suspended'
@@ -32,9 +33,19 @@ const PERSISTENT_AFTER_CONSECUTIVE = 6
 const RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000
 const ERROR_COOLDOWN_MS = 2 * 60 * 1000
 const PERSISTENT_COOLDOWN_MS = 6 * 60 * 60 * 1000
+const FAILOVER_RETRY_GRACE_MS = ERROR_COOLDOWN_MS
 
 export function modelHealthKey(provider: unknown, model: unknown, keyId: unknown = '1'): string {
   return `${String(provider || '').toLowerCase()}:${String(model || '').toLowerCase()}:${String(keyId || '1')}`
+}
+
+export function isModelCredentialReady(provider: unknown, keyId: unknown = '1'): boolean {
+  const normalized = String(provider || '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return false
+  if (normalized === 'local') return true
+  return hasKeyFor(normalized, keyId)
 }
 
 export function parseModelHealthKey(key: string): { provider: string; model: string; keyId: string } | null {
@@ -225,11 +236,18 @@ export function pickFailoverModel(
   failed: { provider: unknown; model: unknown; keyId: unknown },
   opts: { preferRole?: string } = {},
 ): FailoverPick | null {
+  ensureHydrated()
   const failedKey = modelHealthKey(failed.provider, failed.model, failed.keyId)
   const preferRole = opts.preferRole || 'orchestrator'
+  const now = Date.now()
   const healthy = buildAgentRoster(settings)
     .filter((member) => member.provider && member.model)
+    .filter((member) => isModelCredentialReady(member.provider, member.keyId))
     .filter((member) => modelHealthKey(member.provider, member.model, member.keyId) !== failedKey)
+    .filter((member) => {
+      const entry = registry.get(modelHealthKey(member.provider, member.model, member.keyId))
+      return !entry?.lastFailureAt || now - entry.lastFailureAt >= FAILOVER_RETRY_GRACE_MS
+    })
     .filter((member) => isModelHealthy(member.provider, member.model, member.keyId))
   if (!healthy.length) return null
   healthy.sort(
