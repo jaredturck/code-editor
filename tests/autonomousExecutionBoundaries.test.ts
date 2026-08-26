@@ -105,6 +105,8 @@ describe('autonomous execution boundaries', () => {
         agent_require_explicit_approval: true,
         agent_allow_network_commands: false,
         agent_web_site_guard: true,
+        search_web_require_paid_fallback_confirmation: true,
+        agent_search_web_budget: 1,
       } as never,
       '/workspace',
       'automatic',
@@ -118,6 +120,8 @@ describe('autonomous execution boundaries', () => {
     expect(settings.agent_allow_network_commands).toBe(true)
     expect(settings.agent_require_explicit_approval).toBe(false)
     expect(settings.agent_web_site_guard).toBe(false)
+    expect(settings.search_web_require_paid_fallback_confirmation).toBe(false)
+    expect(settings.agent_search_web_budget).toBe(4)
     expect(settings.permissions_screen_capture).toBe(false)
     expect(settings.permissions_mouse_control).toBe(false)
     expect(settings.agent_tool_allowlist).toContain('search.web')
