@@ -66,22 +66,21 @@ export function diagnostic_language_for_file(file_path: string, requested_langua
     .toLowerCase()
 }
 
-export async function analyzeWorkspaceFile(
-  file_path: string,
-  options: { language?: string; max_diagnostics?: number; actor_id?: string } = {},
-) {
-  const read = await readTextFile(file_path, {
-    actorId: String(options.actor_id || 'orchestrator'),
-    lineNumbers: false,
-  })
-  if (read.isBinary) throw new Error('diagnostics.check cannot analyze a binary file.')
+export function supportsWorkspaceDiagnostics(file_path: string, requested_language = '') {
+  return supported_diagnostic_languages.has(diagnostic_language_for_file(file_path, requested_language))
+}
 
-  const language = diagnostic_language_for_file(read.path || file_path, options.language)
+export async function analyzeWorkspaceText(
+  file_path: string,
+  content: string,
+  options: { language?: string; max_diagnostics?: number; revision?: string | null } = {},
+) {
+  const language = diagnostic_language_for_file(file_path, options.language)
   const supported = supported_diagnostic_languages.has(language)
   if (!supported) {
     return {
-      path: read.path || file_path,
-      revision: read.revision || null,
+      path: file_path,
+      revision: options.revision || null,
       language,
       supported: false,
       ok: null,
@@ -99,8 +98,8 @@ export async function analyzeWorkspaceFile(
 
   const diagnostics = await window.editor_api.diagnostics.analyze({
     language,
-    content: read.content,
-    file_path: read.path || file_path,
+    content,
+    file_path,
   })
   const normalized = Array.isArray(diagnostics) ? diagnostics : []
   const errors = normalized.filter((diagnostic) => diagnostic.severity === 'error').length
@@ -109,8 +108,8 @@ export async function analyzeWorkspaceFile(
   const max_diagnostics = Math.max(1, Math.min(200, Math.round(Number(options.max_diagnostics) || 80)))
 
   return {
-    path: read.path || file_path,
-    revision: read.revision || null,
+    path: file_path,
+    revision: options.revision || null,
     language,
     supported: true,
     ok: errors === 0,
@@ -119,4 +118,21 @@ export async function analyzeWorkspaceFile(
     diagnostics: normalized.slice(0, max_diagnostics),
     omitted: Math.max(0, normalized.length - max_diagnostics),
   }
+}
+
+export async function analyzeWorkspaceFile(
+  file_path: string,
+  options: { language?: string; max_diagnostics?: number; actor_id?: string } = {},
+) {
+  const read = await readTextFile(file_path, {
+    actorId: String(options.actor_id || 'orchestrator'),
+    lineNumbers: false,
+  })
+  if (read.isBinary) throw new Error('diagnostics.check cannot analyze a binary file.')
+
+  return analyzeWorkspaceText(read.path || file_path, read.content, {
+    language: options.language,
+    max_diagnostics: options.max_diagnostics,
+    revision: read.revision || null,
+  })
 }

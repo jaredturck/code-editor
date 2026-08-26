@@ -19,6 +19,12 @@ import {
   recordVerificationEvidence,
   type VerificationState,
 } from '@/platform/agent/verificationEvidence'
+import { recordAgentEvidence, terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
+import {
+  formatWorkspaceDiagnostics,
+  getWorkspaceDiagnosticsSnapshot,
+  markWorkspaceDiagnosticsDirty,
+} from '@/platform/agent/workspaceDiagnosticsState'
 import { evaluateToolAccess } from '@/platform/agent/runtime/capabilityPolicy'
 import { assertAllowedTool, assertSafePath } from '@/platform/agent/runtime/safetyPolicy'
 import { inspectBrowserRuntime } from '@/platform/browserInspectionBridge'
@@ -92,6 +98,79 @@ function updateMutationEpoch(
   if (!state || !result || typeof result !== 'object' || Array.isArray(result)) return
   if (mutationSucceeded(toolName, args, result as Record<string, unknown>)) {
     markVerificationMutation(state)
+  }
+}
+
+function workspaceMutationForResult(toolName: string, args: Record<string, unknown>, result: unknown) {
+  if (toolName === 'terminal.exec') return terminalCommandLikelyMutatesSource(args.command)
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false
+  return mutationSucceeded(toolName, args, result as Record<string, unknown>)
+}
+
+function repetitionScope(options: LegacyBrokerOptions, workspaceRoot: string) {
+  const session = options?.settings?.chat_session
+  const chatId =
+    session && typeof session === 'object' && !Array.isArray(session)
+      ? String((session as Record<string, unknown>).id || '').trim()
+      : ''
+  return `${workspaceRoot}::${chatId || 'workspace'}`
+}
+
+async function attachAgentRuntimeContext(
+  options: LegacyBrokerOptions,
+  workspaceRoot: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  result: unknown,
+) {
+  if (!workspaceRoot || !result || typeof result !== 'object' || Array.isArray(result)) return result
+
+  const workspaceMutated = workspaceMutationForResult(toolName, args, result)
+  if (workspaceMutated) markWorkspaceDiagnosticsDirty(workspaceRoot)
+
+  const repetitionAdvisory = recordAgentEvidence({
+    scope_id: repetitionScope(options, workspaceRoot),
+    tool_name: toolName,
+    args,
+    workspace_mutated: workspaceMutated,
+  })
+
+  let snapshot = null
+  let diagnosticsError = ''
+  try {
+    snapshot = await getWorkspaceDiagnosticsSnapshot(workspaceRoot)
+  } catch (error) {
+    diagnosticsError = error instanceof Error ? error.message : String(error || 'Workspace diagnostics failed')
+  }
+
+  const diagnosticsReport = formatWorkspaceDiagnostics(snapshot)
+  const diagnosticSummary = snapshot
+    ? `Workspace diagnostics: ${snapshot.counts.errors} error${snapshot.counts.errors === 1 ? '' : 's'} · ${snapshot.counts.warnings} warning${snapshot.counts.warnings === 1 ? '' : 's'}${snapshot.complete ? '' : ' (scan incomplete)'}.`
+    : diagnosticsError
+      ? `Workspace diagnostics unavailable: ${diagnosticsError}`
+      : ''
+  const agentRuntimeUpdate = [diagnosticSummary, repetitionAdvisory].filter(Boolean).join(' ')
+
+  return {
+    ...(agentRuntimeUpdate ? { agentRuntimeUpdate } : {}),
+    agentRuntimeContext: {
+      ...(repetitionAdvisory ? { repetitionAdvisory } : {}),
+      ...(snapshot
+        ? {
+            workspaceDiagnostics: {
+              refreshedAt: snapshot.refreshed_at,
+              analyzedFiles: snapshot.analyzed_files,
+              diagnosticFiles: snapshot.diagnostic_files,
+              counts: snapshot.counts,
+              complete: snapshot.complete,
+              report: diagnosticsReport,
+            },
+          }
+        : diagnosticsError
+          ? { workspaceDiagnostics: { unavailable: true, message: diagnosticsError } }
+          : {}),
+    },
+    ...(result as Record<string, unknown>),
   }
 }
 
@@ -206,22 +285,22 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
       approvalContext.cwd = String(args.cwd || workspaceRoot || '').trim()
 
       if (toolName === 'approval.request' && automaticMode) {
-        return {
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
           approved: false,
           decision: 'autonomous',
           instruction:
             'Do not ask the user to approve routine project work in Automatic mode. Attempt the intended tool action directly. The runtime safety policy will surface a specific approval only if the real action crosses the workspace boundary or another privileged safety boundary.',
-        }
+        })
       }
 
       if (toolName === 'user.ask' && automaticMode) {
-        return {
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
           answered: false,
           decision: 'autonomous',
           answer: '',
           instruction:
             'Automatic mode does not interrupt the user for implementation preferences. Choose the best reasonable option yourself and continue.',
-        }
+        })
       }
 
       if (
@@ -229,11 +308,11 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         automaticMode &&
         options?.settings?.permissions_screen_capture !== true
       ) {
-        return {
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
           available: false,
           denied: true,
           instruction: 'Screen access is not enabled. Continue without asking the user for screen permission.',
-        }
+        })
       }
 
       if (!editorNativeTools.has(toolName)) {
@@ -248,10 +327,10 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
               `${toolName} ${targetPath}`,
             )
             if (!approved) {
-              return {
+              return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
                 error: 'Workspace boundary access was denied. Continue using files inside the open project.',
                 denied: true,
-              }
+              })
             }
             if (automaticMode) broker = workspaceAutonomousLegacy
           } else if (automaticMode) {
@@ -271,36 +350,44 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
               String(args.command || 'terminal command'),
             )
             if (!approved) {
-              return {
+              return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
                 error: 'Workspace boundary command was denied. Continue with a project-scoped alternative.',
                 denied: true,
-              }
+              })
             }
             if (automaticMode) broker = workspaceAutonomousLegacy
           } else if (automaticMode && workspaceRoot) {
             broker = workspaceAutonomousLegacy
           }
+
+          // Shell commands can change arbitrary files without going through the editor-native file
+          // tools. Mark diagnostics dirty before execution so the next result gets a fresh repo-wide
+          // snapshot even if filesystem watcher delivery races the command completion.
+          if (workspaceRoot) markWorkspaceDiagnosticsDirty(workspaceRoot)
         }
 
         const result = await broker.execute(toolName, args)
         updateMutationEpoch(state, toolName, args, result)
-        return attachVerificationCandidate(state, toolName, args, result)
+        const candidateResult = attachVerificationCandidate(state, toolName, args, result)
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
       }
 
       assertEditorNativeAccess(toolName, options)
 
       if (toolName === 'verification.require') {
         if (!state) throw new Error('No verification state is active for this project run.')
-        return declareVerificationRequirements(
+        const result = declareVerificationRequirements(
           state,
           args.kinds || args.requirements,
           String(args.mode || 'replace').toLowerCase(),
         )
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, result)
       }
 
       if (toolName === 'verification.record') {
         if (!state) throw new Error('No verification state is active for this project run.')
-        return recordVerificationEvidence(state, args.kind || args.requirement, args.candidateId || args.candidate_id)
+        const result = recordVerificationEvidence(state, args.kind || args.requirement, args.candidateId || args.candidate_id)
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, result)
       }
 
       if (toolName === 'browser.inspect') {
@@ -311,7 +398,8 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
           timeout_ms: Number(args.timeoutMs || args.timeout_ms) || undefined,
           max_text_chars: Number(args.maxTextChars || args.max_text_chars) || undefined,
         })
-        return attachVerificationCandidate(state, toolName, args, result)
+        const candidateResult = attachVerificationCandidate(state, toolName, args, result)
+        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
       }
 
       const path = assertSafePath(String(args.path || ''), {
@@ -322,7 +410,8 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         language: String(args.language || '').trim() || undefined,
         max_diagnostics: Number(args.maxDiagnostics || args.max_diagnostics) || undefined,
       })
-      return attachVerificationCandidate(state, toolName, args, result)
+      const candidateResult = attachVerificationCandidate(state, toolName, args, result)
+      return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
     },
     verificationState() {
       const state = verificationState(options)
