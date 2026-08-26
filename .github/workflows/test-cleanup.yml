@@ -69,25 +69,30 @@ jobs:
           import re
           from pathlib import Path
 
+          def rewrite_source_paths(text):
+              text = text.replace("'../../../src/", "'../../src/")
+              text = text.replace('"../../../src/', '"../../src/')
+              text = text.replace("'../../../backend/", "'../../backend/")
+              text = text.replace('"../../../backend/', '"../../backend/')
+              text = text.replace("'../../../electron/", "'../../electron/")
+              text = text.replace('"../../../electron/', '"../../electron/')
+              text = text.replace("'../../server/", "'../../backend/")
+              text = text.replace('"../../server/', '"../../backend/')
+              text = text.replace("'../../src/lib/providers/", "'../../src/platform/providers/")
+              text = text.replace('"../../src/lib/providers/', '"../../src/platform/providers/')
+              text = text.replace('migrated-tests/iris/fixtures/workspace', 'tests/fixtures/workspace')
+              text = re.sub(r"(['\"]\.\./\.\./backend/[^'\"]+)\.js(['\"])", r'\1\2', text)
+              return re.sub(r"(['\"]\.\./\.\./src/platform/providers/[^'\"]+)\.js(['\"])", r'\1\2', text)
+
           for folder in [Path('tests/platform'), Path('tests/backend')]:
               for path in sorted(folder.glob('*.test.ts')):
-                  text = path.read_text()
-                  text = text.replace("'../../../src/", "'../../src/")
-                  text = text.replace('"../../../src/', '"../../src/')
-                  text = text.replace("'../../../backend/", "'../../backend/")
-                  text = text.replace('"../../../backend/', '"../../backend/')
-                  text = text.replace("'../../../electron/", "'../../electron/")
-                  text = text.replace('"../../../electron/', '"../../electron/')
-                  text = text.replace("'../../server/", "'../../backend/")
-                  text = text.replace('"../../server/', '"../../backend/')
-                  text = text.replace("'../../src/lib/providers/", "'../../src/platform/providers/")
-                  text = text.replace('"../../src/lib/providers/', '"../../src/platform/providers/')
-                  text = text.replace('migrated-tests/iris/fixtures/workspace', 'tests/fixtures/workspace')
-                  text = re.sub(r"(['\"]\.\./\.\./backend/[^'\"]+)\.js(['\"])", r'\1\2', text)
-                  text = re.sub(r"(['\"]\.\./\.\./src/platform/providers/[^'\"]+)\.js(['\"])", r'\1\2', text)
+                  text = rewrite_source_paths(path.read_text())
                   if not text.startswith("import '../runtimeSetup'"):
                       text = "import '../runtimeSetup'\n" + text
                   path.write_text(text)
+
+          harness_path = Path('tests/backend/bridgeRouteTestHarness.ts')
+          harness_path.write_text(rewrite_source_paths(harness_path.read_text()))
 
           package_path = Path('package.json')
           package = json.loads(package_path.read_text())
