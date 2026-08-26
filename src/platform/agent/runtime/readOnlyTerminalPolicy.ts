@@ -1,5 +1,5 @@
 const simpleCommands = new Set(['pwd', 'ls', 'cat', 'head', 'tail', 'stat', 'file', 'wc', 'tree', 'which', 'grep'])
-const workspaceMutationCommands = new Set(['mkdir', 'touch', 'cp', 'mv'])
+const workspaceMutationCommands = new Set(['mkdir', 'touch', 'cp', 'mv', 'rm', 'rmdir'])
 const directProjectCommands = new Set(['vite', 'tsc', 'eslint', 'prettier', 'vitest', 'jest', 'pytest', 'ruff'])
 const safeGitSubcommands = new Set(['status', 'diff', 'log', 'show', 'rev-parse', 'ls-files', 'grep', 'blame'])
 
@@ -29,6 +29,7 @@ const unsafeGitOptions = new Set([
 
 const hardBlockedPatterns = [
   /(?:^|\s)rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\s+(?:\/|\*|~)(?:\s|$)/i,
+  /(?:^|\s)rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\s+\.?\/?(?:\s|$)/i,
   /\b(?:mkfs(?:\.[a-z0-9]+)?|fdisk|parted|wipefs)\b/i,
   /\bdd\b[^\n]*\bof=\/dev\//i,
   /\b(?:shutdown|reboot|poweroff|halt)\b/i,
@@ -105,6 +106,7 @@ function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string) {
   if (!value) return false
   const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
   if (!candidate || candidate === '--') return false
+  if (/^https?:\/\//i.test(candidate)) return false
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
   if (candidate.startsWith('-') && !candidate.includes('=')) return false
   return !isWorkspacePath(candidate, workspaceRoot)
@@ -114,6 +116,7 @@ function argumentObviouslyEscapesWorkspace(value: string) {
   if (!value) return false
   const candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
   if (!candidate || candidate === '--') return false
+  if (/^https?:\/\//i.test(candidate)) return false
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
   if (candidate.startsWith('-') && !candidate.includes('=')) return false
 
