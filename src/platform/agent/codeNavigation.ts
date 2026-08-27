@@ -8,6 +8,12 @@ export interface CodeNavigationMatch {
   kind?: 'text' | 'definition' | 'reference' | 'file'
 }
 
+export interface CodeNavigationEvidence {
+  symbols: string[]
+  definitions: CodeNavigationMatch[]
+  references: CodeNavigationMatch[]
+}
+
 function text(value: unknown) {
   return String(value || '').trim()
 }
@@ -114,6 +120,45 @@ export async function readCodeRange(path: string, startLine = 1, lineCount = 240
     startLine: Math.max(1, Number(startLine) || 1),
     lineCount: Math.max(1, Math.min(2000, Number(lineCount) || 240)),
   })
+}
+
+function likelySymbols(value: string) {
+  const explicit = Array.from(value.matchAll(/`([A-Za-z_$][\w$.:/-]{2,120})`/g)).map((match) => match[1])
+  const identifierLike = Array.from(value.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:[A-Z][A-Za-z0-9_$]*)+)\b/g)).map(
+    (match) => match[1],
+  )
+  return Array.from(new Set([...explicit, ...identifierLike]))
+    .filter((symbol) => !/[/.]/.test(symbol) || /^[A-Za-z_$][\w$]*$/.test(symbol))
+    .slice(0, 5)
+}
+
+/**
+ * Cheap structural pre-context for project workers. It only runs when the work item mentions
+ * identifier-like symbols; ordinary prose tasks do not pay for extra repository scans.
+ */
+export async function deriveCodeNavigationEvidence(workspaceRoot: string, workDescription: string): Promise<CodeNavigationEvidence> {
+  const symbols = likelySymbols(String(workDescription || ''))
+  if (!workspaceRoot || !symbols.length) return { symbols: [], definitions: [], references: [] }
+
+  const definitions: CodeNavigationMatch[] = []
+  const references: CodeNavigationMatch[] = []
+  for (const symbol of symbols) {
+    try {
+      definitions.push(...(await findCodeDefinition(workspaceRoot, symbol, 6)))
+    } catch {
+      // Structural navigation is opportunistic; workers can still search normally.
+    }
+    try {
+      references.push(...(await findCodeReferences(workspaceRoot, symbol, 10)))
+    } catch {
+      // same
+    }
+  }
+  return {
+    symbols,
+    definitions: definitions.slice(0, 24),
+    references: references.slice(0, 40),
+  }
 }
 
 export async function navigateCode(
