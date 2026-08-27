@@ -42,6 +42,8 @@ export function build_core_agent_settings(
 
   const project_scoped = Boolean(workspace_root)
   const screen_enabled = base.permissions_screen_capture === true
+  const configured_session_minutes = Math.max(1, Number(base.agent_session_minutes) || 15)
+  const configured_repeat_cap = Math.max(2, Number(base.agent_tool_repeat_cap) || 4)
 
   return {
     ...base,
@@ -54,7 +56,9 @@ export function build_core_agent_settings(
     agent_require_explicit_approval: false,
     agent_web_site_guard: false,
     search_web_require_paid_fallback_confirmation: false,
-    agent_search_web_budget: 4,
+    agent_search_web_budget: Math.min(2, Math.max(1, Number(base.agent_search_web_budget) || 2)),
+    agent_session_minutes: Math.min(8, configured_session_minutes),
+    agent_tool_repeat_cap: Math.min(2, configured_repeat_cap),
     agent_models: automatic_agent_models(base.agent_models),
     agent_overwatch_continuous: false,
     context_budget_warn_ratio: 0.05,
