@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { callLocalLLM } from '../src/platform/providers/localProvider'
+import { callStructuredLocalLLM } from '../src/platform/providers/localStructuredProvider'
 import { getModelCapabilities, supportsNativeTools } from '../src/platform/modelProfiles'
 import { useStatefulLoop } from '../src/platform/agent/runtime/config'
 
@@ -163,7 +164,7 @@ describe('local Qwen native tool calling', () => {
       additionalProperties: false,
     }
 
-    await callLocalLLM(
+    await callStructuredLocalLLM(
       [{ role: 'user', content: 'Return the result.' }],
       'http://localhost:11434',
       'qwen3.5:9b',
@@ -196,7 +197,7 @@ describe('local Qwen native tool calling', () => {
       additionalProperties: false,
     }
 
-    await callLocalLLM(
+    await callStructuredLocalLLM(
       [{ role: 'user', content: 'Return the result.' }],
       'http://localhost:1234',
       'local-model',

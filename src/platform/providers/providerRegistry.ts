@@ -16,7 +16,8 @@ import {
 import { callGemini, listGeminiModels } from '@/platform/providers/geminiProvider'
 import { callDeepSeek, listDeepSeekModels } from '@/platform/providers/deepseekProvider'
 import { callOpenRouter, OPENROUTER_API_BASE_URL } from '@/platform/providers/openrouterProvider'
-import { callLocalLLM, listLocalModels } from '@/platform/providers/localProvider'
+import { listLocalModels } from '@/platform/providers/localProvider'
+import { callStructuredLocalLLM } from '@/platform/providers/localStructuredProvider'
 import type {
   AIProvider,
   AIProviderDefinition,
@@ -62,7 +63,6 @@ const _providers: readonly AIProvider[] = Object.freeze([
     models: Object.freeze(['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']),
     invoke: ({ messages, apiKey, model, fetchFn, options }: ProviderInvokeContext) =>
       callOpenAI(messages, apiKey, model, fetchFn, options),
-    // Discovers models from the available provider or runtime capabilities.
     discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) =>
       listOpenAICompatibleModels(
         {
@@ -109,7 +109,6 @@ const _providers: readonly AIProvider[] = Object.freeze([
     models: Object.freeze(['deepseek-coder-v2', 'gpt-4o-mini', 'claude-3-5-sonnet-latest']),
     invoke: ({ messages, apiKey, model, settings, fetchFn, options }: ProviderInvokeContext) =>
       callOpenCode(messages, apiKey, model, settings, fetchFn, options),
-    // Discovers models from the available provider or runtime capabilities.
     discoverModels: ({ apiKey, settings, fetchFn }: ProviderDiscoveryContext) =>
       listOpenAICompatibleModels(
         {
@@ -135,7 +134,6 @@ const _providers: readonly AIProvider[] = Object.freeze([
     ]),
     invoke: ({ messages, apiKey, model, fetchFn, options }: ProviderInvokeContext) =>
       callOpenRouter(messages, apiKey, model, fetchFn, options),
-    // Discovers models from the available provider or runtime capabilities.
     discoverModels: ({ apiKey, fetchFn }: ProviderDiscoveryContext) =>
       listOpenAICompatibleModels(
         {
@@ -156,7 +154,7 @@ const _providers: readonly AIProvider[] = Object.freeze([
     defaultModel: 'llama3',
     models: Object.freeze(['llama3', 'llama3.2', 'mistral', 'codellama', 'phi3', 'gemma2', 'deepseek-coder']),
     invoke: ({ messages, model, settings, fetchFn, options }: ProviderInvokeContext) =>
-      callLocalLLM(messages, String(settings?.ai_local_url || ''), model, fetchFn, options),
+      callStructuredLocalLLM(messages, String(settings?.ai_local_url || ''), model, fetchFn, options),
     discoverModels: ({ settings, fetchFn }: ProviderDiscoveryContext) =>
       listLocalModels(String(settings?.ai_local_url || ''), fetchFn),
   }),
@@ -188,27 +186,22 @@ export const AI_PROVIDER_DEFINITIONS: readonly AIProviderDefinition[] = Object.f
 export const DEFAULT_AI_PROVIDER_ID: AIProviderId = 'openai'
 export const DEFAULT_AI_MODEL = _providerMap.get(DEFAULT_AI_PROVIDER_ID)!.defaultModel
 
-// Returns the available AI providers in the normalized form used by callers.
 export function listAIProviders(): readonly AIProvider[] {
   return _providers
 }
 
-// Returns the normalized definitions used to populate provider settings and lookups.
 export function listAIProviderDefinitions(): readonly AIProviderDefinition[] {
   return AI_PROVIDER_DEFINITIONS
 }
 
-// Determines whether a value names a registered AI provider.
 export function isAIProviderId(value: unknown): value is AIProviderId {
   return _providerMap.has(String(value || '').toLowerCase() as AIProviderId)
 }
 
-// Provides find AI state and actions to descendant renderer components.
 export function findAIProvider(value: unknown): AIProvider | null {
   return _providerMap.get(String(value || '').toLowerCase() as AIProviderId) || null
 }
 
-// Returns the registered provider definition for the supplied provider ID.
 export function getAIProvider(value: unknown): AIProvider {
   const provider = findAIProvider(value)
   if (provider) return provider
