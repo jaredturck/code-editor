@@ -1,4 +1,5 @@
 import { resolveAgentIdentity } from '@/platform/agent/agentIdentity'
+import { deriveCodeNavigationEvidence, type CodeNavigationEvidence } from '@/platform/agent/codeNavigation'
 import {
   loadProjectLedger,
   mutateProjectLedger,
@@ -38,6 +39,7 @@ interface PreparedWork {
   task: STPTask
   workspace: ProjectWorkerWorkspace | null
   cwd: string
+  navigation: CodeNavigationEvidence
 }
 
 function roleForRuntime(role: ProjectAgentRole) {
@@ -53,27 +55,10 @@ function stpType(role: ProjectAgentRole): STPTaskType {
 }
 
 function toolsForRole(role: ProjectAgentRole) {
-  if (role === 'scout') {
-    return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'search.web', 'web.fetch']
-  }
-  if (role === 'evaluator') {
-    return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'terminal.exec', 'diagnostics.check', 'browser.inspect']
-  }
-  if (role === 'planner' || role === 'orchestrator') {
-    return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'terminal.exec', 'diagnostics.check']
-  }
-  return [
-    'files.list',
-    'files.find',
-    'files.read',
-    'search.ripgrep',
-    'files.write',
-    'files.edit',
-    'files.patch',
-    'terminal.exec',
-    'diagnostics.check',
-    'browser.inspect',
-  ]
+  if (role === 'scout') return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'search.web', 'web.fetch']
+  if (role === 'evaluator') return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'terminal.exec', 'diagnostics.check', 'browser.inspect']
+  if (role === 'planner' || role === 'orchestrator') return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'terminal.exec', 'diagnostics.check']
+  return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'files.write', 'files.edit', 'files.patch', 'terminal.exec', 'diagnostics.check', 'browser.inspect']
 }
 
 function dependenciesComplete(item: ProjectWorkItem, ledger: ProjectLedger) {
@@ -113,8 +98,7 @@ function availableWork(ledger: ProjectLedger, maxParallel: number) {
     .filter((item) => ['pending', 'ready'].includes(item.status))
     .filter((item) => dependenciesComplete(item, ledger))
     .sort((left, right) => {
-      const roleRank = (role: ProjectAgentRole) =>
-        role === 'scout' ? 0 : role === 'executor' ? 1 : role === 'orchestrator' ? 2 : role === 'evaluator' ? 3 : 4
+      const roleRank = (role: ProjectAgentRole) => role === 'scout' ? 0 : role === 'executor' ? 1 : role === 'orchestrator' ? 2 : role === 'evaluator' ? 3 : 4
       return roleRank(left.role) - roleRank(right.role) || left.createdAt - right.createdAt
     })
     .slice(0, Math.max(1, maxParallel))
@@ -131,7 +115,13 @@ function roleSkillProfile(settings: Record<string, any>, runtimeRole: string) {
   return profile ? [profile] : []
 }
 
-function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Record<string, any>, cwd: string): STPTask {
+function buildTask(
+  item: ProjectWorkItem,
+  ledger: ProjectLedger,
+  settings: Record<string, any>,
+  cwd: string,
+  navigation: CodeNavigationEvidence,
+): STPTask {
   const runtimeRole = roleForRuntime(item.role)
   const identity = resolveAgentIdentity(runtimeRole, settings)
   const readOnly = item.role === 'scout' || item.role === 'evaluator'
@@ -172,6 +162,7 @@ function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Recor
       currentStrategy: ledger.currentStrategy,
       workspaceRoot: cwd,
       isolatedWorkspace: item.role === 'executor' && cwd !== String(settings.agent_working_dir || ''),
+      codeNavigation: navigation,
     },
     priority: 'normal',
     toAgent: runtimeRole,
@@ -209,15 +200,27 @@ async function prepareWork(
     }
   }
 
+  let navigation: CodeNavigationEvidence = { symbols: [], definitions: [], references: [] }
+  try {
+    navigation = await deriveCodeNavigationEvidence(cwd, `${item.title}\n${item.description}`)
+  } catch {
+    // Structural hints are opportunistic and never block task dispatch.
+  }
+
   const preparedItem = { ...item, workspaceId: cwd }
-  return { item: preparedItem, task: buildTask(preparedItem, ledger, settings, cwd), workspace, cwd }
+  return {
+    item: preparedItem,
+    task: buildTask(preparedItem, ledger, settings, cwd, navigation),
+    workspace,
+    cwd,
+    navigation,
+  }
 }
 
 async function runPreparedWork(prepared: PreparedWork, settings: Record<string, any>, signal?: AbortSignal) {
   const taskSettings = {
     ...settings,
     agent_working_dir: prepared.cwd,
-    agent_session_minutes: 0,
     agent_bounded_automatic: false,
     agent_project_run_mode: 'automatic',
   }
