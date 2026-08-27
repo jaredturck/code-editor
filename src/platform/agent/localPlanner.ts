@@ -1,6 +1,7 @@
 /**
- * Best-effort local preflight planning. It asks one configured local model for a
- * compact structured plan only; tool execution remains in the main controller.
+ * Lightweight task preflight. Obvious requests are classified deterministically so the
+ * coding model can start useful work immediately; a local planner model is reserved for
+ * genuinely ambiguous requests.
  */
 
 import { callAIWithMeta } from '@/platform/aiService'
@@ -26,8 +27,44 @@ interface SettingsLike {
   ai_local_url?: string
   agent_local_planning?: boolean
   agent_preflight_plan?: unknown
+  agent_working_dir?: string
   [key: string]: unknown
 }
+
+const SOCIAL_TURN_PATTERN =
+  /^(?:hi|hello|hey|thanks|thank you|ok|okay|cool|great|got it|sounds good|good (?:morning|afternoon|evening))[.!?\s]*$/i
+const DEVELOPMENT_NOUN_PATTERN =
+  /\b(code|codebase|repo|repository|project|app|application|website|webpage|page|component|function|class|module|api|endpoint|ui|interface|css|html|typescript|javascript|python|react|electron|backend|frontend|test|tests|bug|provider|agent|runtime|prompt|database|schema|build)\b/i
+const MUTATION_VERB_PATTERN =
+  /\b(build|create|implement|add|change|update|fix|repair|refactor|remove|delete|rename|rewrite|migrate|wire|integrate|debug|optimi[sz]e|improve|redesign|replace|convert|edit|write)\b/i
+const READ_ONLY_DEVELOPMENT_PATTERN =
+  /\b(review|audit|analy[sz]e|explain|inspect|investigate|trace|understand|find|locate|summari[sz]e)\b/i
+const FILE_MUTATION_PATTERN = /\b(create|write|edit|update|change|rename|move|delete|remove|replace)\b[\s\S]{0,80}\b(file|folder|directory|document)\b/i
+const WEB_RESEARCH_PATTERN =
+  /\b(research|look up|search the web|browse|latest|current|today|recent|sources?|citations?|online)\b/i
+
+const LOCAL_PREFLIGHT_RESPONSE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    taskType: { type: 'string', enum: ['answer', 'research', 'code_change', 'file_task', 'other'] },
+    developmentTask: { type: 'boolean' },
+    workspaceMutationExpected: { type: 'boolean' },
+    verificationRequired: { type: 'boolean' },
+    successCriteria: { type: 'array', items: { type: 'string' }, maxItems: 4 },
+    needsLocalFiles: { type: 'boolean' },
+    needsWebResearch: { type: 'boolean' },
+  },
+  required: [
+    'taskType',
+    'developmentTask',
+    'workspaceMutationExpected',
+    'verificationRequired',
+    'successCriteria',
+    'needsLocalFiles',
+    'needsWebResearch',
+  ],
+} as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -59,24 +96,75 @@ function normalizePreflightPlan(value: unknown): LocalPreflightPlan | null {
     developmentTask: value.developmentTask === true,
     workspaceMutationExpected: value.workspaceMutationExpected === true,
     verificationRequired: value.verificationRequired === true,
-    successCriteria: normalizeStrings(value.successCriteria, 10),
+    successCriteria: normalizeStrings(value.successCriteria, 6),
     needsLocalFiles: value.needsLocalFiles === true,
     needsWebResearch: value.needsWebResearch === true,
-    localQueries: normalizeStrings(value.localQueries, 6),
-    webQueries: normalizeStrings(value.webQueries, 6),
-    preflightChecks: normalizeStrings(value.preflightChecks, 8),
-    verificationChecks: normalizeStrings(value.verificationChecks, 8),
-    steps: normalizeStrings(value.steps, 12),
+    localQueries: normalizeStrings(value.localQueries, 4),
+    webQueries: normalizeStrings(value.webQueries, 4),
+    preflightChecks: normalizeStrings(value.preflightChecks, 4),
+    verificationChecks: normalizeStrings(value.verificationChecks, 4),
+    steps: normalizeStrings(value.steps, 6),
   }
 }
 
-const SOCIAL_TURN_PATTERN =
-  /^(?:hi|hello|hey|thanks|thank you|ok|okay|cool|great|got it|sounds good|good (?:morning|afternoon|evening))[.!?\s]*$/i
+function directPlan(
+  taskType: string,
+  developmentTask: boolean,
+  workspaceMutationExpected: boolean,
+  verificationRequired: boolean,
+  needsLocalFiles: boolean,
+  needsWebResearch: boolean,
+): LocalPreflightPlan {
+  return {
+    taskType,
+    developmentTask,
+    workspaceMutationExpected,
+    verificationRequired,
+    successCriteria: [],
+    needsLocalFiles,
+    needsWebResearch,
+    localQueries: [],
+    webQueries: [],
+    preflightChecks: [],
+    verificationChecks: [],
+    steps: [],
+  }
+}
 
-export function shouldRunLocalPlanning(userInput: string): boolean {
+/**
+ * Returns a deterministic task contract only when the request is clear enough that another
+ * inference would add ceremony rather than useful judgment.
+ */
+export function inferDirectPreflightPlan(userInput: string, settings: SettingsLike = {}): LocalPreflightPlan | null {
   const text = String(userInput || '').trim()
-  if (!text) return false
-  return !SOCIAL_TURN_PATTERN.test(text)
+  if (!text || SOCIAL_TURN_PATTERN.test(text)) return null
+
+  const hasWorkspace = Boolean(String(settings.agent_working_dir || '').trim())
+  const development = DEVELOPMENT_NOUN_PATTERN.test(text)
+
+  if (development && MUTATION_VERB_PATTERN.test(text)) {
+    return directPlan('code_change', true, true, true, hasWorkspace, false)
+  }
+
+  if (development && READ_ONLY_DEVELOPMENT_PATTERN.test(text)) {
+    return directPlan('code_change', true, false, false, hasWorkspace, false)
+  }
+
+  if (FILE_MUTATION_PATTERN.test(text)) {
+    return directPlan('file_task', false, true, true, hasWorkspace, false)
+  }
+
+  if (WEB_RESEARCH_PATTERN.test(text)) {
+    return directPlan('research', false, false, false, false, true)
+  }
+
+  return null
+}
+
+export function shouldRunLocalPlanning(userInput: string, settings: SettingsLike = {}): boolean {
+  const text = String(userInput || '').trim()
+  if (!text || SOCIAL_TURN_PATTERN.test(text)) return false
+  return inferDirectPreflightPlan(text, settings) === null
 }
 
 export async function buildLocalPreflightPlan(
@@ -87,7 +175,10 @@ export async function buildLocalPreflightPlan(
 ): Promise<LocalPreflightPlan | null> {
   const suppliedPlan = normalizePreflightPlan(settings?.agent_preflight_plan)
   if (suppliedPlan) return suppliedPlan
-  if (!shouldRunLocalPlanning(userInput) || settings?.agent_local_planning === false) return null
+
+  const direct = inferDirectPreflightPlan(userInput, settings)
+  if (direct) return direct
+  if (!shouldRunLocalPlanning(userInput, settings) || settings?.agent_local_planning === false) return null
 
   const localModels = readAgentModels(settings).filter((entry) => entry.provider === 'local' && entry.model)
   const planner =
@@ -98,36 +189,20 @@ export async function buildLocalPreflightPlan(
   if (!planner) return null
 
   const recent = (Array.isArray(conversation) ? conversation : [])
-    .slice(-6)
-    .map((message) => `${message.role || 'user'}: ${String(message.content || '').slice(0, 1200)}`)
+    .slice(-3)
+    .map((message) => `${message.role || 'user'}: ${String(message.content || '').slice(0, 600)}`)
     .join('\n')
   const prompt = [
-    'Create a compact execution preflight and task contract for an AI agent. Return JSON only.',
-    'Interpret the complete request and recent context semantically. Do not classify intent from isolated keywords or phrases.',
-    'Do not expose chain-of-thought. Provide decisions, observable success criteria, search queries, and observable steps.',
-    'Schema:',
-    '{"taskType":"answer|research|code_change|file_task|other","developmentTask":boolean,"workspaceMutationExpected":boolean,"verificationRequired":boolean,"successCriteria":string[],"needsLocalFiles":boolean,"needsWebResearch":boolean,"localQueries":string[],"webQueries":string[],"preflightChecks":string[],"verificationChecks":string[],"steps":string[]}',
-    'Set workspaceMutationExpected=true only when fulfilling the user intent requires changing files or project state in the workspace. Explanations, review, discovery, and read-only analysis normally do not require mutation.',
-    'Set verificationRequired=true when successful completion should be checked against the real project or runtime rather than accepted from generated text alone.',
-    'successCriteria must contain short observable outcomes that establish whether the user request is actually complete.',
-    'For development tasks, plan reconnaissance before substantive implementation: inspect the existing project structure, manifests, conventions, toolchain/environment, and available developer tooling instead of assuming a blank project or a particular ecosystem.',
-    'If the project is new or incomplete, the main agent should establish only the environment, dependency manifest, and structure that are normally appropriate for the ecosystem it actually discovers. Do not prescribe language-specific commands from this planner.',
-    'For development tasks, include verification appropriate to the discovered project. A successful implementation should be run, built, tested, linted, imported, or otherwise checked against reality as appropriate; failures should feed back into diagnosis and another fix/verify cycle.',
-    'Use needsLocalFiles when files on the user computer could materially help.',
-    'Use needsWebResearch for current/public facts or external sources, not for purely local code work.',
-    `Current request: ${userInput}`,
+    `Request:\n${userInput}`,
     recent ? `Recent context:\n${recent}` : '',
+    'Classify only what the executor needs to know. Keep success criteria short and observable.',
   ]
     .filter(Boolean)
     .join('\n\n')
 
   const meta = await callAIWithMeta(
     [
-      {
-        role: 'system',
-        content:
-          'You are IRIS local planner. Interpret user intent semantically and produce a concise structured task contract, not a final answer.',
-      },
+      { role: 'system', content: 'Classify this task for execution. Return JSON.' },
       { role: 'user', content: prompt },
     ],
     {
@@ -135,38 +210,28 @@ export async function buildLocalPreflightPlan(
       ai_provider: 'local',
       ai_model: planner.model,
       ai_runtime_api_key: '',
-      agent_max_output_tokens: 1100,
+      agent_max_output_tokens: 450,
     },
-    { signal: signal || undefined },
+    {
+      signal: signal || undefined,
+      responseSchema: {
+        name: 'task_preflight',
+        schema: LOCAL_PREFLIGHT_RESPONSE_SCHEMA,
+      },
+    },
   )
-  const parsed = parsePlannerJson(String(meta?.text || ''))
-  return normalizePreflightPlan(parsed)
+  return normalizePreflightPlan(parsePlannerJson(String(meta?.text || '')))
 }
 
 export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): string {
   const normalized = normalizePreflightPlan(plan)
   if (!normalized) return ''
-  const parts = [
-    `Local preflight: task=${normalized.taskType}.`,
-    normalized.developmentTask
-      ? 'Development lifecycle: inspect the current project and toolchain first; prepare only what is missing; implement; verify against the real environment; diagnose and fix any failures; then verify again before finishing.'
-      : '',
-    normalized.workspaceMutationExpected
-      ? 'Task contract: workspace mutation is required for completion. Make the requested change with the available workspace tools; do not finish with only a proposed snippet, example, or explanation. Remain in the current agent loop until the mutation succeeds or a genuine blocker prevents it.'
-      : '',
-    normalized.verificationRequired
-      ? 'Task contract: completion requires real verification. Continue the current agent loop until appropriate verification evidence exists; if verification fails, diagnose the observed failure, choose the next action, fix it, and verify again.'
-      : '',
-    normalized.successCriteria.length ? `Success criteria: ${normalized.successCriteria.join(' | ')}.` : '',
-    normalized.preflightChecks.length ? `Preflight checks: ${normalized.preflightChecks.join(' | ')}.` : '',
-    normalized.needsLocalFiles
-      ? `Use filesystem RAG${normalized.localQueries.length ? ` for: ${normalized.localQueries.join(' | ')}` : ''}.`
-      : 'Filesystem RAG is optional.',
-    normalized.needsWebResearch
-      ? `Use web research${normalized.webQueries.length ? ` for: ${normalized.webQueries.join(' | ')}` : ''}.`
-      : 'Web research is not initially required.',
-    normalized.verificationChecks.length ? `Verification goals: ${normalized.verificationChecks.join(' | ')}.` : '',
-    normalized.steps.length ? `Plan: ${normalized.steps.join(' → ')}.` : '',
-  ]
-  return parts.filter(Boolean).join(' ')
+
+  const parts = [`Task: ${normalized.taskType}.`]
+  if (normalized.workspaceMutationExpected) parts.push('Workspace change required.')
+  if (normalized.verificationRequired) parts.push('Verify the result before finishing.')
+  if (normalized.successCriteria.length) parts.push(`Done when: ${normalized.successCriteria.join(' | ')}.`)
+  if (normalized.needsLocalFiles) parts.push('Use project files as needed.')
+  if (normalized.needsWebResearch) parts.push('Use web research as needed.')
+  return parts.join(' ')
 }
