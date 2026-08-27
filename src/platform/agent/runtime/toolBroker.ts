@@ -93,18 +93,6 @@ function attachVerificationCandidate(
   }
 }
 
-function updateMutationEpoch(
-  state: VerificationState | null,
-  toolName: string,
-  args: Record<string, unknown>,
-  result: unknown,
-) {
-  if (!state || !result || typeof result !== 'object' || Array.isArray(result)) return
-  if (mutationSucceeded(toolName, args, result as Record<string, unknown>)) {
-    markVerificationMutation(state)
-  }
-}
-
 export function workspaceMutationForResult(toolName: string, args: Record<string, unknown>, result: unknown) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false
   const record = result as Record<string, unknown>
@@ -112,6 +100,18 @@ export function workspaceMutationForResult(toolName: string, args: Record<string
     return Number(record.exitCode) === 0 && terminalCommandLikelyMutatesSource(args.command)
   }
   return mutationSucceeded(toolName, args, record)
+}
+
+function updateMutationEpoch(
+  state: VerificationState | null,
+  toolName: string,
+  args: Record<string, unknown>,
+  result: unknown,
+) {
+  if (!state) return
+  if (workspaceMutationForResult(toolName, args, result)) {
+    markVerificationMutation(state)
+  }
 }
 
 function repetitionScope(options: LegacyBrokerOptions, workspaceRoot: string) {
