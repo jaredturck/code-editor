@@ -12,6 +12,8 @@ import { resolveAgentRoleSettings } from '@/platform/agent/agentIdentity'
 import { findCodeDefinition, findCodeReferences } from '@/platform/agent/codeNavigation'
 
 const MAX_USER_QUESTIONS_PER_CONTEXT = 3
+const DEFAULT_CONTEXT_MINUTES = 18
+const DEFAULT_CONTEXT_ACTIONS = 120
 
 const CODE_NAVIGATION_TOOL_DEFINITIONS = [
   {
@@ -80,6 +82,18 @@ function buildApprovalState(settings) {
     allowGlobalPythonInstall: false,
     currentStep: 0,
   }
+}
+
+function contextBudget(settings) {
+  const configuredMinutes = Number(settings?.agent_session_minutes)
+  const configuredActions = Number(settings?.agent_context_action_limit)
+  const minutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
+    ? Math.max(1, Math.min(120, configuredMinutes))
+    : DEFAULT_CONTEXT_MINUTES
+  const maxActions = Number.isFinite(configuredActions) && configuredActions > 0
+    ? Math.max(16, Math.min(400, Math.round(configuredActions)))
+    : DEFAULT_CONTEXT_ACTIONS
+  return { maxMs: minutes * 60_000, maxActions, minutes }
 }
 
 function toolDefinitions(settings, safetyConfig, approvalState) {
@@ -185,6 +199,7 @@ export async function runAgentSession({
   const artifacts = []
   const approvalState = buildApprovalState(settings)
   const questionState = { count: 0 }
+  const budget = contextBudget(settings)
   const safetyConfig = resolveSafetyConfig(settings, maxSteps)
   const guard = createToolGuard({ maxRepeat: 4, maxObservationStreak: 48 })
   let todoTool
@@ -216,12 +231,32 @@ export async function runAgentSession({
     { role: 'user', content: String(userInput || '') },
   ]
 
-  emit(onEvent, timeline, { type: 'phase', name: 'agent', summary: `Native Qwen coding loop started with ${tools.length} tools.` })
+  emit(onEvent, timeline, {
+    type: 'phase',
+    name: 'agent',
+    summary: `Native Qwen coding loop started with ${tools.length} tools; context budget ${budget.minutes}m/${budget.maxActions} actions.`,
+  })
 
   let reply = ''
   let step = 0
+  let handoff = false
+  let handoffReason = ''
   for (;;) {
     if (abortSignal?.aborted) break
+
+    const elapsedMs = Date.now() - startedAt
+    const actionLimitReached = stepHistory.length >= budget.maxActions
+    const timeLimitReached = elapsedMs >= budget.maxMs
+    if (actionLimitReached || timeLimitReached) {
+      handoff = true
+      handoffReason = actionLimitReached
+        ? `context action budget reached (${stepHistory.length}/${budget.maxActions})`
+        : `context time budget reached (${Math.max(1, Math.round(elapsedMs / 60_000))}/${budget.minutes} minutes)`
+      reply = `Context time budget reached; project state is preserved for a fresh context. ${handoffReason}.`
+      emit(onEvent, timeline, { type: 'notice', level: 'info', summary: reply, step })
+      break
+    }
+
     step += 1
     approvalState.currentStep = step
 
@@ -308,6 +343,10 @@ export async function runAgentSession({
       toolCount: tools.length,
       actions: stepHistory.length,
       userQuestions: questionState.count,
+      contextHandoff: handoff,
+      contextHandoffReason: handoffReason,
+      contextBudgetMinutes: budget.minutes,
+      contextBudgetActions: budget.maxActions,
       durationMs: Date.now() - startedAt,
     },
   }
