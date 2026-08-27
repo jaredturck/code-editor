@@ -50,7 +50,7 @@ export function looksLikeMissingRequestReply(text, userInput) {
   return clarificationSignals.some((pattern) => pattern.test(reply))
 }
 
-// Synthesizes final reply from the completed agent steps and available result data.
+// Synthesizes a final reply only when tool evidence is too weak to summarize deterministically.
 export async function synthesizeFinalReply({
   userInput,
   conversation,
@@ -60,61 +60,52 @@ export async function synthesizeFinalReply({
   disallowCapabilityClaims = false,
   requestAI,
 }) {
-  const condensedHistory = stepHistory.length
-    ? stepHistory
-        .slice(-10)
-        .map((item) => `- ${item.tool}: ${item.ok ? item.summary : `error ${item.error}`}`)
-        .join('\n')
-    : '- No tools were executed.'
-
-  const capabilityHint = Array.isArray(capabilitySnapshot?.availableTools)
-    ? capabilitySnapshot.availableTools.join(', ')
-    : ''
+  const successful = stepHistory.filter((step) => step.ok !== false)
+  if (successful.length) {
+    const recent = successful.slice(-6).map((step) => {
+      const tool = String(step.tool || 'action')
+      const summary = String(step.summary || '').replace(/\s+/g, ' ').trim().slice(0, 280)
+      return summary ? `- ${tool}: ${summary}` : `- ${tool}`
+    })
+    const failed = stepHistory.filter((step) => step.ok === false).slice(-3)
+    const failureLines = failed.map((step) => `- ${String(step.tool || 'action')}: ${String(step.error || 'failed').slice(0, 220)}`)
+    return [
+      `Completed ${successful.length} successful action${successful.length === 1 ? '' : 's'}.`,
+      recent.join('\n'),
+      failureLines.length ? `Remaining failures:\n${failureLines.join('\n')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
 
   const messages = [
     {
       role: 'system',
       content: [
-        'You are IRIS. Provide a concise, direct response grounded in available tool results.',
+        'Answer the user directly from the supplied run state.',
         UNTRUSTED_CONTENT_SYSTEM_RULES,
         disallowCapabilityClaims
-          ? 'Do not claim missing tools or permissions in this reply. Describe what happened and provide a concrete next step.'
+          ? 'Do not claim missing tools or permissions.'
           : capabilityBlocked
-            ? `If permissions or tool availability prevent completion, use this exact sentence first: "${INSUFFICIENT_ACCESS_REPLY}".`
-            : 'Only mention permission/tool limitations when explicit tool errors indicate capability restrictions.',
-        'The latest user request is already provided below. Do not claim the user gave no request unless that request is empty.',
-        'Do not return JSON, tool schemas, or controller actions. Respond in plain natural language only.',
-      ].join(' '),
+            ? `If access blocked completion, begin with: "${INSUFFICIENT_ACCESS_REPLY}".`
+            : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
     },
-    ...conversation.slice(-6).map((message) => ({
+    ...conversation.slice(-3).map((message) => ({
       role: message.role,
       content: trimMessageContent(message.content),
     })),
     {
       role: 'user',
-      content: [
-        `Latest user request: ${userInput}`,
-        `Tool summary:\n${condensedHistory}`,
-        `Available tools: ${capabilityHint || 'unknown'}`,
-        `Capability blocked in this run: ${capabilityBlocked ? 'yes' : 'no'}`,
-        'Respond to the user now.',
-      ].join('\n\n'),
+      content: `Request: ${userInput}\n\nNo useful tool result was recorded. Give the best direct response supported by the conversation.`,
     },
   ]
 
   const synthesized = String((await requestAI(messages)) || '').trim()
   if (synthesized) return synthesized
-
-  // The model produced nothing — never hand back an empty final. Summarize what
-  // actually happened so the run ends with a useful, honest reply rather than dead air.
-  const okSteps = stepHistory.filter((s) => s.ok)
-  if (okSteps.length) {
-    const last = okSteps[okSteps.length - 1]
-    return `I worked through ${stepHistory.length} step(s) (${okSteps.length} successful) but couldn't compose a full summary. Latest result: ${String(
-      last.summary || last.tool || 'completed a step',
-    ).slice(0, 400)}. Tell me how you'd like to proceed.`
-  }
-  return 'I could not produce a complete answer this time. Could you rephrase or add a bit more detail so I can try again?'
+  return 'I could not produce a complete answer from the available run state.'
 }
 
 // Assembles controller payload from lower-level state so callers receive one consistent
@@ -158,8 +149,6 @@ export function buildControllerPayload({
 
   return {
     user_request: userInput,
-    // No step counter is surfaced to the model (it confuses pacing); the runtime owns
-    // pacing via the duration budget. previous_steps below is real action history, not a count.
     recent_messages: conversation.slice(-8).map((message) => ({
       role: message.role,
       content: trimMessageContent(message.content),
@@ -167,10 +156,6 @@ export function buildControllerPayload({
     todos,
     previous_steps: recentSteps,
     ...(recoveryContext ? { recovery_context: recoveryContext } : {}),
-    // Advertise tools that are immediately available plus tools whose only missing
-    // requirement is a user permission grant. The broker still enforces the role tier and
-    // pauses requestable tools for the persistent permission popup before execution.
-    // In the 'lean' toolset (W2) the redundant files.*/search.* helpers remain hidden.
     tools: TOOL_DEFINITIONS.filter((tool) => {
       const alwaysOn = tool.name === 'todo.update' || tool.name === 'trace.log' || tool.name === 'browser.inspect'
       const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
@@ -206,15 +191,10 @@ export function buildControllerPayload({
           }))
         : [],
     },
-    // Relevance-gated recall: only the durable notes that actually relate to this
-    // request (recallRelevantNotes), plus whether it's an explicit resume. No
-    // daily-blob injection — memory reaches the model only when it's relevant.
     relevant_memory: {
       resume_intent: Boolean(continuityContext?.resumeIntent),
       notes: Array.isArray(relevantMemory) ? relevantMemory : [],
     },
-    // The chat's durable encrypted memory — always surfaced so the agent keeps
-    // sight of the plan; maintained via chat.remember; earlier history via chat.recall.
     chat_memory: String(chatMemory || ''),
     memory_hygiene: {
       web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed)) ? Number(webSearchState.callsUsed) : 0,
@@ -228,13 +208,6 @@ export function buildControllerPayload({
         ? webSearchState.queryHistory.slice(0, 6)
         : [],
     },
-    // The full capability snapshot is no longer serialized into every per-step payload —
-    // it was the largest redundant chunk. `tools` above already lists what's available
-    // a tool/permission limit is surfaced only when a call is actually blocked
-    // (capabilityPolicy). This is the A5/A6 per-step token cut.
-    // The controller output schema + json-only / one-tool-per-step rules now
-    // live in the system prompt (agent/controllerPrompt.js, 'structured' viest),
-    // so they are no longer re-narrated in every per-step payload.
     constraints: {
       guardrails: {
         safety_profile: safetyConfig?.profile || 'strict',
@@ -268,13 +241,10 @@ export function buildRunSummary({
   const toolFailures = toolResults.filter((event) => event.status !== 'ok').length
   const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
   const toolRetries = stepHistory.filter((step) => step.retried).length
-  // Invalid-argument failures → a signal that a tool's description/schema needs
-  // sharpening (per Anthropic's "analyze tool-calling metrics" guidance).
   const invalidArgErrors = stepHistory.filter(
     (step) =>
       !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
   ).length
-  // Consecutive same-tool calls — a proxy for redundant/thrashing tool use.
   let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {
     if (stepHistory[i]?.tool && stepHistory[i].tool === stepHistory[i - 1]?.tool) redundantToolCalls += 1
