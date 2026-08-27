@@ -173,5 +173,7 @@ export function getStorageFatalError(): string {
 }
 
 export async function flushEncryptedStoreWrites(): Promise<void> {
-  await Promise.all(Array.from(writeQueues.values()))
+  while (writeQueues.size > 0) {
+    await Promise.all(Array.from(writeQueues.values()))
+  }
 }
