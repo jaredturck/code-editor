@@ -7,8 +7,16 @@ import {
   type ProjectLedger,
   type ProjectWorkItem,
 } from '@/platform/agent/projectLedger'
+import {
+  checkpointWorkerWorkspace,
+  createWorkerWorkspace,
+  integrateWorkerCommit,
+  projectGitAvailable,
+  removeWorkerWorkspace,
+  type ProjectWorkerWorkspace,
+} from '@/platform/agent/projectWorkspaceManager'
 import { buildSTP, type STPTask, type STPTaskType } from '@/platform/stpBuilder'
-import { postTaskBatch, waitForAllTasks } from '@/platform/subAgentRuntime'
+import { executeSTP } from '@/platform/subAgentRuntime'
 
 export interface ProjectDispatchOptions {
   maxParallel?: number
@@ -22,6 +30,13 @@ export interface ProjectDispatchResult {
   failed: number
   ledger: ProjectLedger
   taskIds: string[]
+}
+
+interface PreparedWork {
+  item: ProjectWorkItem
+  task: STPTask
+  workspace: ProjectWorkerWorkspace | null
+  cwd: string
 }
 
 function roleForRuntime(role: ProjectAgentRole) {
@@ -46,7 +61,18 @@ function toolsForRole(role: ProjectAgentRole) {
   if (role === 'planner' || role === 'orchestrator') {
     return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'terminal.exec', 'diagnostics.check']
   }
-  return ['files.list', 'files.find', 'files.read', 'search.ripgrep', 'files.write', 'files.edit', 'files.patch', 'terminal.exec', 'diagnostics.check', 'browser.inspect']
+  return [
+    'files.list',
+    'files.find',
+    'files.read',
+    'search.ripgrep',
+    'files.write',
+    'files.edit',
+    'files.patch',
+    'terminal.exec',
+    'diagnostics.check',
+    'browser.inspect',
+  ]
 }
 
 function dependenciesComplete(item: ProjectWorkItem, ledger: ProjectLedger) {
@@ -77,18 +103,23 @@ function resultText(result: any) {
   return JSON.stringify(result)
 }
 
+function taskSucceeded(result: any) {
+  return Boolean(result) && ['done', 'success', 'completed'].includes(String(result.status || '').toLowerCase())
+}
+
 function availableWork(ledger: ProjectLedger, maxParallel: number) {
   return ledger.workItems
     .filter((item) => ['pending', 'ready'].includes(item.status))
     .filter((item) => dependenciesComplete(item, ledger))
     .sort((left, right) => {
-      const roleRank = (role: ProjectAgentRole) => (role === 'scout' ? 0 : role === 'executor' ? 1 : role === 'orchestrator' ? 2 : 3)
+      const roleRank = (role: ProjectAgentRole) =>
+        role === 'scout' ? 0 : role === 'executor' ? 1 : role === 'orchestrator' ? 2 : role === 'evaluator' ? 3 : 4
       return roleRank(left.role) - roleRank(right.role) || left.createdAt - right.createdAt
     })
     .slice(0, Math.max(1, maxParallel))
 }
 
-function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Record<string, any>): STPTask {
+function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Record<string, any>, cwd: string): STPTask {
   const runtimeRole = roleForRuntime(item.role)
   const identity = resolveAgentIdentity(runtimeRole, settings)
   const readOnly = item.role === 'scout' || item.role === 'evaluator'
@@ -99,17 +130,20 @@ function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Recor
     constraints: [
       `Work item: ${item.id}`,
       `Project generation: ${ledger.generation}`,
+      `Assigned workspace: ${cwd}`,
       readOnly ? 'Do not mutate project files.' : 'Make the requested implementation changes in the assigned workspace.',
       'Do not redo work already recorded as complete.',
       'Return concrete evidence, changed files, failures, and remaining blockers.',
     ],
-    tools: { available: toolsForRole(item.role), preferred: item.role === 'scout' ? ['search.ripgrep', 'files.read'] : ['files.read', 'files.edit', 'terminal.exec'] },
+    tools: {
+      available: toolsForRole(item.role),
+      preferred: item.role === 'scout' ? ['search.ripgrep', 'files.read'] : ['files.read', 'files.edit', 'terminal.exec'],
+    },
     budget: {
-      // Task contexts stay finite even though the project lifecycle is unbounded.
-      maxSteps: item.role === 'scout' ? 16 : 28,
-      maxTokens: item.role === 'scout' ? 12000 : 24000,
-      timeoutMs: item.role === 'scout' ? 10 * 60_000 : 30 * 60_000,
-      maxOutputChars: 12000,
+      maxSteps: item.role === 'scout' ? 24 : 48,
+      maxTokens: item.role === 'scout' ? 16000 : 40000,
+      timeoutMs: item.role === 'scout' ? 20 * 60_000 : 60 * 60_000,
+      maxOutputChars: 16000,
     },
     context: {
       projectId: ledger.projectId,
@@ -120,7 +154,8 @@ function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Recor
       recentDecisions: ledger.decisions.slice(-12),
       failedApproaches: ledger.failedApproaches.filter((failed) => failed.workItemId === item.id).slice(-6),
       currentStrategy: ledger.currentStrategy,
-      workspaceId: item.workspaceId,
+      workspaceRoot: cwd,
+      isolatedWorkspace: item.role === 'executor' && cwd !== String(settings.agent_working_dir || ''),
     },
     priority: 'normal',
     toAgent: runtimeRole,
@@ -138,6 +173,65 @@ function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Recor
   })
 }
 
+async function prepareWork(
+  item: ProjectWorkItem,
+  ledger: ProjectLedger,
+  settings: Record<string, any>,
+  gitAvailable: boolean,
+): Promise<PreparedWork> {
+  const mainRoot = String(settings.agent_working_dir || '').trim()
+  let workspace: ProjectWorkerWorkspace | null = null
+  let cwd = mainRoot
+
+  if (item.role === 'executor' && gitAvailable && mainRoot) {
+    try {
+      workspace = await createWorkerWorkspace(mainRoot, `${ledger.projectId}-${item.id}`)
+      cwd = workspace.root
+    } catch {
+      workspace = null
+      cwd = mainRoot
+    }
+  }
+
+  const preparedItem = { ...item, workspaceId: cwd }
+  return { item: preparedItem, task: buildTask(preparedItem, ledger, settings, cwd), workspace, cwd }
+}
+
+async function runPreparedWork(prepared: PreparedWork, settings: Record<string, any>, signal?: AbortSignal) {
+  const taskSettings = {
+    ...settings,
+    agent_working_dir: prepared.cwd,
+    agent_session_minutes: 0,
+    agent_bounded_automatic: false,
+    agent_project_run_mode: 'automatic',
+  }
+  const result = await executeSTP(prepared.task, taskSettings, () => {}, signal)
+  let integrationError = ''
+  let checkpoint = ''
+
+  if (prepared.workspace && taskSucceeded(result)) {
+    try {
+      checkpoint = await checkpointWorkerWorkspace(
+        prepared.workspace,
+        `IRIS ${prepared.item.role} checkpoint: ${prepared.item.title || prepared.item.id}`,
+      )
+      if (checkpoint) await integrateWorkerCommit(String(settings.agent_working_dir || ''), checkpoint)
+    } catch (error) {
+      integrationError = error instanceof Error ? error.message : String(error || 'Worker integration failed')
+    }
+  }
+
+  if (prepared.workspace) {
+    try {
+      await removeWorkerWorkspace(String(settings.agent_working_dir || ''), prepared.workspace, true)
+    } catch {
+      // Cleanup is best-effort in Phase A; stale worktrees can be pruned later.
+    }
+  }
+
+  return { result, checkpoint, integrationError }
+}
+
 export async function dispatchReadyProjectWork(
   chatId: string,
   settings: Record<string, any>,
@@ -150,31 +244,40 @@ export async function dispatchReadyProjectWork(
   const items = availableWork(initial, options.maxParallel ?? 4)
   if (!items.length) return { dispatched: 0, completed: 0, failed: 0, ledger: initial, taskIds: [] }
 
-  const tasks = items.map((item) => buildTask(item, initial, settings))
+  const mainRoot = String(settings.agent_working_dir || '').trim()
+  const gitAvailable = Boolean(mainRoot && (await projectGitAvailable(mainRoot)))
+  const prepared = await Promise.all(items.map((item) => prepareWork(item, initial, settings, gitAvailable)))
+  const tasks = prepared.map((entry) => entry.task)
   const taskIds = tasks.map((task) => task.taskId)
-  const taskByWork = new Map(items.map((item, index) => [item.id, tasks[index]]))
+  const preparedByWork = new Map(prepared.map((entry) => [entry.item.id, entry]))
 
   let ledger = mutateProjectLedger(chatId, initial.goal, (draft) => {
     const timestamp = Date.now()
     draft.workItems = draft.workItems.map((item) => {
-      const task = taskByWork.get(item.id)
-      if (!task) return item
-      return { ...item, status: 'running', taskId: task.taskId, attempts: item.attempts + 1, updatedAt: timestamp }
+      const entry = preparedByWork.get(item.id)
+      if (!entry) return item
+      return {
+        ...item,
+        status: 'running',
+        taskId: entry.task.taskId,
+        workspaceId: entry.cwd,
+        attempts: item.attempts + 1,
+        updatedAt: timestamp,
+      }
     })
-    const nextStates: ProjectAgentTaskState[] = items.map((item, index) => {
-      const task = tasks[index]
-      const runtimeRole = roleForRuntime(item.role)
+    const nextStates: ProjectAgentTaskState[] = prepared.map((entry) => {
+      const runtimeRole = roleForRuntime(entry.item.role)
       const identity = resolveAgentIdentity(runtimeRole, settings)
       return {
-        id: task.taskId,
-        role: item.role,
+        id: entry.task.taskId,
+        role: entry.item.role,
         model: identity.model,
         provider: identity.provider,
         status: 'running',
-        workItemId: item.id,
-        workspaceId: item.workspaceId,
+        workItemId: entry.item.id,
+        workspaceId: entry.cwd,
         outputPath: '',
-        attempts: item.attempts + 1,
+        attempts: entry.item.attempts + 1,
         error: '',
         updatedAt: timestamp,
       }
@@ -182,46 +285,69 @@ export async function dispatchReadyProjectWork(
     draft.agentTasks = [...draft.agentTasks.filter((state) => !taskIds.includes(state.id)), ...nextStates].slice(-500)
   })
 
-  postTaskBatch(tasks)
-  const results = await waitForAllTasks(taskIds, options.timeoutMs ?? 35 * 60_000)
+  const executions = await Promise.allSettled(prepared.map((entry) => runPreparedWork(entry, settings, options.signal)))
   let completed = 0
   let failed = 0
 
   ledger = mutateProjectLedger(chatId, ledger.goal, (draft) => {
     const timestamp = Date.now()
-    const resultByTask = new Map(results.map((result: any) => [String(result.taskId || ''), result]))
+    const executionByTask = new Map(
+      prepared.map((entry, index) => [entry.task.taskId, executions[index]]),
+    )
 
     draft.workItems = draft.workItems.map((item) => {
       if (!item.taskId || !taskIds.includes(item.taskId)) return item
-      const result: any = resultByTask.get(item.taskId)
-      const ok = result && ['done', 'success', 'completed'].includes(String(result.status || '').toLowerCase())
+      const settled = executionByTask.get(item.taskId)
+      const execution = settled?.status === 'fulfilled' ? settled.value : null
+      const result = execution?.result
+      const integrationError = execution?.integrationError || ''
+      const ok = taskSucceeded(result) && !integrationError
       if (ok) completed += 1
       else failed += 1
       return {
         ...item,
         status: ok ? 'done' : 'failed',
         resultSummary: resultText(result).slice(0, 5000),
-        blockers: ok ? [] : [String(result?.error || 'Delegated task failed.').slice(0, 1500)],
+        blockers: ok
+          ? []
+          : [
+              integrationError ||
+                (settled?.status === 'rejected'
+                  ? String(settled.reason instanceof Error ? settled.reason.message : settled.reason)
+                  : String((result as any)?.error || 'Delegated task failed.')),
+            ].slice(0, 20),
         updatedAt: timestamp,
       }
     })
 
     draft.agentTasks = draft.agentTasks.map((state) => {
       if (!taskIds.includes(state.id)) return state
-      const result: any = resultByTask.get(state.id)
-      const ok = result && ['done', 'success', 'completed'].includes(String(result.status || '').toLowerCase())
+      const settled = executionByTask.get(state.id)
+      const execution = settled?.status === 'fulfilled' ? settled.value : null
+      const result = execution?.result
+      const ok = taskSucceeded(result) && !execution?.integrationError
       return {
         ...state,
         status: ok ? 'done' : 'failed',
-        outputPath: String(result?.outputPath || ''),
-        error: ok ? '' : String(result?.error || 'Delegated task failed.').slice(0, 2000),
+        outputPath: String((result as any)?.outputPath || ''),
+        error: ok
+          ? ''
+          : String(
+              execution?.integrationError ||
+                (settled?.status === 'rejected'
+                  ? settled.reason instanceof Error
+                    ? settled.reason.message
+                    : settled.reason
+                  : (result as any)?.error || 'Delegated task failed.'),
+            ).slice(0, 2000),
         updatedAt: timestamp,
       }
     })
 
     if (completed > 0) {
+      draft.generation += 1
       draft.lastProgressAt = timestamp
-      draft.lastProgressSummary = `${completed} delegated project task${completed === 1 ? '' : 's'} completed.`
+      draft.lastProgressSummary = `${completed} isolated project task${completed === 1 ? '' : 's'} completed and integrated.`
     }
   })
 
