@@ -123,14 +123,11 @@ const DEFAULT_MAX_TOKENS = 8000
 const DEFAULT_TIMEOUT_MS = 45000
 const DEFAULT_MAX_OUTPUT_CHARS = 6000
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-
 function generateTaskId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID()
   }
 
-  // Fallback for older runtimes
   const hex = (n: number) =>
     Math.floor(Math.random() * n)
       .toString(16)
@@ -144,7 +141,6 @@ function generateTaskId() {
   ].join('-')
 }
 
-// Converts string array into the canonical representation expected by later code.
 function normalizeStringArray(value: unknown, maxItems = 20): string[] {
   if (!Array.isArray(value)) return []
   return value
@@ -153,12 +149,10 @@ function normalizeStringArray(value: unknown, maxItems = 20): string[] {
     .slice(0, maxItems)
 }
 
-// Converts constraints into the canonical representation expected by later code.
 function normalizeConstraints(value: unknown): string[] {
   return normalizeStringArray(value, 16)
 }
 
-// Converts steps into the canonical representation expected by later code.
 function normalizeSteps(value: unknown): STPStep[] {
   if (!Array.isArray(value)) return []
 
@@ -174,21 +168,18 @@ function normalizeSteps(value: unknown): STPStep[] {
     .slice(0, 24)
 }
 
-// Converts priority into the canonical representation expected by later code.
 function normalizePriority(value: unknown): STPPriority {
   const p = String(value || 'normal').toLowerCase()
   if (p === 'high' || p === 'low') return p
   return 'normal'
 }
 
-// Converts type into the canonical representation expected by later code.
 function normalizeType(value: unknown): STPTaskType {
   const valid = new Set<STPTaskType>(['execute', 'discover', 'summarize', 'verify', 'compile'])
   const t = String(value || 'execute').toLowerCase()
   return valid.has(t as STPTaskType) ? (t as STPTaskType) : 'execute'
 }
 
-// Converts agent identity into the canonical representation expected by later code.
 function normalizeAgentIdentity(value: unknown): STPAgentIdentity | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
 
@@ -201,27 +192,6 @@ function normalizeAgentIdentity(value: unknown): STPAgentIdentity | null {
   return keyId ? { role, provider, model, keyId } : { role, provider, model }
 }
 
-// ── Core builder ──────────────────────────────────────────────────────────────
-
-/**
- * Build a fully normalised STP task object.
- *
- * @param {object} params
- * @param {string} params.type             - 'execute' | 'discover' | 'summarize' | 'verify' | 'compile'
- * @param {string} params.goal             - One sentence describing success
- * @param {string} [params.scope]          - Boundary / depth of the task
- * @param {string[]} [params.constraints]  - Hard limits the sub-agent must respect
- * @param {object} [params.tools]          - { available, preferred, forbidden }
- * @param {object} [params.skills]         - { load: string[], variant: 'simple'|'default' }
- * @param {object[]} [params.steps]        - Explicit step list (optional — if omitted, agent reasons autonomously)
- * @param {object} [params.outputSchema]   - Shape the result must conform to
- * @param {object} [params.budget]         - { maxSteps, maxTokens, timeoutMs, maxOutputChars }
- * @param {object} [params.context]        - { projectRoot, relevantNotes, priorResults, ... }
- * @param {string} [params.priority]       - 'high' | 'normal' | 'low'
- * @param {string} [params.toAgent]        - Target role; legacy aliases remain accepted by orchestration
- * @param {object} [params.agentIdentity]   - Explicit { role, provider, model } for new role-based callers
- * @returns {object} Fully normalised STP task object
- */
 export function buildSTP({
   type,
   goal,
@@ -298,112 +268,44 @@ export function buildSTP({
   }
 }
 
-/**
- * Build an STP system prompt string from a task object.
- * This is what sub-agents actually receive as their system prompt.
- * Runs ~400 tokens vs 1500+ for full-spec prompts.
- *
- * @param {object} stp - Output of buildSTP()
- * @param {string[]} [injectedSkillInstructions] - Pre-rendered skill instruction blocks
- * @returns {string}
- */
 export function buildSTPSystemPrompt(
   stp: STPTask,
   injectedSkillInstructions: string[] = [],
   options: STPSystemPromptOptions = {},
 ) {
-  const lines = [`You are an IRIS Sub-Agent executing task ${stp.taskId}.`, `OBJECTIVE: ${stp.objective.goal}`]
+  const lines = [`Task: ${stp.objective.goal}`]
 
-  if (stp.objective.scope) {
-    lines.push(`SCOPE: ${stp.objective.scope}`)
-  }
-
-  if (stp.objective.constraints.length > 0) {
-    lines.push('CONSTRAINTS:')
-    stp.objective.constraints.forEach((c, i) => {
-      lines.push(`  ${i + 1}. ${c}`)
-    })
+  if (stp.objective.scope) lines.push(`Scope: ${stp.objective.scope}`)
+  if (stp.objective.constraints.length) {
+    lines.push(`Constraints: ${stp.objective.constraints.slice(0, 6).join(' | ')}`)
   }
 
   if (stp.context && Object.keys(stp.context).length > 0) {
-    const contextText = JSON.stringify(stp.context, null, 2).slice(0, 12000)
-    lines.push('SHARED CONTEXT FROM THE ORCHESTRATOR:')
-    lines.push(contextText)
-    lines.push(
-      'Treat this as working evidence from the parent run. Reason from it, but verify live workspace state when the task depends on facts that may have changed.',
-    )
-  }
-
-  if (stp.tools.available.length > 0) {
-    lines.push(`AVAILABLE TOOLS: ${stp.tools.available.join(', ')}`)
-  }
-
-  if (stp.tools.preferred.length > 0) {
-    lines.push(`PREFERRED TOOLS: ${stp.tools.preferred.join(', ')}`)
-  }
-
-  if (stp.tools.forbidden.length > 0) {
-    lines.push(`FORBIDDEN TOOLS: ${stp.tools.forbidden.join(', ')} — do NOT call these.`)
-  }
-
-  lines.push(`MAX OUTPUT: ${stp.output.maxChars} chars`)
-
-  if (Object.keys(stp.output.schema).length > 0) {
-    lines.push(`OUTPUT SCHEMA: ${JSON.stringify(stp.output.schema)}`)
-    lines.push('Return ONLY a JSON object matching this schema when complete.')
+    lines.push(`Context: ${JSON.stringify(stp.context).slice(0, 6000)}`)
   }
 
   if (injectedSkillInstructions.length > 0) {
-    lines.push('')
-    lines.push('ACTIVE SKILLS:')
-    injectedSkillInstructions.forEach((block) => lines.push(block))
+    lines.push(`Skills:\n${injectedSkillInstructions.join('\n\n')}`)
   }
 
-  if (stp.steps.length > 0) {
-    lines.push('')
-    lines.push('Complete these in order:')
-    stp.steps.forEach((step) => {
-      const argsStr = Object.keys(step.args).length > 0 ? ` args=${JSON.stringify(step.args)}` : ''
-      const onEmptyStr = step.onEmpty ? ` [if empty: ${step.onEmpty}]` : ''
-      const onErrorStr = step.onError ? ` [on error: ${step.onError}]` : ''
-      lines.push(`  ${step.order}. ${step.action}${argsStr}${onEmptyStr}${onErrorStr}`)
-    })
-  } else {
-    lines.push('Reason autonomously within the tool and budget constraints above.')
+  if (!options.native && stp.tools.available.length > 0) {
+    lines.push(`Tools: ${stp.tools.available.join(', ')}`)
+    if (stp.tools.forbidden.length > 0) lines.push(`Do not use: ${stp.tools.forbidden.join(', ')}`)
   }
 
-  lines.push('')
+  if (Object.keys(stp.output.schema).length > 0) {
+    lines.push(`Final result schema: ${JSON.stringify(stp.output.schema)}`)
+  }
+
   if (options.native) {
-    // Native tool-calling: call tools natively for actions; return the final
-    // result as JSON text (hybrid keeps the existing output-schema validation).
-    lines.push(
-      'Call the AVAILABLE TOOLS natively to do the work. Before a tool call, put one brief sentence of reasoning in your text.',
-    )
-    if (Object.keys(stp.output.schema).length > 0) {
-      lines.push(
-        'When the task is complete, STOP calling tools and reply with ONLY the final JSON object matching the OUTPUT SCHEMA above — plain text, no markdown.',
-      )
-    } else {
-      lines.push('When the task is complete, reply with your final result as plain text.')
-    }
+    lines.push('Use the available tools when they help. Return the final result when the task is complete.')
   } else {
-    lines.push('Always respond with strict JSON only. No markdown.')
-    lines.push(
-      'Every response MUST include a "thinking" string field with your brief reasoning for this turn (what you are doing and why), alongside either {"tool","args"} to call a tool or the final output object. Example: {"thinking":"Listing the dir to find configs","tool":"files.list","args":{"path":"."}}.',
-    )
+    lines.push('For a tool action, return a JSON object with tool and args. Otherwise return the final JSON result.')
   }
 
-  return lines.join('\n')
+  return lines.join('\n\n')
 }
 
-/**
- * Validate a result object against a task's output schema.
- * Returns { valid: boolean, missing: string[] }.
- *
- * @param {object} result
- * @param {object} schema - From stp.output.schema
- * @returns {{ valid: boolean, missing: string[] }}
- */
 export function validateSTPResult(result: unknown, schema: Record<string, unknown> | null | undefined) {
   if (!schema || typeof schema !== 'object' || Object.keys(schema).length === 0) {
     return { valid: true, missing: [] }
@@ -418,12 +320,6 @@ export function validateSTPResult(result: unknown, schema: Record<string, unknow
   return { valid: missing.length === 0, missing }
 }
 
-/**
- * Build a compact summary string from an STP for logging and timeline display.
- *
- * @param {object} stp
- * @returns {string}
- */
 export function summariseSTP(stp: STPTask) {
   const typeLabel = String(stp.type || 'execute')
   const goal = String(stp.objective?.goal || '').slice(0, 120)
