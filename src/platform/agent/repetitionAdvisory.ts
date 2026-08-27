@@ -117,6 +117,32 @@ export function terminalCommandLikelyMutatesSource(command_value: unknown) {
   )
 }
 
+export function repeatedAgentEvidenceBlock({ scope_id, tool_name, args = {} }: RecordAgentEvidenceInput) {
+  const scope = String(scope_id || '').trim()
+  if (!scope) return ''
+
+  const now = Date.now()
+  prune_stale_states(now)
+  const state = repetition_states.get(scope)
+  if (!state) return ''
+  state.updated_at = now
+
+  const category = evidence_category(tool_name, args)
+  if (!category) return ''
+  const signature = evidence_signature(tool_name, category, args)
+  const records = state.records.filter((record) => record.generation === state.generation)
+  const exact_count = records.filter((record) => record.signature === signature).length
+  const category_count = records.filter((record) => record.category === category).length
+
+  if (exact_count < 2 && category_count < 4) return ''
+
+  const repetition = exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
+  return (
+    `REPETITION BLOCK: ${repetition} have already completed without an intervening source/configuration change. ` +
+    'Do not execute this check again. Change source/configuration, inspect a materially different property, or finish if the evidence already gathered is sufficient.'
+  )
+}
+
 export function recordAgentEvidence({
   scope_id,
   tool_name,
