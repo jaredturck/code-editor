@@ -108,7 +108,7 @@ function stripRedirectionPrefix(value: string) {
 
 function hasOutsideShellExpansion(value: string) {
   if (/`|\$\(/.test(value)) return true
-  return /\$(?:HOME|USERPROFILE|HOMEPATH)(?:[\\/]|$)|\$\{(?:HOME|USERPROFILE|HOMEPATH)\}(?:[\\/]|$)/i.test(value)
+  return /\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?!$-]|\{[^}]+\})/.test(value)
 }
 
 function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string): boolean {
