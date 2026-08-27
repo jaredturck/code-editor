@@ -57,6 +57,7 @@ export function build_core_agent_settings(
     agent_search_web_budget: 4,
     agent_models: automatic_agent_models(base.agent_models),
     agent_overwatch_continuous: false,
+    context_budget_warn_ratio: 0.05,
     agent_tool_allowlist: autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled),
   }
 }
