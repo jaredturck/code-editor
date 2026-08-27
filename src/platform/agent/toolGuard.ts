@@ -1,6 +1,6 @@
 /**
- * Prevents repeated and observation-heavy tool behavior from consuming an agent session
- * without producing useful project progress.
+ * Prevents repeated or runaway evidence gathering without forcing arbitrary mutation after a
+ * tiny number of legitimate repository observations.
  */
 
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
@@ -20,39 +20,34 @@ export interface ToolGuard {
 
 export interface ToolGuardOptions {
   maxRepeat?: number
+  maxObservationStreak?: number
 }
 
 const EXEMPT_TOOL_NAMES = new Set<string>(['trace.log'])
-
-const OBSERVATION_CAPS = new Map<string, number>([
-  ['files.read', 8],
-  ['files.list', 4],
-  ['files.find', 4],
-  ['files.stat', 4],
-  ['files.diff', 4],
-  ['search.ripgrep', 5],
-  ['search.find', 4],
-  ['search.fd', 4],
-  ['terminal.observe', 8],
-  ['terminal.verify', 4],
-  ['launch.run', 2],
-  ['browser.inspect', 2],
-  ['diagnostics.check', 2],
-  ['rag.retrieve', 2],
-  ['search.web', 2],
-  ['web.fetch', 3],
-  ['sources.lookup', 2],
-  ['system.stats', 2],
-  ['system.processes', 2],
-  ['agent.status', 2],
-  ['chat.remember', 2],
-  ['todo.update', 4],
+const OBSERVATION_TOOLS = new Set([
+  'files.read',
+  'files.list',
+  'files.find',
+  'files.stat',
+  'files.diff',
+  'search.ripgrep',
+  'search.find',
+  'search.fd',
+  'search.locate',
+  'rag.retrieve',
+  'browser.inspect',
+  'diagnostics.check',
+  'search.web',
+  'web.fetch',
+  'sources.lookup',
+  'system.stats',
+  'system.processes',
+  'agent.status',
 ])
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
-
   const record = value as Record<string, unknown>
   return `{${Object.keys(record)
     .sort()
@@ -70,29 +65,38 @@ function isMutation(toolName: string, args: unknown) {
 }
 
 function terminalLooksLikeVerification(command: unknown) {
-  const text = String(command || '')
-  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(text)
+  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(String(command || ''))
 }
 
-function observationKey(toolName: string, args: unknown): string | null {
-  if (toolName === 'terminal.exec') {
-    if (isMutation(toolName, args)) return null
-    return terminalLooksLikeVerification(normalizedArgs(args).command) ? 'terminal.verify' : 'terminal.observe'
-  }
-  return OBSERVATION_CAPS.has(toolName) ? toolName : null
+function isObservation(toolName: string, args: unknown) {
+  if (OBSERVATION_TOOLS.has(toolName)) return true
+  return toolName === 'terminal.exec' && !isMutation(toolName, args)
 }
 
-/** Tracks repeated tool calls and evidence-gathering budgets within one session. */
-export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolGuard {
-  const cap = Math.max(2, Number(maxRepeat) || 4)
+function observationFamily(toolName: string, args: unknown) {
+  if (toolName === 'terminal.exec') return terminalLooksLikeVerification(normalizedArgs(args).command) ? 'verification' : 'terminal'
+  if (toolName.startsWith('search.') || toolName === 'files.find' || toolName === 'rag.retrieve') return 'search'
+  if (toolName === 'files.read' || toolName === 'files.list' || toolName === 'files.stat') return 'repository'
+  if (toolName === 'browser.inspect' || toolName === 'diagnostics.check') return 'verification'
+  return toolName
+}
+
+/**
+ * Exact repetition is blocked aggressively. Distinct observations are allowed in a much larger
+ * streak so scouts can genuinely understand unfamiliar repositories. Crossing the streak budget
+ * asks the orchestrator to reconsider strategy instead of demanding an arbitrary source edit.
+ */
+export function createToolGuard({ maxRepeat = 4, maxObservationStreak = 32 }: ToolGuardOptions = {}): ToolGuard {
+  const repeatCap = Math.max(2, Number(maxRepeat) || 4)
+  const observationCap = Math.max(12, Number(maxObservationStreak) || 32)
   const counts = new Map<string, number>()
-  const observationCounts = new Map<string, number>()
+  const familyCounts = new Map<string, number>()
+  let observationStreak = 0
   let lastSignature: string | null = null
   let blockedSignature: string | null = null
   let blockedSignatureCount = 0
 
-  const signature = (tool: string, args: unknown): string => `${tool}::${stableStringify(normalizedArgs(args))}`
-
+  const signature = (tool: string, args: unknown) => `${tool}::${stableStringify(normalizedArgs(args))}`
   const block = (sig: string, reason: string): ToolGuardResult => {
     if (sig === blockedSignature) blockedSignatureCount += 1
     else {
@@ -106,35 +110,32 @@ export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolG
     check(toolName: string, args: unknown): ToolGuardResult {
       const name = String(toolName || '')
       if (EXEMPT_TOOL_NAMES.has(name)) return { blocked: false }
-
       const sig = signature(name, args)
-      const consecutive = sig === lastSignature
       const count = counts.get(sig) || 0
-      if (consecutive || count >= cap) {
-        return block(sig, `Repeated \`${name}\` action blocked. Use the result already returned or do different work.`)
+      if (sig === lastSignature || count >= repeatCap) {
+        return block(sig, `Repeated \`${name}\` action blocked. Reuse existing evidence or choose a materially different action.`)
       }
 
-      const key = observationKey(name, args)
-      const observationCap = key ? OBSERVATION_CAPS.get(key) : undefined
-      const observations = key ? observationCounts.get(key) || 0 : 0
-      if (key && observationCap && observations >= observationCap) {
+      if (isObservation(name, args) && observationStreak >= observationCap) {
+        const dominant = [...familyCounts.entries()].sort((a, b) => b[1] - a[1])[0]
         return block(
-          `${key}::observation-budget`,
-          `Evidence budget for \`${key}\` is exhausted until the project changes. Use current evidence, make a relevant change, or finish.`,
+          'observation-streak',
+          `Observation streak reached ${observationStreak} actions${dominant ? ` (${dominant[0]} dominated)` : ''}. Checkpoint evidence and reconsider the current strategy before gathering more.`,
         )
       }
-
       return { blocked: false }
     },
 
     record(toolName: string, args: unknown): void {
       const name = String(toolName || '')
       if (EXEMPT_TOOL_NAMES.has(name)) return
-
-      if (isMutation(name, args)) observationCounts.clear()
-      else {
-        const key = observationKey(name, args)
-        if (key) observationCounts.set(key, (observationCounts.get(key) || 0) + 1)
+      if (isMutation(name, args)) {
+        observationStreak = 0
+        familyCounts.clear()
+      } else if (isObservation(name, args)) {
+        observationStreak += 1
+        const family = observationFamily(name, args)
+        familyCounts.set(family, (familyCounts.get(family) || 0) + 1)
       }
 
       const sig = signature(name, args)
