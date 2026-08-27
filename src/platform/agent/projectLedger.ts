@@ -256,8 +256,6 @@ export function loadProjectLedger(chatId: string): ProjectLedger | null {
     projectId: text(run.id, 300),
     goal: text(run.goal, 20_000),
   })
-  // Opportunistic migration: once a nested Phase-A ledger is read, persist it into the dedicated
-  // slot so subsequent ProjectRunState writes cannot erase it.
   if (!session?.projectLedger) saveChatSessionState(chatId, { projectLedger: ledger })
   return ledger
 }
@@ -293,6 +291,32 @@ export function replaceProjectRequirements(chatId: string, goal: string, require
     ledger.requirements = requirements.slice(0, MAX_REQUIREMENTS).map((item, index) => normalizeRequirement(item, index))
     ledger.lastProgressAt = now()
     ledger.lastProgressSummary = 'Initialized project requirements.'
+  })
+}
+
+/** Add or revise requirements without replacing already verified project state. */
+export function upsertProjectRequirements(chatId: string, goal: string, requirements: Array<Partial<ProjectRequirement>>): ProjectLedger {
+  return mutateProjectLedger(chatId, goal, (ledger) => {
+    const byId = new Map(ledger.requirements.map((item) => [item.id, item]))
+    for (const raw of requirements.slice(0, MAX_REQUIREMENTS)) {
+      const normalized = normalizeRequirement(raw, byId.size)
+      const previous = byId.get(normalized.id)
+      if (previous) {
+        byId.set(normalized.id, {
+          ...previous,
+          ...normalized,
+          status: previous.status === 'verified' ? 'verified' : normalized.status,
+          evidence: Array.from(new Set([...previous.evidence, ...normalized.evidence])).slice(-60),
+          notes: Array.from(new Set([...previous.notes, ...normalized.notes])).slice(-30),
+          updatedAt: now(),
+        })
+      } else {
+        byId.set(normalized.id, normalized)
+      }
+    }
+    ledger.requirements = [...byId.values()].slice(0, MAX_REQUIREMENTS)
+    ledger.lastProgressAt = now()
+    ledger.lastProgressSummary = `${requirements.length} requirement${requirements.length === 1 ? '' : 's'} added or refreshed.`
   })
 }
 
