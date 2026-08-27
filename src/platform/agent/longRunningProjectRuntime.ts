@@ -2,13 +2,18 @@ import { initializeProject } from '@/platform/agent/projectInitializer'
 import { dispatchReadyProjectWork } from '@/platform/agent/projectOrchestrator'
 import { evaluateProject } from '@/platform/agent/projectEvaluator'
 import {
-  advanceProjectStrategy,
   loadProjectLedger,
   mutateProjectLedger,
   projectLedgerComplete,
   projectLedgerSummary,
   upsertProjectWorkItems,
 } from '@/platform/agent/projectLedger'
+import {
+  applyProjectWatchdogStrategy,
+  evaluateProjectProgress,
+  snapshotProjectProgress,
+  type ProjectProgressSnapshot,
+} from '@/platform/agent/projectProgressWatchdog'
 import { runAgentSession as runProjectSegment } from '@/platform/projectAgentRuntime'
 import type { AgentSessionInput, AgentSessionResult } from '@/platform/agentRuntimeLegacy'
 
@@ -40,18 +45,6 @@ function mergeResults(previous: AgentSessionResult | null, next: AgentSessionRes
     steps: Number(previous.steps || 0) + Number(next.steps || 0),
     summary: { ...(previous.summary || {}), ...(next.summary || {}) },
   }
-}
-
-function progressFingerprint(chatId: string) {
-  const ledger = loadProjectLedger(chatId)
-  if (!ledger) return ''
-  return JSON.stringify({
-    generation: ledger.generation,
-    strategyGeneration: ledger.strategyGeneration,
-    requirements: ledger.requirements.map((item) => [item.id, item.status, item.evidence.length]),
-    work: ledger.workItems.map((item) => [item.id, item.status, item.attempts, item.resultSummary]),
-    findings: ledger.evaluatorFindings.map((item) => [item.id, item.status, item.severity]),
-  })
 }
 
 function compactProjectState(chatId: string) {
@@ -89,12 +82,11 @@ function compactProjectState(chatId: string) {
 
 function segmentInput(input: AgentSessionInput, reason: string): AgentSessionInput {
   const chatId = projectChatId(input)
-  const ledgerContext = compactProjectState(chatId)
   return {
     ...input,
     userInput: [
       input.userInput,
-      ledgerContext,
+      compactProjectState(chatId),
       `# Current orchestration directive\n${reason}`,
       'Continue autonomously. Work from live files and the durable ledger. Do not declare the overall project complete unless requirements and evaluator state support it.',
     ]
@@ -102,7 +94,6 @@ function segmentInput(input: AgentSessionInput, reason: string): AgentSessionInp
       .join('\n\n'),
     settings: {
       ...input.settings,
-      // Project lifetime is unbounded. Individual provider/tool calls retain their own timeout controls.
       agent_session_minutes: 0,
       agent_bounded_automatic: false,
     },
@@ -151,37 +142,33 @@ function markCompletedWorkImplemented(chatId: string) {
   })
 }
 
-function strategyResetWork(chatId: string) {
+function retryFailedWork(chatId: string, escalate = false) {
   const ledger = loadProjectLedger(chatId)
   if (!ledger) return null
   return mutateProjectLedger(chatId, ledger.goal, (draft) => {
-    draft.workItems = draft.workItems.map((item) =>
-      item.status === 'failed' && item.attempts < 4
+    draft.workItems = draft.workItems.map((item) => {
+      if (item.status !== 'failed') return item
+      const retryLimit = escalate ? 6 : 4
+      return item.attempts < retryLimit
         ? { ...item, status: 'ready', taskId: '', blockers: [], updatedAt: Date.now() }
-        : item,
-    )
+        : { ...item, status: 'blocked', updatedAt: Date.now() }
+    })
   })
 }
 
-/**
- * Outer autonomous lifecycle. The project may span arbitrarily many model contexts.
- * Only abort, completion, or sustained lack of state progress ends the lifecycle.
- */
 export async function runLongRunningProject(input: AgentSessionInput): Promise<AgentSessionResult> {
   const chatId = projectChatId(input)
   if (!chatId || !workspaceRoot(input)) return runProjectSegment(input)
 
   const initialized = await initializeProject(chatId, input.userInput, input.settings || {}, input.abortSignal)
-  input.onEvent?.({
-    type: 'notice',
-    level: 'info',
-    summary: initialized.summary,
-    at: Date.now(),
-  } as any)
+  input.onEvent?.({ type: 'notice', level: 'info', summary: initialized.summary, at: Date.now() } as any)
 
   let combined: AgentSessionResult | null = null
   let stallGenerations = 0
   let wave = 0
+  let previousProgress: ProjectProgressSnapshot | null = initialized.ledger
+    ? snapshotProjectProgress(initialized.ledger)
+    : null
 
   while (!input.abortSignal?.aborted) {
     wave += 1
@@ -189,14 +176,13 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
     if (!ledger) throw new Error('Long-running project lost its durable ledger.')
     if (projectLedgerComplete(ledger)) break
 
-    const before = progressFingerprint(chatId)
     let dispatched = 0
     let completed = 0
 
     try {
       const dispatch = await dispatchReadyProjectWork(chatId, input.settings || {}, {
         maxParallel: 4,
-        timeoutMs: 35 * 60_000,
+        timeoutMs: 70 * 60_000,
         signal: input.abortSignal,
       })
       dispatched = dispatch.dispatched
@@ -213,8 +199,6 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
 
     markCompletedWorkImplemented(chatId)
 
-    // If workers could not make progress, give the primary orchestrator one fresh context to
-    // investigate/integrate/replan. This may happen many times across a multi-hour project.
     if (!dispatched || !completed) {
       const segment = await runProjectSegment(
         segmentInput(
@@ -229,8 +213,6 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
       })
     }
 
-    // Semantic acceptance is independent from the implementer. Failure to evaluate should not
-    // destroy the project; deterministic verification still exists in the segment runtime.
     try {
       const evaluation = await evaluateProject(
         chatId,
@@ -253,26 +235,42 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
       } as any)
     }
 
-    const after = progressFingerprint(chatId)
-    if (after === before) stallGenerations += 1
-    else stallGenerations = 0
+    ledger = loadProjectLedger(chatId)
+    if (!ledger) throw new Error('Long-running project lost its ledger after evaluation.')
+    const verdict = evaluateProjectProgress(ledger, previousProgress, stallGenerations)
+    previousProgress = verdict.snapshot
 
-    if (stallGenerations >= 2) {
-      advanceProjectStrategy(
-        chatId,
-        input.userInput,
-        `Strategy reset after ${stallGenerations} consecutive project waves without durable state progress. Re-localize the blocker, avoid repeated evidence, and choose a materially different approach.`,
-      )
-      strategyResetWork(chatId)
+    if (verdict.state === 'progressing') stallGenerations = 0
+    else if (verdict.state !== 'complete') stallGenerations += 1
+
+    if (verdict.strategyChangeRecommended || stallGenerations >= 2) {
+      applyProjectWatchdogStrategy(chatId, {
+        ...verdict,
+        strategyChangeRecommended: true,
+        escalationRecommended: verdict.escalationRecommended || stallGenerations >= 4,
+      })
+      retryFailedWork(chatId, stallGenerations >= 4)
+      input.onEvent?.({
+        type: 'notice',
+        level: 'warning',
+        summary: `Project watchdog changed strategy after ${stallGenerations} stalled wave${stallGenerations === 1 ? '' : 's'}: ${verdict.reasons.join(' ')}`.slice(0, 800),
+        at: Date.now(),
+      } as any)
     }
 
-    if (stallGenerations >= MAX_STALL_GENERATIONS) {
+    if (stallGenerations >= MAX_STALL_GENERATIONS || verdict.state === 'deep_stall') {
       const stalled = loadProjectLedger(chatId)
       const summary = stalled ? projectLedgerSummary(stalled) : null
       return {
         ...(combined || ({ reply: '', timeline: [], stepHistory: [], artifacts: [], steps: 0, todos: [] } as any)),
-        reply: `${String(combined?.reply || '').trim()}\n\nAutonomous project execution paused after sustained lack of durable progress. The project ledger is preserved for resume.`.trim(),
-        summary: { ...(combined?.summary || {}), longRunningProject: summary, stallGenerations, wave },
+        reply: `${String(combined?.reply || '').trim()}\n\nAutonomous project execution paused after sustained lack of durable progress. The project ledger and failed strategy evidence are preserved for resume.`.trim(),
+        summary: {
+          ...(combined?.summary || {}),
+          longRunningProject: summary,
+          watchdog: verdict,
+          stallGenerations,
+          wave,
+        },
       }
     }
   }
