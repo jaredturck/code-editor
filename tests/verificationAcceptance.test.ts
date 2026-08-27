@@ -5,6 +5,7 @@ const runtime_state = vi.hoisted(() => ({
   load_context: vi.fn(),
   save_compacted: vi.fn(),
   planner: vi.fn(),
+  diagnostics: vi.fn(),
   sessions: new Map<string, Record<string, unknown>>(),
 }))
 
@@ -21,6 +22,17 @@ vi.mock('@/platform/chatSessionStore', () => ({
 
 vi.mock('@/platform/agent/localPlanner', () => ({
   buildLocalPreflightPlan: runtime_state.planner,
+}))
+
+vi.mock('@/platform/agent/workspaceDiagnosticsState', () => ({
+  getWorkspaceDiagnosticsSnapshot: runtime_state.diagnostics,
+  formatWorkspaceDiagnostics: (snapshot: Record<string, any>) => {
+    const lines = [`LIVE WORKSPACE DIAGNOSTICS: ${snapshot.counts.errors} errors.`]
+    for (const finding of snapshot.findings || []) {
+      lines.push(`- ERROR ${finding.path} · ${finding.line}:${finding.column} — ${finding.message}`)
+    }
+    return lines.join('\n')
+  },
 }))
 
 import {
@@ -49,6 +61,34 @@ function result(reply: string, step: number): AgentSessionResult {
   }
 }
 
+function workspace_diagnostics(errors = 0, messages: string[] = []) {
+  return {
+    root: '/workspace',
+    refreshed_at: Date.now(),
+    analyzed_files: 1,
+    diagnostic_files: errors > 0 ? 1 : 0,
+    counts: {
+      errors,
+      warnings: 0,
+      info: 0,
+      total: errors,
+    },
+    findings: messages.map((message, index) => ({
+      path: '/workspace/index.html',
+      source: 'HTML Validate',
+      code: 'test-error',
+      severity: 'error',
+      message,
+      line: index + 10,
+      column: 1,
+      end_line: index + 10,
+      end_column: 2,
+    })),
+    scan_errors: [],
+    complete: true,
+  }
+}
+
 function verification_state(input: AgentSessionInput) {
   return input.settings.agent_verification_state as VerificationState
 }
@@ -59,9 +99,11 @@ describe('project verification acceptance', () => {
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
     runtime_state.planner.mockReset()
+    runtime_state.diagnostics.mockReset()
     runtime_state.sessions.clear()
     runtime_state.load_context.mockResolvedValue({ messages: [], memory: '', compacted: '' })
     runtime_state.save_compacted.mockResolvedValue(undefined)
+    runtime_state.diagnostics.mockResolvedValue(workspace_diagnostics())
   })
 
   it('remediates failed browser evidence, stales pre-edit checks, and accepts fresh evidence', async () => {
@@ -119,7 +161,7 @@ describe('project verification acceptance', () => {
 
     expect(runtime_state.run).toHaveBeenCalledTimes(2)
     const remediation = runtime_state.run.mock.calls[1][0] as AgentSessionInput
-    expect(remediation.userInput).toContain('VERIFICATION GATE REMEDIATION')
+    expect(remediation.userInput).toContain('PROJECT ACCEPTANCE REMEDIATION')
     expect(remediation.userInput).toContain('browser-runtime: failed')
     expect(output.summary.verification).toMatchObject({
       required: true,
@@ -131,6 +173,84 @@ describe('project verification acceptance', () => {
     const persisted = output.summary.verificationState as VerificationState
     expect(persisted.requirements).toEqual(['tests', 'browser-runtime'])
     expect(persisted.mutationEpoch).toBe(1)
+  })
+
+  it('treats live editor errors as blocking even when model verification passed', async () => {
+    runtime_state.diagnostics
+      .mockResolvedValueOnce(workspace_diagnostics(2, ['Raw "&" must be encoded as "&amp;"', 'Inline style is not allowed']))
+      .mockResolvedValue(workspace_diagnostics())
+
+    runtime_state.run.mockImplementationOnce(async (input: AgentSessionInput) => {
+      const state = verification_state(input)
+      declareVerificationRequirements(state, ['browser-runtime'])
+      const browser = addVerificationCandidate(
+        state,
+        'browser.inspect',
+        { url: 'http://localhost:3000' },
+        { ok: true },
+      )!
+      recordVerificationEvidence(state, 'browser-runtime', browser.id)
+      return result('The page renders, so I consider it complete.', 1)
+    })
+    runtime_state.run.mockImplementationOnce(async () => result('Fixed the editor errors.', 2))
+
+    const output = await runAgentSession({
+      userInput: 'Build a valid single-file page with no editor errors.',
+      conversation: [],
+      settings: {
+        agent_working_dir: '/workspace',
+        chat_session: { id: 'diagnostics-chat' },
+        agent_preflight_plan: {
+          taskType: 'implementation',
+          developmentTask: true,
+          workspaceMutationExpected: true,
+          verificationRequired: true,
+          successCriteria: ['The page has no editor errors.'],
+          verificationChecks: [],
+        },
+      },
+    })
+
+    expect(runtime_state.run).toHaveBeenCalledTimes(2)
+    const remediation = runtime_state.run.mock.calls[1][0] as AgentSessionInput
+    expect(remediation.userInput).toContain('LIVE WORKSPACE DIAGNOSTICS ARE A HARD COMPLETION GATE')
+    expect(remediation.userInput).toContain('Raw "&" must be encoded as "&amp;"')
+    expect(remediation.userInput).toContain('Inline style is not allowed')
+    expect(remediation.userInput).toContain('Do not relabel editor errors as cosmetic')
+    expect(output.summary.workspaceDiagnostics).toMatchObject({
+      complete: true,
+      counts: { errors: 0 },
+    })
+    expect(output.todos.some((todo) => todo.id === 'diagnostics-gate')).toBe(false)
+  })
+
+  it('stops after bounded diagnostics remediation instead of claiming completion', async () => {
+    runtime_state.diagnostics.mockResolvedValue(
+      workspace_diagnostics(1, ['Trailing whitespace']),
+    )
+    runtime_state.run.mockResolvedValue(result('Still calling the page complete.', 1))
+
+    const output = await runAgentSession({
+      userInput: 'Create valid HTML with no errors.',
+      conversation: [],
+      settings: {
+        agent_working_dir: '/workspace',
+        chat_session: { id: 'bounded-diagnostics-chat' },
+        agent_preflight_plan: {
+          taskType: 'implementation',
+          developmentTask: true,
+          workspaceMutationExpected: true,
+          verificationRequired: false,
+          successCriteria: ['No editor errors remain.'],
+          verificationChecks: [],
+        },
+      },
+    })
+
+    expect(runtime_state.run).toHaveBeenCalledTimes(3)
+    expect(output.todos.some((todo) => todo.id === 'diagnostics-gate' && todo.status === 'in_progress')).toBe(true)
+    expect(output.reply).toContain('project acceptance gate remains open')
+    expect(output.reply).toContain('Workspace diagnostics still report 1 error.')
   })
 
   it('reuses the persisted model task contract when a paused project run resumes', async () => {
