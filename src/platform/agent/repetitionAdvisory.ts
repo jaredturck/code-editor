@@ -60,16 +60,28 @@ function terminal_evidence_category(command: string) {
   if (/\b(?:curl|wget)\b.*https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\b/.test(command)) {
     return 'local http verification'
   }
-  if (/\b(?:ps|pgrep|lsof|ss|netstat)\b/.test(command)) {
-    return 'process verification'
-  }
-  if (/\b(?:rg|grep)\b/.test(command)) {
-    return 'source text inspection'
-  }
+  if (/\b(?:ps|pgrep|lsof|ss|netstat)\b/.test(command)) return 'process verification'
+  if (/\b(?:rg|grep)\b/.test(command)) return 'source text inspection'
   if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?dev\b|\b(?:vite|next|nuxt)\b.*(?:--host|dev|serve)\b/.test(command)) {
     return 'dev server verification'
   }
   return ''
+}
+
+const TERMINAL_ACCEPTANCE_CATEGORIES = new Set([
+  'build verification',
+  'test verification',
+  'lint diagnostics',
+  'typecheck verification',
+  'local http verification',
+])
+
+export function terminalCommandVerificationCategory(command_value: unknown) {
+  return terminal_evidence_category(normalize_terminal_command(command_value))
+}
+
+export function terminalCommandLikelyVerifies(command_value: unknown) {
+  return TERMINAL_ACCEPTANCE_CATEGORIES.has(terminalCommandVerificationCategory(command_value))
 }
 
 function evidence_category(tool_name: string, args: Record<string, unknown>) {
@@ -84,9 +96,7 @@ function evidence_category(tool_name: string, args: Record<string, unknown>) {
 }
 
 function evidence_signature(tool_name: string, category: string, args: Record<string, unknown>) {
-  if (tool_name === 'terminal.exec') {
-    return `${category}:${normalize_terminal_command(args.command)}`
-  }
+  if (tool_name === 'terminal.exec') return `${category}:${normalize_terminal_command(args.command)}`
   if (tool_name === 'browser.inspect' || tool_name === 'web.fetch') {
     return `${category}:${normalize_local_ports(normalized_text(args.url))}`
   }
@@ -137,10 +147,7 @@ export function repeatedAgentEvidenceBlock({ scope_id, tool_name, args = {} }: R
   if (exact_count < 2 && category_count < 4) return ''
 
   const repetition = exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
-  return (
-    `REPETITION BLOCK: ${repetition} have already completed without an intervening source/configuration change. ` +
-    'Do not execute this check again. Change source/configuration, inspect a materially different property, or finish if the evidence already gathered is sufficient.'
-  )
+  return `REPETITION BLOCK: ${repetition} already completed without a source/configuration change. Use existing evidence, mutate the relevant state, or choose a materially different check.`
 }
 
 export function recordAgentEvidence({
@@ -183,13 +190,8 @@ export function recordAgentEvidence({
   }
 
   if (exact_count < 2 && category_count < 3) return ''
-
   const repetition = exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
-  return (
-    `REPETITION ADVISORY (non-blocking): You have now gathered ${repetition} without an intervening source/configuration change. ` +
-    'The check may still be useful, but repeating the same kind of evidence is unlikely to resolve an unanswered question by itself. ' +
-    'Reassess what property is actually unverified and consider a different observation (for example current editor diagnostics, generated output, computed browser behavior, or the relevant source/configuration) before repeating it again.'
-  )
+  return `REPETITION ADVISORY: ${repetition} gathered without a source/configuration change. Prefer using the evidence or changing the relevant state before checking again.`
 }
 
 export function resetRepetitionAdvisoryForTests() {
