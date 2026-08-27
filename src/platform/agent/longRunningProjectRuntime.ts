@@ -2,6 +2,7 @@ import { initializeProject } from '@/platform/agent/projectInitializer'
 import { dispatchReadyProjectWork } from '@/platform/agent/projectOrchestrator'
 import { evaluateProject } from '@/platform/agent/projectEvaluator'
 import { replanProject } from '@/platform/agent/projectReplanner'
+import { normalizeProjectWorkGraph } from '@/platform/agent/projectTaskScheduler'
 import {
   loadProjectLedger,
   mutateProjectLedger,
@@ -194,6 +195,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
 
   const initialized = await initializeProject(chatId, input.userInput, input.settings || {}, input.abortSignal)
   input.onEvent?.({ type: 'notice', level: 'info', summary: initialized.summary, at: Date.now() } as any)
+  normalizeProjectWorkGraph(chatId)
   await checkpointProject(input, chatId, 'project-start')
 
   let combined: AgentSessionResult | null = null
@@ -205,6 +207,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
 
   while (!input.abortSignal?.aborted) {
     wave += 1
+    normalizeProjectWorkGraph(chatId)
     let ledger = loadProjectLedger(chatId)
     if (!ledger) throw new Error('Long-running project lost its durable ledger.')
     if (projectLedgerComplete(ledger)) break
@@ -230,6 +233,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
       } as any)
     }
 
+    normalizeProjectWorkGraph(chatId)
     markCompletedWorkImplemented(chatId)
     if (completed > 0) await checkpointProject(input, chatId, `wave-${wave}-integrated`)
 
@@ -245,6 +249,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
         draft.lastProgressAt = Date.now()
         draft.lastProgressSummary = String(segment.reply || 'Orchestrator segment completed.').slice(0, 5000)
       })
+      normalizeProjectWorkGraph(chatId)
       await checkpointProject(input, chatId, `wave-${wave}-orchestrator`)
     }
 
@@ -264,6 +269,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
         break
       }
       materializeEvaluatorRepairs(chatId)
+      normalizeProjectWorkGraph(chatId)
     } catch (error) {
       input.onEvent?.({
         type: 'notice',
@@ -291,6 +297,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
           input.abortSignal,
         )
         replanned = replan.replanned
+        normalizeProjectWorkGraph(chatId)
         input.onEvent?.({
           type: 'notice',
           level: 'warning',
@@ -313,6 +320,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
           escalationRecommended: verdict.escalationRecommended || stallGenerations >= 4,
         })
         retryFailedWork(chatId, stallGenerations >= 4)
+        normalizeProjectWorkGraph(chatId)
       }
 
       await checkpointProject(input, chatId, `wave-${wave}-strategy-reset`)
@@ -336,6 +344,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
     }
   }
 
+  normalizeProjectWorkGraph(chatId)
   const ledger = loadProjectLedger(chatId)
   const complete = Boolean(ledger && projectLedgerComplete(ledger))
   const base = combined || (await runProjectSegment(segmentInput(input, 'Finalize the completed project and report the delivered result.')))
