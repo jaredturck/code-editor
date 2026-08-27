@@ -9,9 +9,11 @@ import { build_core_agent_settings as buildLegacyCoreAgentSettings } from '@/cha
 import type { ProjectRunMode } from '@/chat/projectRunController'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
-// These capabilities may remain available elsewhere in the IDE/runtime, but they are not part of
-// the default autonomous coding action surface. The lead model sees semantic engineering actions;
-// deterministic runtime code owns persistence, queueing, status, and transport mechanics.
+// Compatibility sentinel for the inherited session runner, which currently treats 0 as "use the
+// old 15-minute default". The outer project lifecycle has no duration completion budget; this
+// merely keeps the legacy inner-context check-in unreachable until that runner is replaced.
+const LONG_RUNNING_PROJECT_SESSION_MINUTES = 10 * 365 * 24 * 60
+
 const automatic_blocked_tools = new Set([
   'approval.request',
   'todo.update',
@@ -28,16 +30,11 @@ const automatic_blocked_tools = new Set([
   'trace.log',
   'system.stats',
   'system.processes',
-
-  // Generic semantic / overlapping repository retrieval is removed from the default coding path.
   'rag.retrieve',
   'search.find',
   'search.fd',
   'search.locate',
   'sources.lookup',
-
-  // Multi-agent mechanics stay implemented but are runtime-owned. Semantic actions such as
-  // agent.delegate, agent.consult and agent.review remain available when the controller needs them.
   'agent.status',
   'agent.roster',
   'agent.available',
@@ -60,7 +57,6 @@ function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
   })
 }
 
-/** Builds execution settings for the selected project-run mode. */
 export function build_core_agent_settings(
   settings: OrbSettings,
   workspace_root: string | null,
@@ -96,22 +92,16 @@ export function build_core_agent_settings(
     search_web_require_paid_fallback_confirmation: false,
     agent_search_web_budget: Math.max(2, Number(base.agent_search_web_budget) || 2),
 
-    // A project run is not a chat-turn timer. Individual model/tool calls remain bounded,
-    // but the outer project lifecycle is allowed to continue for hours while it progresses.
-    agent_session_minutes: 0,
+    agent_session_minutes: LONG_RUNNING_PROJECT_SESSION_MINUTES,
     agent_bounded_automatic: false,
     agent_tool_repeat_cap: configured_repeat_cap,
 
-    // Restore semantic specialization. Runtime code owns queueing/status/persistence; models
-    // own role-level decisions such as investigate, implement, review, and escalate.
     agent_multi_enabled: base.agent_multi_enabled !== false,
     agent_peer_consult_enabled: base.agent_peer_consult_enabled !== false,
     agent_peer_review: base.agent_peer_review || 'suggested',
     agent_model_routing: base.agent_model_routing || 'auto',
     agent_overwatch_continuous: false,
 
-    // Skills remain available through progressive disclosure / role filtering. The agent is
-    // not required to maintain skill state manually during ordinary project execution.
     skills_enabled: base.skills_enabled !== false,
     agent_finish_open_todos: false,
     context_budget_warn_ratio: 0.05,
@@ -119,8 +109,6 @@ export function build_core_agent_settings(
   }
 }
 
-/** Builds the minimal semantic contract for a project run. Runtime policy owns permissions,
- * source control, verification, continuity, and tool availability. */
 export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
   const clean_goal = String(goal || '').trim()
   if (resume) {
