@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import hljs from 'highlight.js/lib/common'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -234,4 +234,4 @@ function MarkdownView({ content, baseFilePath = null, className = 'artifact-md',
   )
 }
 
-export default MarkdownView
+export default memo(MarkdownView)
