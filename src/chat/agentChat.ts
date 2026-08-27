@@ -9,15 +9,33 @@ import { build_core_agent_settings as buildLegacyCoreAgentSettings } from '@/cha
 import type { ProjectRunMode } from '@/chat/projectRunController'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
+// These capabilities may remain available elsewhere in the IDE, but they are not part of the
+// default autonomous coding action surface. This keeps product features separate from coding-agent
+// degrees of freedom.
 const automatic_blocked_tools = new Set([
   'approval.request',
   'todo.update',
   'chat.remember',
   'chat.recall',
   'context.summarize',
+  'memory.query',
+  'notes.list',
+  'notes.add',
+  'notes.update',
+  'notes.delete',
   'launcher.list',
   'resources.list',
   'trace.log',
+  'system.stats',
+  'system.processes',
+
+  // Generic semantic / overlapping repository retrieval is removed from the default coding path.
+  // Coding roles use filename/text search plus code-aware navigation and targeted reads.
+  'rag.retrieve',
+  'search.find',
+  'search.fd',
+  'search.locate',
+  'sources.lookup',
 ])
 
 function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
