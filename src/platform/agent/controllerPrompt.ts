@@ -119,9 +119,6 @@ export function buildControllerStateHeader(
     )
   }
 
-  const chatMemory = String(payload?.chat_memory || '').trim()
-  if (chatMemory) parts.push(`## Continuity\n${chatMemory.slice(0, 600)}`)
-
   const text = parts.join('\n\n')
   if (screenContext) {
     return [
