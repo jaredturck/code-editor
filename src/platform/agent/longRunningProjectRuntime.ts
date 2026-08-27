@@ -1,6 +1,7 @@
 import { initializeProject } from '@/platform/agent/projectInitializer'
 import { dispatchReadyProjectWork } from '@/platform/agent/projectOrchestrator'
 import { evaluateProject } from '@/platform/agent/projectEvaluator'
+import { replanProject } from '@/platform/agent/projectReplanner'
 import {
   loadProjectLedger,
   mutateProjectLedger,
@@ -281,19 +282,40 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
     else if (verdict.state !== 'complete') stallGenerations += 1
 
     if (verdict.strategyChangeRecommended || stallGenerations >= 2) {
-      applyProjectWatchdogStrategy(chatId, {
-        ...verdict,
-        strategyChangeRecommended: true,
-        escalationRecommended: verdict.escalationRecommended || stallGenerations >= 4,
-      })
-      retryFailedWork(chatId, stallGenerations >= 4)
+      let replanned = false
+      try {
+        const replan = await replanProject(
+          chatId,
+          input.settings || {},
+          [...verdict.reasons, `Consecutive stalled waves: ${stallGenerations}`],
+          input.abortSignal,
+        )
+        replanned = replan.replanned
+        input.onEvent?.({
+          type: 'notice',
+          level: 'warning',
+          summary: `Project replanned with fresh context: ${replan.summary}`.slice(0, 900),
+          at: Date.now(),
+        } as any)
+      } catch (error) {
+        input.onEvent?.({
+          type: 'notice',
+          level: 'warning',
+          summary: `Fresh replanning failed; applying deterministic retry fallback: ${error instanceof Error ? error.message : String(error)}`.slice(0, 800),
+          at: Date.now(),
+        } as any)
+      }
+
+      if (!replanned) {
+        applyProjectWatchdogStrategy(chatId, {
+          ...verdict,
+          strategyChangeRecommended: true,
+          escalationRecommended: verdict.escalationRecommended || stallGenerations >= 4,
+        })
+        retryFailedWork(chatId, stallGenerations >= 4)
+      }
+
       await checkpointProject(input, chatId, `wave-${wave}-strategy-reset`)
-      input.onEvent?.({
-        type: 'notice',
-        level: 'warning',
-        summary: `Project watchdog changed strategy after ${stallGenerations} stalled wave${stallGenerations === 1 ? '' : 's'}: ${verdict.reasons.join(' ')}`.slice(0, 800),
-        at: Date.now(),
-      } as any)
     }
 
     if (stallGenerations >= MAX_STALL_GENERATIONS || verdict.state === 'deep_stall') {
