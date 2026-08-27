@@ -26,6 +26,7 @@ export interface ProjectRunTodo {
 export interface ProjectRunState {
   id: string
   chat_id: string
+  workspace_root: string
   goal: string
   mode: ProjectRunMode
   status: ProjectRunStatus
@@ -81,11 +82,13 @@ const resumable_statuses = new Set<ProjectRunStatus>(['paused', 'interrupted'])
 const terminal_statuses = new Set<ProjectRunStatus>(['completed', 'failed', 'cancelled'])
 
 let current_state: ProjectRunState | null = null
+let current_workspace_root = ''
 let abort_controller: AbortController | null = null
 let pause_requested = false
 const listeners = new Set<Listener>()
 
 const MAX_RUN_ID_LENGTH = 200
+const MAX_WORKSPACE_ROOT_LENGTH = 4096
 const MAX_GOAL_LENGTH = 20_000
 const MAX_PROVIDER_LENGTH = 200
 const MAX_MODEL_LENGTH = 300
@@ -94,6 +97,16 @@ const MAX_TODO_TEXT_LENGTH = 1_000
 const MAX_TODO_DEPENDENCIES = 30
 const MAX_RUNTIME_SUMMARY_LENGTH = 128_000
 const runtime_summary_keys = ['verificationState', 'taskPreflightPlan', 'verification'] as const
+
+function normalize_workspace_root(value: unknown) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .slice(0, MAX_WORKSPACE_ROOT_LENGTH)
+  const windows = typeof window !== 'undefined' && window.editor_api?.platform === 'win32'
+  return windows ? normalized.toLowerCase() : normalized
+}
 
 function normalize_todo_status(value: unknown): ProjectRunTodo['status'] {
   const status = String(value || '').toLowerCase()
@@ -214,6 +227,7 @@ export function normalize_project_run_state(value: unknown): ProjectRunState | n
   return {
     id: String(source.id).slice(0, MAX_RUN_ID_LENGTH),
     chat_id: String(source.chat_id).slice(0, MAX_RUN_ID_LENGTH),
+    workspace_root: normalize_workspace_root(source.workspace_root),
     goal: String(source.goal || '').slice(0, MAX_GOAL_LENGTH),
     mode: mode === 'plan_first' ? 'plan_first' : 'automatic',
     status,
@@ -348,6 +362,7 @@ function begin(input: BeginProjectRunInput) {
   current_state = {
     id: String(input.id).slice(0, MAX_RUN_ID_LENGTH),
     chat_id: String(input.chat_id).slice(0, MAX_RUN_ID_LENGTH),
+    workspace_root: current_workspace_root,
     goal: String(input.goal).slice(0, MAX_GOAL_LENGTH),
     mode: input.mode,
     status: input.mode === 'plan_first' ? 'planning' : 'starting',
@@ -374,6 +389,13 @@ function begin(input: BeginProjectRunInput) {
 
 function resume(provider = '', model = '') {
   if (!current_state || !is_resumable_project_run_status(current_state.status)) return null
+  if (!current_state.workspace_root || current_state.workspace_root !== current_workspace_root) {
+    const expected = current_state.workspace_root
+      ? 'Open the workspace where this project run started before resuming it.'
+      : 'This older project run has no workspace binding and cannot be resumed safely.'
+    checkpoint({ error: expected, last_activity: expected })
+    return null
+  }
   abort_controller = new AbortController()
   pause_requested = false
   transition(current_state.mode === 'plan_first' && current_state.todos.length === 0 ? 'planning' : 'running', {
@@ -429,6 +451,10 @@ function clear(chat_id: string) {
   saveChatSessionState(chat_id, { projectRun: null })
 }
 
+function set_workspace_root(root_path: string | null) {
+  current_workspace_root = normalize_workspace_root(root_path)
+}
+
 export const projectRunController = {
   begin,
   checkpoint,
@@ -444,6 +470,7 @@ export const projectRunController = {
   restore,
   resume,
   set_status: transition,
+  set_workspace_root,
   subscribe(listener: Listener) {
     listeners.add(listener)
     return () => {
