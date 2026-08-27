@@ -21,9 +21,8 @@ export interface ToolGuardOptions {
   maxRepeat?: number
 }
 
-const EXEMPT_TOOL_NAMES = new Set<string>(['todo.update', 'trace.log'])
+const EXEMPT_TOOL_NAMES = new Set<string>(['trace.log'])
 
-// Serializes tool arguments with stable key ordering for repetition detection.
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
@@ -35,13 +34,7 @@ function stableStringify(value: unknown): string {
     .join(',')}}`
 }
 
-/**
- * Tracks repeated tool calls within one agent session and blocks identical or overused
- * requests before they consume more local work. Repeated attempts to run an already blocked
- * call escalate the signal so the runtime can steer the model toward another action or a
- * final answer.
- */
-
+/** Tracks repeated tool calls within one session before more work is consumed. */
 export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolGuard {
   const cap = Math.max(2, Number(maxRepeat) || 4)
   const counts = new Map<string, number>()
@@ -49,7 +42,6 @@ export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolG
   let blockedSignature: string | null = null
   let blockedSignatureCount = 0
 
-  // Builds the stable tool-call signature used to detect repeated actions.
   const signature = (tool: string, args: unknown): string => {
     const normalizedArgs: ToolArguments =
       args && typeof args === 'object' && !Array.isArray(args) ? (args as ToolArguments) : {}
@@ -57,7 +49,6 @@ export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolG
   }
 
   return {
-    // Checks check against the policy owned by the agent tool and policy layer.
     check(toolName: string, args: unknown): ToolGuardResult {
       const name = String(toolName || '')
       if (EXEMPT_TOOL_NAMES.has(name)) return { blocked: false }
@@ -73,16 +64,15 @@ export function createToolGuard({ maxRepeat = 4 }: ToolGuardOptions = {}): ToolG
           blockedSignatureCount = 1
         }
 
-        const reason = consecutive
-          ? `You just ran \`${name}\` with identical arguments and already have its result above. Do NOT repeat the same call. If the user asked for OTHER things (e.g. a different app, file, or command), do the NEXT one now — you may issue several tool calls at once. If everything is done, give your final answer.`
-          : `\`${name}\` has already run ${count} times with these arguments this session. Stop repeating it — use the results you already have, move on to the next distinct action, or give your final answer.`
-
-        return { blocked: true, escalate: blockedSignatureCount >= 2, reason }
+        return {
+          blocked: true,
+          escalate: blockedSignatureCount >= 2,
+          reason: `Repeated \`${name}\` action blocked. Use the evidence already returned or choose a materially different action.`,
+        }
       }
       return { blocked: false }
     },
 
-    // Appends one normalized entry to tool guard without making logging a required success path.
     record(toolName: string, args: unknown): void {
       const name = String(toolName || '')
       if (EXEMPT_TOOL_NAMES.has(name)) return
