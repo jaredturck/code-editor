@@ -73,7 +73,7 @@ function verificationState(options: LegacyBrokerOptions) {
 }
 
 function mutationSucceeded(toolName: string, args: Record<string, unknown>, result: Record<string, unknown>) {
-  if (toolName === 'files.write') return result.saved !== false
+  if (toolName === 'files.write') return result.saved === true || result.dirty === true
   if (toolName === 'files.edit') return result.applied === true
   if (toolName === 'files.patch') return args.dryRun !== true && result.applied !== false
   return false
