@@ -13,6 +13,7 @@ vi.mock('../src/data/languages', () => ({
 import {
   formatWorkspaceDiagnostics,
   getWorkspaceDiagnosticsSnapshot,
+  markWorkspaceDiagnosticsDirty,
   resetWorkspaceDiagnosticsForTests,
 } from '../src/platform/agent/workspaceDiagnosticsState'
 
@@ -104,7 +105,7 @@ describe('workspace diagnostics state', () => {
     })
   })
 
-  it('refreshes the whole supported workspace after any source change', async () => {
+  it('refreshes only the changed supported file after an ordinary source change', async () => {
     const first = await getWorkspaceDiagnosticsSnapshot(root)
 
     expect(first?.counts).toEqual({ errors: 3, warnings: 1, info: 0, total: 4 })
@@ -119,10 +120,42 @@ describe('workspace diagnostics state', () => {
     expect(analyze).toHaveBeenCalledTimes(calls_after_first_scan)
 
     analyze.mockClear()
+    read_directory.mockClear()
     change_listener?.({
       root_path: root,
       event_type: 'change',
       file_path: '/project/src/App.jsx',
+    })
+    const refreshed = await getWorkspaceDiagnosticsSnapshot(root)
+
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(analyze.mock.calls[0][0].file_path).toBe('/project/src/App.jsx')
+    expect(read_directory).not.toHaveBeenCalled()
+    expect(refreshed?.counts).toEqual({ errors: 3, warnings: 1, info: 0, total: 4 })
+  })
+
+  it('accepts a known mutation path for a targeted diagnostics refresh', async () => {
+    await getWorkspaceDiagnosticsSnapshot(root)
+    analyze.mockClear()
+    read_directory.mockClear()
+
+    markWorkspaceDiagnosticsDirty(root, '/project/src/index.css')
+    await getWorkspaceDiagnosticsSnapshot(root)
+
+    expect(analyze).toHaveBeenCalledTimes(1)
+    expect(analyze.mock.calls[0][0].file_path).toBe('/project/src/index.css')
+    expect(read_directory).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a full scan after a structural workspace event', async () => {
+    await getWorkspaceDiagnosticsSnapshot(root)
+    analyze.mockClear()
+    read_directory.mockClear()
+
+    change_listener?.({
+      root_path: root,
+      event_type: 'rename',
+      file_path: '/project/src/NewFile.jsx',
     })
     await getWorkspaceDiagnosticsSnapshot(root)
 
@@ -130,5 +163,6 @@ describe('workspace diagnostics state', () => {
     expect(analyzed_paths).toContain('/project/src/App.jsx')
     expect(analyzed_paths).toContain('/project/src/index.css')
     expect(analyzed_paths).toContain('/project/package.json')
+    expect(read_directory).toHaveBeenCalledWith(root, root)
   })
 })
