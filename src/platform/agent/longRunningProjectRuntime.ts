@@ -94,7 +94,8 @@ function segmentInput(input: AgentSessionInput, reason: string): AgentSessionInp
       .join('\n\n'),
     settings: {
       ...input.settings,
-      agent_session_minutes: 0,
+      // Preserve the long-running compatibility sentinel from project settings. The outer project
+      // watchdog, not the inherited inner-session timer, controls continuation.
       agent_bounded_automatic: false,
     },
   }
