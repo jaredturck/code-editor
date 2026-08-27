@@ -1,13 +1,8 @@
-/**
- * Defines the provider-neutral request, response, streaming, and registration contracts used
- * by the AI routing layer. Provider adapters keep their wire-format types local while sharing
- * these stable application boundaries.
- */
-
+/** Local-model provider contracts used by the agentic coding runtime. */
 import type { AIMessageContentPart, JsonSchemaTool, ProviderMeta, ToolCall } from '@/platform/agent/types'
 import type { ModelProfileSettings } from '@/platform/modelProfiles'
 
-export type AIProviderId = 'anthropic' | 'openai' | 'gemini' | 'deepseek' | 'opencode' | 'openrouter' | 'local'
+export type AIProviderId = 'local'
 
 export interface AIToolResult {
   id: string
@@ -23,11 +18,8 @@ export interface AIMessage extends Record<string, unknown> {
 }
 
 export interface AISettings extends ModelProfileSettings, Record<string, unknown> {
-  ai_provider?: string
-  ai_api_key?: string
-  ai_runtime_api_key?: string
+  ai_provider?: 'local' | string
   ai_model?: string
-  ai_opencode_url?: string
   ai_local_url?: string
   extended_thinking?: boolean
   thinking_budget_tokens?: number
@@ -67,18 +59,8 @@ export type ProviderStreamFn = (
 ) => Promise<ProviderStreamResult | void>
 
 export type ToolCallStreamEvent =
-  | {
-      phase: 'start'
-      index: number
-      id: string
-      name: string
-    }
-  | {
-      phase: 'args'
-      index: number
-      partial: string
-      json: string
-    }
+  | { phase: 'start'; index: number; id: string; name: string }
+  | { phase: 'args'; index: number; partial: string; json: string }
 
 export interface ProviderResponseSchema {
   name?: string
@@ -96,8 +78,6 @@ export interface ProviderCallOptions {
   streamFn?: ProviderStreamFn
   settings?: AISettings
   signal?: AbortSignal
-  /** Runtime-only classification used by the per-turn cloud safety budget. */
-  cloudPurpose?: 'agent' | 'consult' | 'final' | 'retry'
 }
 
 export interface ProviderInvokeContext {
@@ -121,7 +101,7 @@ export interface AIProviderDefinition {
   readonly color: string
   readonly keyPlaceholder: string | null
   readonly keyHelpUrl: string | null
-  readonly requiresApiKey: boolean
+  readonly requiresApiKey: false
   readonly defaultModel: string
   readonly models: readonly string[]
 }
@@ -129,21 +109,6 @@ export interface AIProviderDefinition {
 export interface AIProvider extends AIProviderDefinition {
   readonly invoke: (context: ProviderInvokeContext) => Promise<ProviderMeta>
   readonly discoverModels: (context: ProviderDiscoveryContext) => Promise<string[]>
-}
-
-export interface OpenAICompatibleOptions extends ProviderCallOptions {
-  apiKey: unknown
-  model: string
-  baseUrl: unknown
-  providerId?: string
-  providerLabel: string
-  extraHeaders?: Record<string, string>
-}
-
-export interface OpenAIModelDiscoveryOptions {
-  apiKey: unknown
-  baseUrl: unknown
-  extraHeaders?: Record<string, string>
 }
 
 export interface AIConnectionTestResult {
