@@ -28,23 +28,24 @@ describe('autonomous multi-agent acceptance', () => {
     expect(result.blockers.join(' ')).toMatch(/write lease/)
   })
 
-  it('requires independent review when a main or delegated agent mutates files', () => {
+  it('requires independent review only when explicitly requested', () => {
     const direct = evaluate({
+      require_independent_review: true,
       step_history: [{ tool: 'files.edit', ok: true, summary: 'edited a.ts' }],
     })
     expect(direct.requires_review).toBe(true)
     expect(direct.accepted).toBe(false)
 
     const delegated = evaluate({
+      require_independent_review: true,
       timeline: [{ type: 'tool_result', tool: 'files.write', status: 'ok', role: 'executor' }],
     })
     expect(delegated.requires_review).toBe(true)
     expect(delegated.accepted).toBe(false)
   })
 
-  it('does not force independent review when the runtime marks a simple mutation as proportionate', () => {
+  it('does not force independent review by default', () => {
     const result = evaluate({
-      require_independent_review: false,
       step_history: [{ tool: 'files.write', ok: true, summary: 'created main.py' }],
     })
 
@@ -55,6 +56,7 @@ describe('autonomous multi-agent acceptance', () => {
 
   it('rejects changes-requested review and a review made stale by later edits', () => {
     const requested = evaluate({
+      require_independent_review: true,
       step_history: [
         { tool: 'files.edit', ok: true },
         { tool: 'agent.review', ok: true, summary: '{"overallVerdict":"changes_requested"}' },
@@ -64,6 +66,7 @@ describe('autonomous multi-agent acceptance', () => {
     expect(requested.accepted).toBe(false)
 
     const stale = evaluate({
+      require_independent_review: true,
       step_history: [
         { tool: 'files.edit', ok: true },
         { tool: 'agent.review', ok: true, summary: '{"overallVerdict":"approved"}' },
@@ -76,6 +79,7 @@ describe('autonomous multi-agent acceptance', () => {
 
   it('rejects a review that completed before a delegated worker finished writing', () => {
     const result = evaluate({
+      require_independent_review: true,
       step_history: [
         { tool: 'agent.delegate', ok: true },
         { tool: 'agent.review', ok: true, summary: '{"overallVerdict":"approved"}' },
@@ -92,6 +96,7 @@ describe('autonomous multi-agent acceptance', () => {
 
   it('accepts clean reviewed coding work after all delegated work settles', () => {
     const result = evaluate({
+      require_independent_review: true,
       step_history: [
         { tool: 'files.edit', ok: true },
         { tool: 'agent.review', ok: true, summary: '{"reviewed":true,"overallVerdict":"approved"}' },

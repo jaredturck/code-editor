@@ -112,7 +112,7 @@ export function evaluateAutonomousAcceptance(input: AutonomousAcceptanceInput): 
   )
   const timeline_mutation_index = latest_timeline_mutation_index(input.timeline)
   const mutation_present = direct_mutation_index >= 0 || timeline_mutation_index >= 0
-  const requires_review = mutation_present && input.require_independent_review !== false
+  const requires_review = mutation_present && input.require_independent_review === true
   let latest_review: AutonomousAcceptanceResult['latest_review'] = 'missing'
 
   if (requires_review) {
@@ -155,8 +155,11 @@ export function evaluateAutonomousAcceptance(input: AutonomousAcceptanceInput): 
 
 export function buildAcceptanceRemediationPrompt(result: AutonomousAcceptanceResult) {
   const blockers = result.blockers.map((blocker) => `- ${blocker}`).join('\n')
-  const review_guidance = result.requires_review
-    ? ' If code changed, obtain an independent agent.review. If review requests changes, fix them, rerun relevant verification, then review the corrected state again.'
-    : ''
-  return `AUTONOMOUS ACCEPTANCE GATE: The project is not ready to finish yet. Continue working without asking the user unless a genuine product decision or permission is required.\n\nBlocking conditions:\n${blockers}\n\nUse agent.roster/status/recall as needed to await active work, resolve stale/lease conflicts through coordination and fresh live-file reads, and finish or explicitly resolve TODOs.${review_guidance} Do not declare completion until the gate can pass.`
+  const guidance = [
+    'Project acceptance is blocked.',
+    blockers ? `Resolve only these blockers:\n${blockers}` : '',
+    result.requires_review ? 'After the final code change, run one independent review.' : '',
+    'Continue autonomously. Do not repeat work that already passed.',
+  ]
+  return guidance.filter(Boolean).join('\n\n')
 }
