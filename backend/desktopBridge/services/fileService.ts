@@ -1,5 +1,6 @@
 /** Feature service surface for the corresponding desktop bridge routes. */
 import * as runtime from './bridgeServiceRuntime.js'
+import { runCommand } from './terminalCommandService.js'
 
 export const DEFAULT_FIND_DEPTH = runtime.DEFAULT_FIND_DEPTH
 export const DEFAULT_FIND_FUZZY_THRESHOLD = runtime.DEFAULT_FIND_FUZZY_THRESHOLD
@@ -18,7 +19,7 @@ export const path = runtime.path
 export const readJsonBody = runtime.readJsonBody
 export const resolveFindRootPath = runtime.resolveFindRootPath
 export const resolvePath = runtime.resolvePath
-export const runCommand = runtime.runCommand
+export { runCommand }
 export const saveArtifact = runtime.saveArtifact
 export const listArtifacts = runtime.listArtifacts
 export const readArtifact = runtime.readArtifact
