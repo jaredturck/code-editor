@@ -72,6 +72,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
   const selected_path_ref = useRef(selected_path)
   const selected_paths_ref = useRef(selected_paths)
   const selection_version_ref = useRef(0)
+  const workspace_open_version_ref = useRef(0)
   const refresh_timeout_ref = useRef<number | null>(null)
   const directory_versions_ref = useRef(new Map<string, number>())
   const pending_refresh_paths_ref = useRef(new Set<string>())
@@ -212,6 +213,8 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
   }, [])
 
   const open_workspace = async (folder_path: string) => {
+    const open_version = workspace_open_version_ref.current + 1
+    workspace_open_version_ref.current = open_version
     window.editor_api.workspace.unwatch()
 
     if (refresh_timeout_ref.current !== null) {
@@ -238,18 +241,23 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
     try {
       const git_state = await window.editor_api.git.ensure_repository(folder_path)
+      if (workspace_open_version_ref.current !== open_version || root_path_ref.current !== folder_path) return
       if (git_state.nested_repositories.length > 0) {
         onNotice('Nested Git metadata detected. Open Source Control to reconcile it before running the agent.')
       }
     } catch (error) {
+      if (workspace_open_version_ref.current !== open_version || root_path_ref.current !== folder_path) return
       const message = error instanceof Error ? error.message : 'Unable to initialize source control for this workspace.'
       onNotice(`Source control unavailable: ${message}`)
     }
+
+    if (workspace_open_version_ref.current !== open_version || root_path_ref.current !== folder_path) return
 
     try {
       await window.editor_api.workspace.watch(folder_path)
       await load_directory(folder_path)
     } catch (error) {
+      if (workspace_open_version_ref.current !== open_version || root_path_ref.current !== folder_path) return
       const message = error instanceof Error ? error.message : 'Unable to open the selected folder.'
       onNotice(message)
     }
