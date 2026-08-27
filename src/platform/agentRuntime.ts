@@ -291,18 +291,6 @@ function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResul
   }
 }
 
-function formatVerificationGate(gate: VerificationGateResult) {
-  if (!gate.requirements.length) return '- No verification requirements have been declared yet.'
-  return gate.requirements
-    .map((item) => {
-      const source = item.sourceTool
-        ? ` via ${item.sourceTool}${item.source ? ` (${cleanLine(item.source, 220)})` : ''}`
-        : ''
-      return `- ${item.requirement}: ${item.status}${source}${item.detail ? ` — ${cleanLine(item.detail, 300)}` : ''}`
-    })
-    .join('\n')
-}
-
 async function currentWorkspaceDiagnostics(input: AgentSessionInput) {
   const plan = taskPreflightPlan(input)
   if (plan?.developmentTask !== true || !isWorkspaceProjectRun(input)) return null
@@ -330,41 +318,40 @@ function buildAcceptanceRemediationPrompt(
   originalRequest: string,
   gate: VerificationGateResult | null,
   diagnostics: WorkspaceDiagnosticsSnapshot | null,
-  result: AgentSessionResult,
 ) {
-  const recentEvidence = (result.stepHistory || [])
-    .slice(-24)
-    .map((step) => {
-      const tool = String(step.tool || step.requestedTool || 'action')
-      const detail = step.ok === false ? step.error : step.summary
-      return `- ${tool}: ${step.ok === false ? 'failed' : 'ok'}${detail ? ` — ${cleanLine(detail, 360)}` : ''}`
-    })
-    .join('\n')
-  const verificationBlocked = gate?.required === true && !gate.passed
-  const errorCount = diagnosticsErrors(diagnostics)
+  const lines = [`Continue the original request:\n${originalRequest}`, 'Acceptance is blocked. Fix the blockers below.']
+  const errors = diagnosticsErrors(diagnostics)
+  if (errors > 0 && diagnostics) lines.push(formatWorkspaceDiagnostics(diagnostics))
+  if (gate?.required === true && !gate.passed) {
+    lines.push(`Verification blockers:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}`)
+  }
+  lines.push('Change what is necessary, then verify only the affected result. Do not repeat checks that already passed.')
+  return lines.join('\n\n')
+}
 
-  return [
-    `Continue the original development request:\n${originalRequest}`,
-    'PROJECT ACCEPTANCE REMEDIATION: The runtime cannot accept this development task yet. Fix the blocking evidence below rather than re-declaring completion.',
-    errorCount > 0
-      ? 'LIVE WORKSPACE DIAGNOSTICS ARE A HARD COMPLETION GATE. Every severity=error finding must be fixed before completion. Do not relabel editor errors as cosmetic, validator preferences, false positives, or non-blocking merely because the browser still renders. If a diagnostic rule or configuration is genuinely wrong for this project, correct that configuration so the live error count reaches zero.'
-      : '',
-    errorCount > 0 && diagnostics ? formatWorkspaceDiagnostics(diagnostics) : '',
-    errorCount > 0
-      ? 'Prioritize source/configuration changes that reduce the diagnostics above. Repeating browser inspection, builds, status checks, memory updates, or the same verification command without a relevant mutation does not remediate these errors.'
-      : '',
-    verificationBlocked
-      ? 'The model-defined verification gate is also incomplete, stale, failed, or inconclusive. Use verification.require only when the set of checks genuinely needs revision. Real terminal.exec, launch.run, browser.inspect, diagnostics.check, and agent.review results return verificationCandidateId values; bind the appropriate fresh result with verification.record. The runtime derives pass/fail from real results.'
-      : '',
-    verificationBlocked && gate ? `Current verification state:\n${formatVerificationGate(gate)}` : '',
-    verificationBlocked && gate?.blockers.length
-      ? `Verification blockers:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}`
-      : '',
-    'If you change source files after a verification check passes, that evidence becomes stale. Re-run only the checks that are necessary after the change.',
-    recentEvidence ? `Recent execution evidence:\n${recentEvidence}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n')
+function blockerSignature(blockers: string[]) {
+  return [...new Set(blockers.map((blocker) => cleanLine(blocker, 500)))].sort().join('|')
+}
+
+function hasSuccessfulMutation(result: AgentSessionResult) {
+  return (result.stepHistory || []).some((step) => {
+    const tool = String(step.tool || step.requestedTool || '')
+    const status = String(step.status || '').toLowerCase()
+    return ['files.write', 'files.edit', 'files.patch'].includes(tool) && step.ok !== false && !['error', 'failed'].includes(status)
+  })
+}
+
+function remediationMadeProgress(
+  previousBlockers: string[],
+  previousDiagnostics: WorkspaceDiagnosticsSnapshot | null,
+  currentBlockers: string[],
+  currentDiagnostics: WorkspaceDiagnosticsSnapshot | null,
+  remediationResult: AgentSessionResult,
+) {
+  if (currentBlockers.length === 0) return true
+  if (blockerSignature(currentBlockers) !== blockerSignature(previousBlockers)) return true
+  if (diagnosticsErrors(currentDiagnostics) < diagnosticsErrors(previousDiagnostics)) return true
+  return hasSuccessfulMutation(remediationResult)
 }
 
 function annotateAcceptance(
@@ -483,7 +470,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     })
     const remediationInput: AgentSessionInput = {
       ...executionInput,
-      userInput: buildAcceptanceRemediationPrompt(input.userInput, gate, diagnostics, combined),
+      userInput: buildAcceptanceRemediationPrompt(input.userInput, gate, diagnostics),
       conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-80),
       todos: withoutAcceptanceTodos(combined.todos),
     }
@@ -493,10 +480,21 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     } finally {
       stream_events.flush()
     }
+    const previousBlockers = blockers
+    const previousDiagnostics = diagnostics
     combined = mergeAgentResults(combined, next)
     gate = state ? evaluateVerificationGate(state) : null
     diagnostics = await currentWorkspaceDiagnostics(executionInput)
     blockers = acceptanceBlockers(gate, diagnostics)
+    if (!remediationMadeProgress(previousBlockers, previousDiagnostics, blockers, diagnostics, next)) {
+      executionInput.onEvent?.({
+        type: 'notice',
+        level: 'warning',
+        summary: 'Project acceptance remediation made no meaningful progress; stopping instead of repeating the same work.',
+        at: Date.now(),
+      })
+      break
+    }
   }
 
   const finalResult = annotateAcceptance(
