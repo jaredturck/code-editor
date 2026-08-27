@@ -29,6 +29,7 @@ function bridgeProcessData(result: any) {
     status: String(source.status || source.process?.status || 'running') as ProjectManagedProcess['status'],
     command: String(source.command || source.process?.command || ''),
     logPath: String(source.logPath || source.log_path || source.process?.logPath || ''),
+    url: String(source.url || source.process?.url || ''),
   }
 }
 
@@ -66,7 +67,7 @@ export async function startManagedDevServer(
     ownerWorkItemId,
   })
   upsertManagedProjectProcess(chatId, goal, process)
-  return { process, result }
+  return { process, result, url: data.url }
 }
 
 export async function refreshManagedDevServer(chatId: string, goal: string, cwd: string) {
@@ -85,7 +86,18 @@ export async function refreshManagedDevServer(chatId: string, goal: string, cwd:
     logPath: data.logPath || existing?.logPath || '',
   })
   upsertManagedProjectProcess(chatId, goal, process)
-  return { process, result }
+  return { process, result, url: data.url }
+}
+
+/** Ensure the harness owns a usable dev server before browser/evaluator work. */
+export async function ensureManagedDevServer(chatId: string, goal: string, cwd: string) {
+  try {
+    const refreshed = await refreshManagedDevServer(chatId, goal, cwd)
+    if (refreshed.process.status === 'running' || refreshed.process.pid) return refreshed
+  } catch {
+    // Start below when no bridge-owned process exists yet.
+  }
+  return startManagedDevServer(chatId, goal, cwd)
 }
 
 export async function stopManagedDevServer(chatId: string, goal: string) {
@@ -120,7 +132,21 @@ export async function launchManagedProjectProcess(
     ownerWorkItemId: input.ownerWorkItemId || '',
   })
   upsertManagedProjectProcess(chatId, goal, process)
-  return { process, result }
+  return { process, result, url: data.url }
+}
+
+export function managedProjectRuntimeEvidence(chatId: string) {
+  return listManagedProjectProcesses(chatId).map((process) => ({
+    id: process.id,
+    kind: process.kind,
+    command: process.command,
+    cwd: process.cwd,
+    pid: process.pid,
+    port: process.port,
+    status: process.status,
+    logPath: process.logPath,
+    updatedAt: process.updatedAt,
+  }))
 }
 
 export function markManagedProcessStopped(chatId: string, goal: string, processId: string) {
