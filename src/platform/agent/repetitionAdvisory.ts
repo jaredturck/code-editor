@@ -167,6 +167,9 @@ export function recordAgentEvidence({
     return ''
   }
 
+  const block = repeatedAgentEvidenceBlock({ scope_id: scope, tool_name, args })
+  if (block) throw new Error(block)
+
   const category = evidence_category(tool_name, args)
   if (!category) return ''
   const signature = evidence_signature(tool_name, category, args)
