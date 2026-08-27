@@ -14,17 +14,27 @@ function trim_output(value: unknown) {
 }
 
 function parse_cd_command(command: string) {
-  const trimmed = command.trim()
-  if (!trimmed.startsWith('cd')) return null
-  const rest = trimmed.slice(2).trim()
-  return rest || '~'
+  const match = /^cd(?:\s+(.+))?$/.exec(command.trim())
+  if (!match) return null
+  const rest = String(match[1] || '').trim()
+  if (!rest) return ''
+  if (/[\r\n;&|`$()<>]/.test(rest)) return null
+  if ((rest.startsWith('"') && rest.endsWith('"')) || (rest.startsWith("'") && rest.endsWith("'"))) {
+    return rest.slice(1, -1)
+  }
+  if (/\s/.test(rest)) return null
+  return rest
 }
 
 export async function runCommand(command: string, cwd: string, root_dir = cwd) {
   const cd_target = parse_cd_command(command)
   if (cd_target !== null) {
     try {
-      const requested = path.isAbsolute(cd_target) ? cd_target : path.join(cwd, cd_target)
+      const requested = cd_target
+        ? path.isAbsolute(cd_target)
+          ? cd_target
+          : path.join(cwd, cd_target)
+        : root_dir
       const next_cwd = await resolveDirectoryWithinRoot(requested, root_dir)
       const stats = await fs.stat(next_cwd)
       if (!stats.isDirectory()) {
