@@ -30,6 +30,10 @@ async function git(workspaceRoot: string, args: string) {
   return executeTerminalCommand(`git ${args}`, workspaceRoot)
 }
 
+function terminalText(result: any) {
+  return String(result?.stdout || result?.output || result?.text || '').trim()
+}
+
 export async function projectGitAvailable(workspaceRoot: string) {
   try {
     await git(workspaceRoot, 'rev-parse --is-inside-work-tree')
@@ -46,9 +50,9 @@ export async function createProjectCheckpoint(
   label = 'checkpoint',
 ): Promise<ProjectCheckpoint> {
   const status = await git(workspaceRoot, 'status --porcelain')
-  const statusText = String((status as any)?.stdout || (status as any)?.output || '')
+  const statusText = terminalText(status)
   const created = await git(workspaceRoot, 'stash create')
-  const ref = String((created as any)?.stdout || (created as any)?.output || '').trim()
+  const ref = terminalText(created)
   const checkpoint: ProjectCheckpoint = {
     id: `checkpoint-${Date.now().toString(36)}`,
     generation: 0,
@@ -78,6 +82,27 @@ export async function createWorkerWorkspace(
   return { id, root, branch, baseRef, createdAt: Date.now() }
 }
 
+/** Rehydrate an existing harness-owned worktree recorded in the durable work item. */
+export async function recoverWorkerWorkspace(root: string): Promise<ProjectWorkerWorkspace | null> {
+  const workspaceRoot = String(root || '').trim()
+  if (!workspaceRoot) return null
+  try {
+    const inside = terminalText(await git(workspaceRoot, 'rev-parse --is-inside-work-tree'))
+    if (!/true/i.test(inside)) return null
+    const branch = terminalText(await git(workspaceRoot, 'rev-parse --abbrev-ref HEAD'))
+    const baseRef = terminalText(await git(workspaceRoot, 'merge-base HEAD HEAD~1')) || 'HEAD'
+    return {
+      id: sanitizeId(workspaceRoot.split(/[\\/]/).pop() || 'worker'),
+      root: workspaceRoot,
+      branch,
+      baseRef,
+      createdAt: Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function removeWorkerWorkspace(workspaceRoot: string, worker: ProjectWorkerWorkspace, force = true) {
   const flag = force ? '--force ' : ''
   await git(workspaceRoot, `worktree remove ${flag}${quote(worker.root)}`)
@@ -90,21 +115,27 @@ export async function removeWorkerWorkspace(workspaceRoot: string, worker: Proje
 
 export async function workerWorkspaceDiff(worker: ProjectWorkerWorkspace) {
   const result = await executeTerminalCommand('git diff --binary HEAD', worker.root)
-  return String((result as any)?.stdout || (result as any)?.output || '')
+  return terminalText(result)
 }
 
 export async function workerWorkspaceStatus(worker: ProjectWorkerWorkspace) {
   const result = await executeTerminalCommand('git status --porcelain=v1', worker.root)
-  return String((result as any)?.stdout || (result as any)?.output || '')
+  return terminalText(result)
 }
 
+/** Commit any current worker mutations so a fresh context can resume from them later. */
 export async function checkpointWorkerWorkspace(worker: ProjectWorkerWorkspace, message: string) {
   await executeTerminalCommand('git add -A', worker.root)
   const status = await workerWorkspaceStatus(worker)
-  if (!status.trim()) return ''
+  if (!status.trim()) {
+    try {
+      return terminalText(await executeTerminalCommand('git rev-parse HEAD', worker.root))
+    } catch {
+      return ''
+    }
+  }
   await executeTerminalCommand(`git commit -m ${quote(String(message || 'IRIS worker checkpoint').slice(0, 200))}`, worker.root)
-  const result = await executeTerminalCommand('git rev-parse HEAD', worker.root)
-  return String((result as any)?.stdout || (result as any)?.output || '').trim()
+  return terminalText(await executeTerminalCommand('git rev-parse HEAD', worker.root))
 }
 
 export async function abortWorkerIntegration(workspaceRoot: string) {
@@ -119,12 +150,8 @@ export async function integrateWorkerCommit(workspaceRoot: string, commit: strin
   const ref = String(commit || '').trim()
   if (!ref) throw new Error('Worker commit is required for integration.')
   try {
-    // Apply without creating history on the user's branch. Acceptance can verify the integrated
-    // worktree before the editor decides how final history should be represented.
     return await git(workspaceRoot, `cherry-pick --no-commit ${quote(ref)}`)
   } catch (error) {
-    // Never leave the integration workspace inside a half-resolved cherry-pick. The failed worker
-    // can be retried/replanned from its durable work item instead.
     await abortWorkerIntegration(workspaceRoot)
     throw error
   }
