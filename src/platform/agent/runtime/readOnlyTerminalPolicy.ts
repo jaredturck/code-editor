@@ -243,8 +243,15 @@ function validSimpleCommand(command: unknown) {
   return splitWords(text)
 }
 
+export function isEditorOwnedGitCommand(command: unknown) {
+  const words = validSimpleCommand(command)
+  if (!words?.length || commandName(words[0]).toLowerCase() !== 'git') return false
+  return !safeGit(words)
+}
+
 export function isHardBlockedTerminalCommand(command: unknown) {
   const text = String(command || '').trim()
+  if (isEditorOwnedGitCommand(text)) return true
   return hardBlockedPatterns.some((pattern) => pattern.test(text))
 }
 
