@@ -60,6 +60,10 @@ interface ApprovalExecutionContext {
   cwd: string
 }
 
+interface AgentRuntimeContextState {
+  lastDiagnosticsRefresh: number
+}
+
 function verificationState(options: LegacyBrokerOptions) {
   const state = options?.settings?.agent_verification_state
   if (!state || typeof state !== 'object' || Array.isArray(state)) return null
@@ -101,10 +105,13 @@ function updateMutationEpoch(
   }
 }
 
-function workspaceMutationForResult(toolName: string, args: Record<string, unknown>, result: unknown) {
-  if (toolName === 'terminal.exec') return terminalCommandLikelyMutatesSource(args.command)
+export function workspaceMutationForResult(toolName: string, args: Record<string, unknown>, result: unknown) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return false
-  return mutationSucceeded(toolName, args, result as Record<string, unknown>)
+  const record = result as Record<string, unknown>
+  if (toolName === 'terminal.exec') {
+    return Number(record.exitCode) === 0 && terminalCommandLikelyMutatesSource(args.command)
+  }
+  return mutationSucceeded(toolName, args, record)
 }
 
 function repetitionScope(options: LegacyBrokerOptions, workspaceRoot: string) {
@@ -118,6 +125,7 @@ function repetitionScope(options: LegacyBrokerOptions, workspaceRoot: string) {
 
 async function attachAgentRuntimeContext(
   options: LegacyBrokerOptions,
+  runtimeContextState: AgentRuntimeContextState,
   workspaceRoot: string,
   toolName: string,
   args: Record<string, unknown>,
@@ -143,15 +151,20 @@ async function attachAgentRuntimeContext(
     diagnosticsError = error instanceof Error ? error.message : String(error || 'Workspace diagnostics failed')
   }
 
-  const diagnosticsReport = formatWorkspaceDiagnostics(snapshot)
+  const snapshotChanged = Boolean(snapshot && snapshot.refreshed_at !== runtimeContextState.lastDiagnosticsRefresh)
+  if (snapshotChanged && snapshot) runtimeContextState.lastDiagnosticsRefresh = snapshot.refreshed_at
   const diagnosticSummary = snapshot
     ? `Workspace diagnostics: ${snapshot.counts.errors} error${snapshot.counts.errors === 1 ? '' : 's'} · ${snapshot.counts.warnings} warning${snapshot.counts.warnings === 1 ? '' : 's'}${snapshot.complete ? '' : ' (scan incomplete)'}.`
     : diagnosticsError
       ? `Workspace diagnostics unavailable: ${diagnosticsError}`
       : ''
   const agentRuntimeUpdate = [diagnosticSummary, repetitionAdvisory].filter(Boolean).join(' ')
+  const resultRecord = { ...(result as Record<string, unknown>) }
+  delete resultRecord.agentRuntimeUpdate
+  delete resultRecord.agentRuntimeContext
 
   return {
+    ...resultRecord,
     ...(agentRuntimeUpdate ? { agentRuntimeUpdate } : {}),
     agentRuntimeContext: {
       ...(repetitionAdvisory ? { repetitionAdvisory } : {}),
@@ -163,14 +176,13 @@ async function attachAgentRuntimeContext(
               diagnosticFiles: snapshot.diagnostic_files,
               counts: snapshot.counts,
               complete: snapshot.complete,
-              report: diagnosticsReport,
+              ...(snapshotChanged ? { report: formatWorkspaceDiagnostics(snapshot) } : {}),
             },
           }
         : diagnosticsError
           ? { workspaceDiagnostics: { unavailable: true, message: diagnosticsError } }
           : {}),
     },
-    ...(result as Record<string, unknown>),
   }
 }
 
@@ -253,6 +265,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
     command: '',
     cwd: workspaceRoot,
   }
+  const runtimeContextState: AgentRuntimeContextState = { lastDiagnosticsRefresh: 0 }
   const contextualOptions = withApprovalExecutionContext(options, approvalContext)
   const legacy = createLegacyModuleBroker(contextualOptions)
   const workspaceAutonomousLegacy = createLegacyModuleBroker({
@@ -285,7 +298,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
       approvalContext.cwd = String(args.cwd || workspaceRoot || '').trim()
 
       if (toolName === 'approval.request' && automaticMode) {
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
           approved: false,
           decision: 'autonomous',
           instruction:
@@ -294,7 +307,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
       }
 
       if (toolName === 'user.ask' && automaticMode) {
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
           answered: false,
           decision: 'autonomous',
           answer: '',
@@ -308,7 +321,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         automaticMode &&
         options?.settings?.permissions_screen_capture !== true
       ) {
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
           available: false,
           denied: true,
           instruction: 'Screen access is not enabled. Continue without asking the user for screen permission.',
@@ -327,7 +340,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
               `${toolName} ${targetPath}`,
             )
             if (!approved) {
-              return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
+              return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
                 error: 'Workspace boundary access was denied. Continue using files inside the open project.',
                 denied: true,
               })
@@ -350,7 +363,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
               String(args.command || 'terminal command'),
             )
             if (!approved) {
-              return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, {
+              return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
                 error: 'Workspace boundary command was denied. Continue with a project-scoped alternative.',
                 denied: true,
               })
@@ -359,17 +372,12 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
           } else if (automaticMode && workspaceRoot) {
             broker = workspaceAutonomousLegacy
           }
-
-          // Shell commands can change arbitrary files without going through the editor-native file
-          // tools. Mark diagnostics dirty before execution so the next result gets a fresh repo-wide
-          // snapshot even if filesystem watcher delivery races the command completion.
-          if (workspaceRoot) markWorkspaceDiagnosticsDirty(workspaceRoot)
         }
 
         const result = await broker.execute(toolName, args)
         updateMutationEpoch(state, toolName, args, result)
         const candidateResult = attachVerificationCandidate(state, toolName, args, result)
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, candidateResult)
       }
 
       assertEditorNativeAccess(toolName, options)
@@ -381,13 +389,13 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
           args.kinds || args.requirements,
           String(args.mode || 'replace').toLowerCase(),
         )
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, result)
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, result)
       }
 
       if (toolName === 'verification.record') {
         if (!state) throw new Error('No verification state is active for this project run.')
         const result = recordVerificationEvidence(state, args.kind || args.requirement, args.candidateId || args.candidate_id)
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, result)
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, result)
       }
 
       if (toolName === 'browser.inspect') {
@@ -399,7 +407,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
           max_text_chars: Number(args.maxTextChars || args.max_text_chars) || undefined,
         })
         const candidateResult = attachVerificationCandidate(state, toolName, args, result)
-        return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, candidateResult)
       }
 
       const path = assertSafePath(String(args.path || ''), {
@@ -411,7 +419,7 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         max_diagnostics: Number(args.maxDiagnostics || args.max_diagnostics) || undefined,
       })
       const candidateResult = attachVerificationCandidate(state, toolName, args, result)
-      return attachAgentRuntimeContext(options, workspaceRoot, toolName, args, candidateResult)
+      return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, candidateResult)
     },
     verificationState() {
       const state = verificationState(options)
