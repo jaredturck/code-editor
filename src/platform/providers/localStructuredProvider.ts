@@ -1,7 +1,7 @@
 /**
- * Adds provider-level structured output enforcement around the stable local-model adapter.
- * Keeping this wire-format concern in a small wrapper avoids coupling the main adapter to
- * every structured-response experiment used by the agent runtime.
+ * Provider-level structured output enforcement for local models.
+ * Explicit response schemas pass through unchanged. Structured controller turns also receive a
+ * minimal inferred schema so the agent loop does not depend on prompt-only JSON compliance.
  */
 
 import { callLocalLLM } from '@/platform/providers/localProvider'
@@ -14,8 +14,40 @@ import type {
   ProviderStreamFn,
 } from '@/platform/providers/types'
 
+const CONTROLLER_ACTION_SCHEMA: ProviderResponseSchema = {
+  name: 'controller_action',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['tool', 'final'] },
+      tool: { type: 'string' },
+      args: { type: 'object', additionalProperties: true },
+      message: { type: 'string' },
+    },
+    required: ['type'],
+  },
+}
+
 function schemaName(response: ProviderResponseSchema) {
   return String(response.name || 'response').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'response'
+}
+
+function messageText(message: AIMessage) {
+  return typeof message.content === 'string' ? message.content : JSON.stringify(message.content || '')
+}
+
+function inferredResponseSchema(messages: readonly AIMessage[], options: ProviderCallOptions) {
+  if (options.responseSchema) return options.responseSchema
+  if (Array.isArray(options.tools) && options.tools.length) return null
+
+  const controllerTurn = messages.some(
+    (message) =>
+      message.role === 'system' &&
+      /return the controller decision object/i.test(messageText(message)),
+  )
+  return controllerTurn ? CONTROLLER_ACTION_SCHEMA : null
 }
 
 function injectStructuredFormat(url: string, init: RequestInit, response: ProviderResponseSchema): RequestInit {
@@ -53,7 +85,7 @@ export async function callStructuredLocalLLM(
   fetchFn: ProviderFetch,
   options: ProviderCallOptions = {},
 ) {
-  const response = options.responseSchema
+  const response = inferredResponseSchema(messages, options)
   if (!response) return callLocalLLM(messages, baseUrl, model, fetchFn, options)
 
   const wrappedFetch: ProviderFetch = (url, init = {}, fetchOptions?: ProviderFetchOptions) =>
@@ -66,6 +98,7 @@ export async function callStructuredLocalLLM(
 
   return callLocalLLM(messages, baseUrl, model, wrappedFetch, {
     ...options,
+    responseSchema: response,
     streamFn: wrappedStream,
   })
 }
