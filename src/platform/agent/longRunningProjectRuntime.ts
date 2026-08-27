@@ -14,6 +14,10 @@ import {
   snapshotProjectProgress,
   type ProjectProgressSnapshot,
 } from '@/platform/agent/projectProgressWatchdog'
+import {
+  createProjectCheckpoint,
+  projectGitAvailable,
+} from '@/platform/agent/projectWorkspaceManager'
 import { runAgentSession as runProjectSegment } from '@/platform/projectAgentRuntime'
 import type { AgentSessionInput, AgentSessionResult } from '@/platform/agentRuntimeLegacy'
 
@@ -44,6 +48,34 @@ function mergeResults(previous: AgentSessionResult | null, next: AgentSessionRes
     artifacts: [...artifacts.values()],
     steps: Number(previous.steps || 0) + Number(next.steps || 0),
     summary: { ...(previous.summary || {}), ...(next.summary || {}) },
+  }
+}
+
+async function checkpointProject(input: AgentSessionInput, chatId: string, label: string) {
+  const root = workspaceRoot(input)
+  if (!root) return null
+  try {
+    if (!(await projectGitAvailable(root))) return null
+    const ledger = loadProjectLedger(chatId)
+    if (!ledger) return null
+    const checkpoint = await createProjectCheckpoint(chatId, ledger.goal, root, label)
+    input.onEvent?.({
+      type: 'notice',
+      level: 'info',
+      summary: checkpoint.ref
+        ? `Project checkpoint ${label} recorded at generation ${checkpoint.generation}.`
+        : `Project checkpoint ${label} recorded; workspace had no snapshot-worthy diff.`,
+      at: Date.now(),
+    } as any)
+    return checkpoint
+  } catch (error) {
+    input.onEvent?.({
+      type: 'notice',
+      level: 'warning',
+      summary: `Project checkpoint skipped: ${error instanceof Error ? error.message : String(error)}`.slice(0, 700),
+      at: Date.now(),
+    } as any)
+    return null
   }
 }
 
@@ -94,8 +126,6 @@ function segmentInput(input: AgentSessionInput, reason: string): AgentSessionInp
       .join('\n\n'),
     settings: {
       ...input.settings,
-      // Preserve the long-running compatibility sentinel from project settings. The outer project
-      // watchdog, not the inherited inner-session timer, controls continuation.
       agent_bounded_automatic: false,
     },
   }
@@ -163,6 +193,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
 
   const initialized = await initializeProject(chatId, input.userInput, input.settings || {}, input.abortSignal)
   input.onEvent?.({ type: 'notice', level: 'info', summary: initialized.summary, at: Date.now() } as any)
+  await checkpointProject(input, chatId, 'project-start')
 
   let combined: AgentSessionResult | null = null
   let stallGenerations = 0
@@ -199,6 +230,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
     }
 
     markCompletedWorkImplemented(chatId)
+    if (completed > 0) await checkpointProject(input, chatId, `wave-${wave}-integrated`)
 
     if (!dispatched || !completed) {
       const segment = await runProjectSegment(
@@ -212,6 +244,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
         draft.lastProgressAt = Date.now()
         draft.lastProgressSummary = String(segment.reply || 'Orchestrator segment completed.').slice(0, 5000)
       })
+      await checkpointProject(input, chatId, `wave-${wave}-orchestrator`)
     }
 
     try {
@@ -225,7 +258,10 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
         },
         input.abortSignal,
       )
-      if (evaluation.accepted) break
+      if (evaluation.accepted) {
+        await checkpointProject(input, chatId, `wave-${wave}-accepted`)
+        break
+      }
       materializeEvaluatorRepairs(chatId)
     } catch (error) {
       input.onEvent?.({
@@ -251,6 +287,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
         escalationRecommended: verdict.escalationRecommended || stallGenerations >= 4,
       })
       retryFailedWork(chatId, stallGenerations >= 4)
+      await checkpointProject(input, chatId, `wave-${wave}-strategy-reset`)
       input.onEvent?.({
         type: 'notice',
         level: 'warning',
@@ -260,6 +297,7 @@ export async function runLongRunningProject(input: AgentSessionInput): Promise<A
     }
 
     if (stallGenerations >= MAX_STALL_GENERATIONS || verdict.state === 'deep_stall') {
+      await checkpointProject(input, chatId, `wave-${wave}-stalled`)
       const stalled = loadProjectLedger(chatId)
       const summary = stalled ? projectLedgerSummary(stalled) : null
       return {
