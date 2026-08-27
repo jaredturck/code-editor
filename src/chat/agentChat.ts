@@ -9,9 +9,9 @@ import { build_core_agent_settings as buildLegacyCoreAgentSettings } from '@/cha
 import type { ProjectRunMode } from '@/chat/projectRunController'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
-// These capabilities may remain available elsewhere in the IDE, but they are not part of the
-// default autonomous coding action surface. This keeps product features separate from coding-agent
-// degrees of freedom.
+// These capabilities may remain available elsewhere in the IDE/runtime, but they are not part of
+// the default autonomous coding action surface. The lead model sees semantic engineering actions;
+// deterministic runtime code owns persistence, queueing, status, and transport mechanics.
 const automatic_blocked_tools = new Set([
   'approval.request',
   'todo.update',
@@ -30,12 +30,24 @@ const automatic_blocked_tools = new Set([
   'system.processes',
 
   // Generic semantic / overlapping repository retrieval is removed from the default coding path.
-  // Coding roles use filename/text search plus code-aware navigation and targeted reads.
   'rag.retrieve',
   'search.find',
   'search.fd',
   'search.locate',
   'sources.lookup',
+
+  // Multi-agent mechanics stay implemented but are runtime-owned. Semantic actions such as
+  // agent.delegate, agent.consult and agent.review remain available when the controller needs them.
+  'agent.status',
+  'agent.roster',
+  'agent.available',
+  'agent.recall',
+  'agent.recallAll',
+  'agent.readOutput',
+  'agent.verify',
+  'agent.broadcast',
+  'agent.find',
+  'agent.overwatch',
 ])
 
 function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
