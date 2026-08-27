@@ -459,7 +459,23 @@ function clear(chat_id: string) {
 }
 
 function set_workspace_root(root_path: string | null) {
-  current_workspace_root = normalize_workspace_root(root_path)
+  const next_root = normalize_workspace_root(root_path)
+  if (next_root === current_workspace_root) return
+  current_workspace_root = next_root
+
+  if (
+    !current_state ||
+    !is_active_project_run_status(current_state.status) ||
+    current_state.workspace_binding_version !== WORKSPACE_BINDING_VERSION ||
+    current_state.workspace_root === current_workspace_root
+  ) {
+    return
+  }
+
+  const message = 'Workspace changed while the project run was active. Reopen the original workspace before resuming.'
+  pause_requested = true
+  transition('paused', { error: message, last_activity: message })
+  abort_controller?.abort()
 }
 
 export const projectRunController = {
