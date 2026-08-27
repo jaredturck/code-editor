@@ -24,11 +24,10 @@ import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const DIAGNOSTICS_GATE_TODO_ID = 'diagnostics-gate'
 const MUTATION_GATE_TODO_ID = 'mutation-gate'
-const MAX_PROJECT_REMEDIATION_PASSES = 1
 const STREAM_EVENT_INTERVAL_MS = 80
-const PROJECT_CONTEXT_MAX_CHARS = 6000
-const PROJECT_CONTEXT_PRIOR_CHARS = 2200
-const PROJECT_CONTEXT_ACTIONS = 10
+const PROJECT_CONTEXT_MAX_CHARS = 4200
+const PROJECT_CONTEXT_ACTIONS = 8
+const REMEDIATION_SESSION_MINUTES = 4
 
 type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
 
@@ -49,17 +48,14 @@ class StreamEventCoalescer {
       return
     }
 
-    const step = String(record.step ?? '')
     const current = this.pending as unknown as Record<string, unknown> | null
-    if (this.pending && step !== String(current?.step ?? '')) this.flush()
-
+    if (this.pending && String(record.step ?? '') !== String(current?.step ?? '')) this.flush()
     const pending = this.pending as unknown as Record<string, unknown> | null
     this.pending = {
       ...(pending || {}),
       ...record,
       delta: `${String(pending?.delta || '')}${String(record.delta || '')}`,
     } as unknown as AgentRuntimeEvent
-
     if (!this.timer) this.timer = setTimeout(() => this.flush(), this.intervalMs)
   }
 
@@ -98,13 +94,11 @@ function isWorkspaceProjectRun(input: AgentSessionInput) {
 
 function taskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null {
   const plan = input.settings?.agent_preflight_plan
-  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null
-  return plan as unknown as LocalPreflightPlan
+  return plan && typeof plan === 'object' && !Array.isArray(plan) ? (plan as unknown as LocalPreflightPlan) : null
 }
 
 function persistedProjectRun(input: AgentSessionInput) {
-  if (!isWorkspaceProjectRun(input)) return null
-  return getChatSessionState(projectChatId(input))?.projectRun || null
+  return isWorkspaceProjectRun(input) ? getChatSessionState(projectChatId(input))?.projectRun || null : null
 }
 
 function persistedProjectSummary(input: AgentSessionInput) {
@@ -115,24 +109,16 @@ function persistedProjectSummary(input: AgentSessionInput) {
     : null
 }
 
-function persistedTaskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null {
-  const plan = persistedProjectSummary(input)?.taskPreflightPlan
-  return plan && typeof plan === 'object' && !Array.isArray(plan)
-    ? (plan as unknown as LocalPreflightPlan)
-    : null
-}
-
 export function persistedTaskMatchesInput(input: AgentSessionInput) {
   const goal = String(persistedProjectRun(input)?.goal || '').trim()
-  const request = String(input.userInput || '').trim()
-  return Boolean(goal && request.includes(goal))
+  return Boolean(goal && String(input.userInput || '').includes(goal))
 }
 
 async function withTaskContract(input: AgentSessionInput): Promise<AgentSessionInput> {
   if (taskPreflightPlan(input) || !String(input.userInput || '').trim()) return input
 
-  const persisted = persistedTaskMatchesInput(input) ? persistedTaskPreflightPlan(input) : null
-  if (persisted) {
+  const persisted = persistedTaskMatchesInput(input) ? persistedProjectSummary(input)?.taskPreflightPlan : null
+  if (persisted && typeof persisted === 'object' && !Array.isArray(persisted)) {
     return { ...input, settings: { ...input.settings, agent_preflight_plan: persisted } }
   }
 
@@ -142,8 +128,7 @@ async function withTaskContract(input: AgentSessionInput): Promise<AgentSessionI
       content: message.content,
     }))
     const plan = await buildLocalPreflightPlan(input.userInput, conversation, input.settings, input.abortSignal)
-    if (!plan) return input
-    return { ...input, settings: { ...input.settings, agent_preflight_plan: plan } }
+    return plan ? { ...input, settings: { ...input.settings, agent_preflight_plan: plan } } : input
   } catch (error) {
     input.onEvent?.({
       type: 'notice',
@@ -160,14 +145,15 @@ function withVerificationState(input: AgentSessionInput): AgentSessionInput {
   if (!plan || !isWorkspaceProjectRun(input)) return input
   const required = plan.developmentTask === true && plan.verificationRequired === true
   const contractKey = buildVerificationContractKey(plan as unknown as Record<string, unknown>)
-  const persistedState = input.settings?.agent_verification_state || persistedProjectSummary(input)?.verificationState
-  const state = ensureVerificationState(persistedState, contractKey, required)
+  const persisted = input.settings?.agent_verification_state || persistedProjectSummary(input)?.verificationState
+  const state = ensureVerificationState(persisted, contractKey, required)
   return { ...input, settings: { ...input.settings, agent_verification_state: state } }
 }
 
 export function withAutomaticApprovalPolicy(input: AgentSessionInput): AgentSessionInput {
   if (String(input.settings?.agent_project_run_mode || 'automatic') === 'plan_first') return input
   const original = input.onApprovalRequest
+  const bounded = input.settings?.agent_bounded_automatic === true
 
   return {
     ...input,
@@ -176,12 +162,18 @@ export function withAutomaticApprovalPolicy(input: AgentSessionInput): AgentSess
       const requestType = String(record.requestType || '').toLowerCase()
       const requestedAction = String(record.requestedAction || '').toLowerCase()
 
-      if (requestType === 'limit') return { approved: true, decision: 'unlimited' }
+      if (requestType === 'limit') {
+        return bounded ? { approved: true, decision: 'continue' } : { approved: true, decision: 'unlimited' }
+      }
+      if (requestType === 'question' && requestedAction === 'continue the long-running task') {
+        return bounded
+          ? { approved: false, decision: 'deny', answer: 'Halt', stopped: true }
+          : { approved: true, decision: 'continue', answer: 'Continue' }
+      }
+      if (requestType === 'question' && record.planText) {
+        return { approved: true, decision: 'approve', answer: 'Approve' }
+      }
       if (requestType === 'question') {
-        if (record.planText) return { approved: true, decision: 'approve', answer: 'Approve' }
-        if (requestedAction === 'continue the long-running task') {
-          return { approved: true, decision: 'continue', answer: 'Continue' }
-        }
         return { approved: true, decision: 'autonomous', answer: 'Proceed using the current project evidence.' }
       }
       if (typeof original === 'function') return original(request)
@@ -225,8 +217,8 @@ function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): A
   }
   return {
     ...next,
-    timeline: [...(previous.timeline || []), ...(next.timeline || [])].slice(-500),
-    stepHistory: [...(previous.stepHistory || []), ...(next.stepHistory || [])].slice(-500),
+    timeline: [...(previous.timeline || []), ...(next.timeline || [])].slice(-240),
+    stepHistory: [...(previous.stepHistory || []), ...(next.stepHistory || [])].slice(-240),
     artifacts: [...artifacts.values()],
     steps: Number(previous.steps || 0) + Number(next.steps || 0),
     todos: Array.isArray(next.todos) ? next.todos : previous.todos,
@@ -234,8 +226,7 @@ function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): A
 }
 
 async function currentDiagnostics(input: AgentSessionInput) {
-  const plan = taskPreflightPlan(input)
-  if (plan?.developmentTask !== true || !isWorkspaceProjectRun(input)) return null
+  if (taskPreflightPlan(input)?.developmentTask !== true || !isWorkspaceProjectRun(input)) return null
   try {
     return await getWorkspaceDiagnosticsSnapshot(String(input.settings?.agent_working_dir || ''))
   } catch {
@@ -261,7 +252,7 @@ function acceptanceBlockers(
   if (gate?.required === true && !gate.passed) blockers.push(...gate.blockers)
   const errors = diagnosticsErrors(diagnostics)
   if (errors > 0) blockers.push(`Workspace diagnostics report ${errors} error${errors === 1 ? '' : 's'}.`)
-  return blockers
+  return [...new Set(blockers)]
 }
 
 function remediationPrompt(
@@ -272,30 +263,14 @@ function remediationPrompt(
   diagnostics: WorkspaceDiagnosticsSnapshot | null,
 ) {
   const blockers = acceptanceBlockers(input, result, gate, diagnostics)
-  const parts = [
-    `Continue the original request:\n${originalRequest}`,
-    `Fix these blockers:\n${blockers.map((blocker) => `- ${blocker}`).join('\n')}`,
-  ]
+  const parts = [originalRequest, `Fix these blockers:\n${blockers.map((blocker) => `- ${blocker}`).join('\n')}`]
   if (diagnosticsErrors(diagnostics) > 0 && diagnostics) parts.push(formatWorkspaceDiagnostics(diagnostics))
-  parts.push('Make the necessary change and verify the affected result. Do not repeat checks that already passed.')
+  parts.push('Make the necessary change and verify the affected result.')
   return parts.join('\n\n')
 }
 
-function blockerSignature(blockers: string[]) {
-  return [...new Set(blockers.map((blocker) => cleanLine(blocker, 400)))].sort().join('|')
-}
-
-function remediationMadeProgress(
-  previousBlockers: string[],
-  previousDiagnostics: WorkspaceDiagnosticsSnapshot | null,
-  currentBlockers: string[],
-  currentDiagnostics: WorkspaceDiagnosticsSnapshot | null,
-  result: AgentSessionResult,
-) {
-  if (currentBlockers.length === 0) return true
-  if (blockerSignature(previousBlockers) !== blockerSignature(currentBlockers)) return true
-  if (diagnosticsErrors(currentDiagnostics) < diagnosticsErrors(previousDiagnostics)) return true
-  return hasSuccessfulMutation(result)
+function runHitBudget(result: AgentSessionResult) {
+  return /time budget|stopped after|halted at the \d+-minute|long-running task.*halt/i.test(String(result.reply || ''))
 }
 
 function annotateAcceptance(
@@ -310,7 +285,7 @@ function annotateAcceptance(
   const plan = taskPreflightPlan(input)
   const summary = {
     ...(result.summary || {}),
-    projectRuntime: 'direct-v2',
+    projectRuntime: 'direct-v3',
     taskPreflightPlan: plan,
     verificationState: state ? snapshotVerificationState(state) : null,
     ...(gate ? { verification: { ...gate, remediationPasses } } : {}),
@@ -334,14 +309,14 @@ function annotateAcceptance(
   if (gate?.required === true && !gate.passed) {
     todos.push({
       id: VERIFICATION_GATE_TODO_ID,
-      text: `Verification gate: ${gate.blockers.join(' ')}`.slice(0, 1200),
+      text: `Verification gate: ${gate.blockers.join(' ')}`.slice(0, 1000),
       status: 'in_progress',
     })
   }
   if (errors > 0) {
     todos.push({
       id: DIAGNOSTICS_GATE_TODO_ID,
-      text: `Diagnostics gate: ${errors} editor error${errors === 1 ? '' : 's'} remain.`.slice(0, 1200),
+      text: `Diagnostics gate: ${errors} editor error${errors === 1 ? '' : 's'} remain.`.slice(0, 1000),
       status: 'in_progress',
     })
   }
@@ -354,34 +329,27 @@ function annotateAcceptance(
   }
 }
 
-function formatProjectActions(result: AgentSessionResult) {
-  return (result.stepHistory || [])
+function buildProjectContext(input: AgentSessionInput, result: AgentSessionResult) {
+  const openTodos = (result.todos || [])
+    .filter((todo) => String(todo.status || '').toLowerCase() !== 'done')
+    .slice(0, 10)
+    .map((todo) => `- ${cleanLine(todo.text || todo.title || '', 180)}`)
+    .join('\n')
+  const actions = (result.stepHistory || [])
     .slice(-PROJECT_CONTEXT_ACTIONS)
     .map((step) => {
       const tool = String(step.tool || step.requestedTool || 'action')
-      const status = step.ok === false ? 'failed' : 'ok'
-      const summary = cleanLine(step.summary || step.error || '', 220)
-      return `- ${tool} [${status}]${summary ? `: ${summary}` : ''}`
+      const summary = cleanLine(step.summary || step.error || '', 180)
+      return `- ${tool}${summary ? `: ${summary}` : ''}`
     })
     .join('\n')
-}
 
-function formatProjectTodos(result: AgentSessionResult) {
-  return (result.todos || [])
-    .slice(0, 16)
-    .map((todo) => `- [${cleanLine(todo.status || 'pending', 30)}] ${cleanLine(todo.text || todo.title || '', 220)}`)
-    .join('\n')
-}
-
-function buildProjectContext(input: AgentSessionInput, result: AgentSessionResult, prior: string) {
-  const priorTail = String(prior || '').trim().slice(-PROJECT_CONTEXT_PRIOR_CHARS)
   return [
-    '# Autonomous project working context',
-    `Goal: ${cleanLine(input.userInput, 1200)}`,
-    priorTail ? `## Prior\n${priorTail}` : '',
-    result.todos?.length ? `## Todos\n${formatProjectTodos(result)}` : '',
-    result.stepHistory?.length ? `## Recent actions\n${formatProjectActions(result)}` : '',
-    `## Outcome\n${cleanLine(result.reply, 1200)}`,
+    '# Project state',
+    `Goal: ${cleanLine(input.userInput, 900)}`,
+    openTodos ? `## Open\n${openTodos}` : '',
+    actions ? `## Recent\n${actions}` : '',
+    `## Last result\n${cleanLine(result.reply, 900)}`,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -394,9 +362,9 @@ function injectPriorContext(input: AgentSessionInput, compacted: string): AgentS
   return {
     ...input,
     conversation: [
-      { role: 'user', content: `[PROJECT STATE]\n${context.slice(-3500)}`, _injected: true },
+      { role: 'user', content: `[PROJECT STATE]\n${context.slice(-2600)}`, _injected: true },
       ...(input.conversation || []),
-    ].slice(-80),
+    ].slice(-50),
   }
 }
 
@@ -408,11 +376,7 @@ async function runCore(input: AgentSessionInput, flush: () => void) {
   }
 }
 
-/**
- * Project runs use one core agent session plus at most one concrete acceptance-remediation
- * session. This deliberately bypasses the nested legacy project lifecycle. Normal chat keeps
- * legacy behavior.
- */
+/** One core session plus at most one short objective repair session. */
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   if (!isWorkspaceProjectRun(input)) return runLegacyAgentSession(input)
 
@@ -421,13 +385,12 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
   const throttled = withThrottledStreamEvents(withAutomaticApprovalPolicy(verified))
   let executionInput = throttled.input
   const state = activeVerificationState(executionInput)
-  let priorCompacted = ''
 
   try {
-    priorCompacted = String((await loadChatContext(projectChatId(executionInput)))?.compacted || '')
-    executionInput = injectPriorContext(executionInput, priorCompacted)
+    const compacted = String((await loadChatContext(projectChatId(executionInput)))?.compacted || '')
+    executionInput = injectPriorContext(executionInput, compacted)
   } catch {
-    priorCompacted = ''
+    // Persisted continuity is optional; live project state remains authoritative.
   }
 
   let combined = await runCore(executionInput, throttled.flush)
@@ -436,43 +399,40 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
   let blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics)
   let remediationPasses = 0
 
-  if (blockers.length && !executionInput.abortSignal?.aborted) {
+  if (blockers.length && !executionInput.abortSignal?.aborted && !runHitBudget(combined)) {
     remediationPasses = 1
     executionInput.onEvent?.({
       type: 'notice',
       level: 'warning',
-      summary: `Project acceptance needs one remediation pass: ${blockers.join(' ')}`.slice(0, 800),
+      summary: `Repairing project acceptance: ${blockers.join(' ')}`.slice(0, 600),
       at: Date.now(),
     })
 
     const remediationInput: AgentSessionInput = {
       ...executionInput,
       userInput: remediationPrompt(input.userInput, executionInput, combined, gate, diagnostics),
-      conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-60),
+      conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-40),
       todos: withoutGateTodos(combined.todos),
+      settings: {
+        ...executionInput.settings,
+        agent_session_minutes: Math.min(
+          REMEDIATION_SESSION_MINUTES,
+          Math.max(1, Number(executionInput.settings?.agent_session_minutes) || REMEDIATION_SESSION_MINUTES),
+        ),
+        agent_tool_repeat_cap: 2,
+      },
     }
 
-    const previousBlockers = blockers
-    const previousDiagnostics = diagnostics
-    const next = await runCore(remediationInput, throttled.flush)
-    combined = mergeResults(combined, next)
+    const repaired = await runCore(remediationInput, throttled.flush)
+    combined = mergeResults(combined, repaired)
     gate = state ? evaluateVerificationGate(state) : null
     diagnostics = await currentDiagnostics(executionInput)
     blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics)
-
-    if (!remediationMadeProgress(previousBlockers, previousDiagnostics, blockers, diagnostics, next)) {
-      executionInput.onEvent?.({
-        type: 'notice',
-        level: 'warning',
-        summary: 'Acceptance remediation made no meaningful progress; the project run is pausing.',
-        at: Date.now(),
-      })
-    }
   }
 
   const finalResult = annotateAcceptance(executionInput, combined, gate, diagnostics, remediationPasses, state)
   try {
-    await saveCompacted(projectChatId(executionInput), buildProjectContext(executionInput, finalResult, priorCompacted))
+    await saveCompacted(projectChatId(executionInput), buildProjectContext(executionInput, finalResult))
   } catch (error) {
     executionInput.onEvent?.({
       type: 'notice',
