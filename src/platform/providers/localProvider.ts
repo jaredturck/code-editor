@@ -121,6 +121,22 @@ function normalizeOllamaToolCalls(value: unknown): ToolCall[] {
     })
 }
 
+function localResponseFormat(options: ProviderCallOptions) {
+  const response = options.responseSchema
+  if (!response?.schema || typeof response.schema !== 'object' || Array.isArray(response.schema)) return null
+  return {
+    ollama: response.schema,
+    openai: {
+      type: 'json_schema',
+      json_schema: {
+        name: String(response.name || 'response').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'response',
+        strict: response.strict !== false,
+        schema: response.schema,
+      },
+    },
+  }
+}
+
 async function streamOllamaCompletion(
   url: string,
   model: string,
@@ -168,12 +184,16 @@ async function streamOllamaCompletion(
     }
   }
 
+  const requestBody: Record<string, unknown> = { model, messages, stream: true }
+  const responseFormat = localResponseFormat(options)
+  if (responseFormat) requestBody.format = responseFormat.ollama
+
   const streamResult = await streamFn(
     `${url}/api/chat`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, stream: true }),
+      body: JSON.stringify(requestBody),
       signal: options.signal,
     },
     (chunk) => {
@@ -253,20 +273,24 @@ async function streamOpenAICompatibleCompletion(
       emitted = true
       text += delta
     }
-    if (data?.usage) usage = normalizeUsage(data.usage)
+   if (data?.usage) usage = normalizeUsage(data.usage)
   }
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+   stream: true,
+    stream_options: { include_usage: true },
+  }
+  const responseFormat = localResponseFormat(options)
+  if (responseFormat) requestBody.response_format = responseFormat.openai
 
   const streamResult = await streamFn(
     `${url}/v1/chat/completions`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream: true,
-        stream_options: { include_usage: true },
-      }),
+      body: JSON.stringify(requestBody),
       signal: options.signal,
     },
     (chunk) => {
@@ -296,17 +320,17 @@ async function streamOpenAICompatibleCompletion(
       firstThinkingAt,
       lastThinkingAt,
       firstAnswerAt,
-    ),
+     ),
   }
 }
 
-export async function callLocalLLM(
+export async function callLocalLLM (
   messages: readonly AIMessage[],
   baseUrl: string,
   model: string,
   fetchFn: ProviderFetch,
   options: ProviderCallOptions = {},
-) {
+{
   if (!baseUrl) throw new Error('Local server URL not configured.')
   const _url = baseUrl.replace(/\/$/, '').replace(/(^https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1')
 
@@ -333,221 +357,5 @@ export async function callLocalLLM(
     const content = Array.isArray(message.content) ? contentToText(message.content) : String(message.content || '')
     const images = Array.isArray(message.content)
       ? message.content
-          .map((part: any) => toDataUrl(part))
-          .filter((url: string) => /^data:image\/[^;]+;base64,/i.test(url))
-          .map((url: string) => url.replace(/^data:image\/[^;]+;base64,/i, ''))
-      : []
-
-    if (message.role === 'assistant' && Array.isArray(message.toolCalls) && message.toolCalls.length) {
-      return [
-        {
-          role: 'assistant',
-          content,
-          tool_calls: message.toolCalls.map((toolCall) => ({
-            ...(toolCall.id ? { id: toolCall.id } : {}),
-            function: {
-              name: encodeToolName(toolCall.name),
-              arguments: toolCall.args || {},
-            },
-          })),
-        },
-      ]
-    }
-
-    return [
-      {
-        role: message.role,
-        content,
-        ...(images.length ? { images } : {}),
-      },
-    ]
-  }
-
-  const ollamaMessages = messages.flatMap(toOllamaMessages)
-  const openAiMessages = normalizeOpenAIMessages(messages)
-  const nativeTools = Array.isArray(options.tools) && options.tools.length ? toOpenAITools(options.tools) : []
-
-  // Ollama tool calling is most reliable as a complete /api/chat turn. Keep ordinary
-  // tool-free local chat streaming exactly as before, but do not split tool calls across
-  // streaming chunks: the stateful agent loop needs one canonical tool-call object.
-  if (!nativeTools.length && (options.onToken || options.onThinkingToken) && options.streamFn) {
-    let ollamaError = ''
-    try {
-      const streamed = await streamOllamaCompletion(_url, model, ollamaMessages, options.streamFn, options)
-      return toMetaResponse({
-        provider: 'Local',
-        model,
-        text: streamed.text,
-        usage: streamed.usage,
-        thinkingText: streamed.thinking,
-        timings: streamed.timings,
-      })
-    } catch (error) {
-      if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw error
-      }
-      if ((error as { partial?: boolean })?.partial) throw error
-      ollamaError = error instanceof Error ? error.message : String(error || 'stream failed')
-    }
-
-    try {
-      const streamed = await streamOpenAICompatibleCompletion(_url, model, openAiMessages, options.streamFn, options)
-      return toMetaResponse({
-        provider: 'Local',
-        model,
-        text: streamed.text,
-        usage: streamed.usage,
-        thinkingText: streamed.thinking,
-        timings: streamed.timings,
-      })
-    } catch (error) {
-      if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw error
-      }
-      throw new Error(
-        `Local streaming failed for Ollama and LM Studio. [Ollama: ${ollamaError}; LM Studio: ${
-          error instanceof Error ? error.message : String(error || 'stream failed')
-        }]`,
-      )
-    }
-  }
-
-  let _ollamaNote = ''
-  try {
-    const ollamaBody: Record<string, unknown> = {
-      model,
-      messages: ollamaMessages,
-      stream: false,
-    }
-    if (nativeTools.length) ollamaBody.tools = nativeTools
-
-    const _res = await fetchFn(`${_url}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ollamaBody),
-      signal: options.signal,
-    })
-
-    if (_res.ok) {
-      const _data: any = await _res.json()
-      const _usage = normalizeUsage(_data?.usage, {
-        promptTokens: safeNumber(_data?.prompt_eval_count),
-        completionTokens: safeNumber(_data?.eval_count),
-      })
-      const _toolCalls = normalizeOllamaToolCalls(_data?.message?.tool_calls)
-      return toMetaResponse({
-        provider: 'Local',
-        model,
-        text:
-          _data?.message?.content ||
-          _data?.choices?.[0]?.message?.content ||
-          (_toolCalls.length ? '' : JSON.stringify(_data)),
-        usage: _usage,
-        toolCalls: _toolCalls,
-        stopReason: _data?.done_reason || '',
-        thinkingText: _data?.message?.thinking || _data?.message?.reasoning_content || '',
-        timings: buildOllamaTimings(_data),
-      })
-    }
-
-    const _body = await _res.text().catch(() => '')
-    let _serverMsg = ''
-    try {
-      _serverMsg = String(JSON.parse(_body)?.error || '')
-    } catch {
-      _serverMsg = _body.slice(0, 200)
-    }
-    if (/model|not found|pull|no such/i.test(_serverMsg)) {
-      throw new Error(
-        `Local model "${model}" isn't available on the Ollama server (${_serverMsg}). Pull it with \`ollama pull ${model}\`, or pick an installed model in Settings → Agents.`,
-      )
-    }
-    _ollamaNote = `Ollama ${_res.status}${_serverMsg ? `: ${_serverMsg}` : ''}`
-  } catch (err) {
-    if (err instanceof Error && /isn't available on the Ollama server/.test(err.message)) throw err
-    _ollamaNote = `Ollama unreachable (${err instanceof Error ? err.message : 'connection failed'})`
-  }
-
-  let _res2: Awaited<ReturnType<ProviderFetch>>
-  try {
-    const lmStudioBody: Record<string, unknown> = {
-      model,
-      messages: openAiMessages,
-      stream: false,
-    }
-    if (nativeTools.length) {
-      lmStudioBody.tools = nativeTools
-      lmStudioBody.tool_choice = options.toolChoice || 'auto'
-    }
-    _res2 = await fetchFn(`${_url}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(lmStudioBody),
-      signal: options.signal,
-    })
-  } catch (err) {
-    throw new Error(
-      `Can't reach a local model server at ${_url} (tried Ollama /api/chat and LM Studio /v1/chat/completions). ` +
-        `Is Ollama or LM Studio running and serving "${model}"? [${_ollamaNote}; LM Studio: ${err instanceof Error ? err.message : 'connection failed'}]`,
-    )
-  }
-
-  if (!_res2.ok) {
-    const _body2 = await _res2.text().catch(() => '')
-    let _msg2 = ''
-    try {
-      _msg2 = String(JSON.parse(_body2)?.error?.message || JSON.parse(_body2)?.error || '')
-    } catch {
-      _msg2 = _body2.slice(0, 200)
-    }
-    throw new Error(
-      `Local server error: LM Studio ${_res2.status}${_msg2 ? `: ${_msg2}` : ''}${_ollamaNote ? ` (after ${_ollamaNote})` : ''}`,
-    )
-  }
-
-  const _data2: any = await _res2.json()
-  return parseOpenAIChatResponse(_data2, 'Local', model)
-}
-
-/**
- * List models served by a local Ollama / LM Studio endpoint.
- * Tries Ollama /api/tags first, then LM Studio /v1/models. Returns [] on failure.
- */
-export async function listLocalModels(baseUrl: string, fetchFn: ProviderFetch): Promise<string[]> {
-  const _url = String(baseUrl || '')
-    .replace(/\/$/, '')
-    .replace(/(^https?:\/\/)localhost(?=[:/]|$)/i, '$1127.0.0.1')
-  if (!_url) return []
-
-  try {
-    const _res = await fetchFn(`${_url}/api/tags`, { method: 'GET' })
-    if (_res.ok) {
-      const _data: any = await _res.json().catch(() => ({}))
-      const _names = Array.isArray(_data?.models)
-        ? _data.models.map((m: any) => String(m?.name || m?.model || '')).filter(Boolean)
-        : []
-      if (_names.length)
-        return (_names as string[]).sort((a: string, b: string) =>
-          a.localeCompare(b, undefined, { sensitivity: 'base' }),
-        )
-    }
-  } catch {
-    /* try next */
-  }
-
-  try {
-    const _res = await fetchFn(`${_url}/v1/models`, { method: 'GET' })
-    if (_res.ok) {
-      const _data: any = await _res.json().catch(() => ({}))
-      const _raw = Array.isArray(_data?.data) ? _data.data : Array.isArray(_data) ? _data : []
-      return _raw
-        .map((m: any) => String(m?.id || m?.name || ''))
-        .filter(Boolean)
-        .sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-    }
-  } catch {
-    /* give up */
-  }
-
-  return []
-}
+          .map((Part: any) => toDataUrl(part))
+          .filter((url: string) => /^data:image\/[^;]+;

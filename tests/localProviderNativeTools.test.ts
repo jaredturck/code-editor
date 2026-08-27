@@ -145,4 +145,72 @@ describe('local Qwen native tool calling', () => {
     )
     expect(second.text).toBe('I have the file contents and can continue.')
   })
+
+  it('uses Ollama JSON schema constrained output when a response schema is supplied', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    const fetch_fn = vi.fn(async (_url: string, init?: RequestInit) => {
+      requests.push(JSON.parse(String(init?.body || '{}')) as Record<string, unknown>)
+      return response_json({
+        message: { content: '{"answer":"ok"}' },
+        done: true,
+        done_reason: 'stop',
+      })
+    })
+    const schema = {
+      type: 'object',
+      properties: { answer: { type: 'string' } },
+      required: ['answer'],
+      additionalProperties: false,
+    }
+
+    await callLocalLLM(
+      [{ role: 'user', content: 'Return the result.' }],
+      'http://localhost:11434',
+      'qwen3.5:9b',
+      fetch_fn as never,
+      { responseSchema: { name: 'agent-response', schema } },
+    )
+
+    expect(requests[0].format).toEqual(schema)
+  })
+
+  it('maps constrained output to LM Studio response_format on fallback', async () => {
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = []
+    const fetch_fn = vi.fn(async (url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+      requests.push({ url, body })
+      if (url.endsWith('/api/chat')) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({}),
+          text: async () => 'Ollama unavailable',
+        }
+      }
+      return response_json({ choices: [{ message: { content: '{"answer":"ok"}' } }] })
+    })
+    const schema = {
+      type: 'object',
+      properties: { answer: { type: 'string' } },
+      required: ['answer'],
+      additionalProperties: false,
+    }
+
+    await callLocalLLM(
+      [{ role: 'user', content: 'Return the result.' }],
+      'http://localhost:1234',
+      'local-model',
+      fetch_fn as never,
+      { responseSchema: { name: 'agent response', schema } },
+    )
+
+    expect(requests[1].body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'agent_response',
+        strict: true,
+        schema,
+      },
+    })
+  })
 })

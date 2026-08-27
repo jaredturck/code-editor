@@ -80,9 +80,16 @@ export type ToolCallStreamEvent =
       json: string
     }
 
+export interface ProviderResponseSchema {
+  name?: string
+  schema: Record<string, unknown>
+  strict?: boolean
+}
+
 export interface ProviderCallOptions {
   tools?: readonly JsonSchemaTool[]
   toolChoice?: string | Record<string, unknown>
+  responseSchema?: ProviderResponseSchema
   onToken?: (token: string) => void
   onThinkingToken?: (token: string) => void
   onToolCall?: (event: ToolCallStreamEvent) => void
