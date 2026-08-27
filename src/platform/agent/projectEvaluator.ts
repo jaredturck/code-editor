@@ -1,4 +1,5 @@
 import { runBoundedRoleTask } from '@/platform/agent/boundedRoleTask'
+import { collectProjectEvaluationEvidence } from '@/platform/agent/projectEvaluationHarness'
 import {
   addEvaluatorFindings,
   loadProjectLedger,
@@ -7,10 +8,6 @@ import {
   type ProjectEvaluatorFinding,
   type ProjectLedger,
 } from '@/platform/agent/projectLedger'
-import {
-  ensureManagedDevServer,
-  managedProjectRuntimeEvidence,
-} from '@/platform/agent/projectProcessManager'
 
 export interface ProjectEvaluationEvidence {
   diagnostics?: unknown
@@ -27,8 +24,6 @@ export interface ProjectEvaluationResult {
   requirementStatus: Array<{ id: string; status: 'verified' | 'implemented' | 'blocked' | 'pending'; evidence: string[] }>
   ledger: ProjectLedger
 }
-
-const UI_PROJECT_PATTERN = /\b(web|website|webpage|frontend|front-end|react|vue|svelte|next|vite|html|css|ui|dashboard|browser|responsive)\b/i
 
 const EVALUATOR_SCHEMA = {
   type: 'object',
@@ -86,6 +81,7 @@ function compactLedger(ledger: ProjectLedger) {
   return {
     goal: ledger.goal,
     generation: ledger.generation,
+    strategyGeneration: ledger.strategyGeneration,
     requirements: ledger.requirements.map((requirement) => ({
       id: requirement.id,
       text: requirement.text,
@@ -93,53 +89,21 @@ function compactLedger(ledger: ProjectLedger) {
       acceptanceCriteria: requirement.acceptanceCriteria,
       evidence: requirement.evidence.slice(-8),
     })),
-    workItems: ledger.workItems.slice(-80).map((item) => ({
+    workItems: ledger.workItems.slice(-100).map((item) => ({
       id: item.id,
       title: item.title,
       status: item.status,
       role: item.role,
       requirementIds: item.requirementIds,
+      attempts: item.attempts,
       resultSummary: item.resultSummary,
+      blockers: item.blockers,
     })),
-    openFindings: ledger.evaluatorFindings.filter((finding) => finding.status === 'open').slice(-50),
+    openFindings: ledger.evaluatorFindings.filter((finding) => finding.status === 'open').slice(-60),
     architectureSummary: ledger.architectureSummary,
+    currentStrategy: ledger.currentStrategy,
     lastProgressSummary: ledger.lastProgressSummary,
   }
-}
-
-async function prepareRuntimeEvidence(
-  chatId: string,
-  ledger: ProjectLedger,
-  settings: Record<string, any>,
-  supplied: ProjectEvaluationEvidence,
-) {
-  const merged: ProjectEvaluationEvidence = { ...supplied }
-  const workspace = String(settings.agent_working_dir || '').trim()
-  if (workspace && UI_PROJECT_PATTERN.test(`${ledger.goal}\n${ledger.architectureSummary}`)) {
-    try {
-      const runtime = await ensureManagedDevServer(chatId, ledger.goal, workspace)
-      merged.runtime = {
-        supplied: supplied.runtime,
-        managed: managedProjectRuntimeEvidence(chatId),
-        devServer: {
-          status: runtime.process.status,
-          pid: runtime.process.pid,
-          port: runtime.process.port,
-          url: runtime.url,
-          logPath: runtime.process.logPath,
-        },
-      }
-    } catch (error) {
-      merged.runtime = {
-        supplied: supplied.runtime,
-        managed: managedProjectRuntimeEvidence(chatId),
-        devServerError: error instanceof Error ? error.message : String(error || 'Unable to start project runtime.'),
-      }
-    }
-  } else {
-    merged.runtime = supplied.runtime || managedProjectRuntimeEvidence(chatId)
-  }
-  return merged
 }
 
 export async function evaluateProject(
@@ -150,13 +114,19 @@ export async function evaluateProject(
 ): Promise<ProjectEvaluationResult> {
   const ledger = loadProjectLedger(chatId)
   if (!ledger) throw new Error('Project evaluator requires a durable project ledger.')
-  const runtimeEvidence = await prepareRuntimeEvidence(chatId, ledger, settings, evidence)
+
+  // Fresh deterministic evidence is gathered independently of executor summaries. This is the
+  // evaluator's factual substrate: integrated diff/status, diagnostics, inferred build/test/lint
+  // verification, managed runtime state, and browser evidence where applicable.
+  const freshEvidence = await collectProjectEvaluationEvidence(chatId, ledger, settings, evidence as Record<string, unknown>)
 
   const result = await runBoundedRoleTask({
     settings,
+    // The settings UI still exposes "overwatcher". The autonomous coding harness treats that
+    // binding as the independent evaluator until the GUI/settings vocabulary is migrated later.
     preferredRoles: ['overwatcher', 'orchestrator'],
     maxAttempts: 2,
-    maxOutputTokens: 2600,
+    maxOutputTokens: 3200,
     reasoningEffort: 'medium',
     signal,
     taskLabel: 'independent project evaluation',
@@ -165,11 +135,11 @@ export async function evaluateProject(
       {
         role: 'system',
         content:
-          'Act as an independent software evaluator. Do not assume implementation claims are true. Judge every requirement against supplied repository/runtime/diagnostic/test evidence. A requirement is verified only when the available evidence supports its acceptance criteria. Return concrete missing behavior and regressions. Do not propose unrelated enhancements.',
+          'Act as an independent software evaluator. Do not trust implementation claims. Judge each requirement against the current project plus supplied deterministic evidence. Verification failures, severity=error diagnostics, broken runtime/browser behavior, or unmet acceptance criteria prevent verified status. Do not mutate code and do not propose unrelated enhancements. Return concrete requirement statuses and actionable defects only.',
       },
       {
         role: 'user',
-        content: JSON.stringify({ project: compactLedger(ledger), evidence: runtimeEvidence }, null, 2).slice(0, 50_000),
+        content: JSON.stringify({ project: compactLedger(ledger), evidence: freshEvidence }, null, 2).slice(0, 80_000),
       },
     ],
   })
