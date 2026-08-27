@@ -113,9 +113,13 @@ function taskPreflightPlan(input: AgentSessionInput): LocalPreflightPlan | null 
   return plan as unknown as LocalPreflightPlan
 }
 
-function persistedProjectSummary(input: AgentSessionInput) {
+function persistedProjectRun(input: AgentSessionInput) {
   if (!isWorkspaceProjectRun(input)) return null
-  const projectRun = getChatSessionState(projectChatId(input))?.projectRun
+  return getChatSessionState(projectChatId(input))?.projectRun || null
+}
+
+function persistedProjectSummary(input: AgentSessionInput) {
+  const projectRun = persistedProjectRun(input)
   const runtimeSummary = projectRun?.runtime_summary
   if (runtimeSummary && typeof runtimeSummary === 'object' && !Array.isArray(runtimeSummary)) {
     return runtimeSummary as Record<string, unknown>
@@ -133,10 +137,16 @@ function persistedTaskPreflightPlan(input: AgentSessionInput): LocalPreflightPla
   return plan as unknown as LocalPreflightPlan
 }
 
+export function persistedTaskMatchesInput(input: AgentSessionInput) {
+  const persistedGoal = String(persistedProjectRun(input)?.goal || '').trim()
+  const currentRequest = String(input.userInput || '').trim()
+  return Boolean(persistedGoal && currentRequest.includes(persistedGoal))
+}
+
 async function withModelTaskContract(input: AgentSessionInput): Promise<AgentSessionInput> {
   if (taskPreflightPlan(input) || !String(input.userInput || '').trim()) return input
 
-  const persistedPlan = persistedTaskPreflightPlan(input)
+  const persistedPlan = persistedTaskMatchesInput(input) ? persistedTaskPreflightPlan(input) : null
   if (persistedPlan) {
     return {
       ...input,
