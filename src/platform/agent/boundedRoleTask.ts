@@ -12,7 +12,7 @@ import { getKey } from '@/platform/keyStore'
 import { buildAgentRoster, type RosterMember } from '@/platform/agent/modelTags'
 import { isModelHealthy, recordModelFailure, recordModelSuccess } from '@/platform/agent/modelHealth'
 import type { AgentRoleId } from '@/platform/agent/agentIdentity'
-import type { AIMessage } from '@/platform/providers/types'
+import type { AIMessage, ProviderResponseSchema } from '@/platform/providers/types'
 import type { ProviderMeta } from '@/platform/agent/types'
 
 export interface BoundedRoleTaskOptions {
@@ -29,6 +29,7 @@ export interface BoundedRoleTaskOptions {
   extendedThinking?: boolean
   signal?: AbortSignal
   taskLabel?: string
+  responseSchema?: ProviderResponseSchema
   onToken?: (token: string) => void
   onTokenReset?: () => void
   onThinkingToken?: (token: string) => void
@@ -120,8 +121,6 @@ function selectCandidates(options: BoundedRoleTaskOptions): RosterMember[] {
       right.tags.length - left.tags.length,
   )
 
-  // A newly configured local-only install can temporarily have no role cards yet.
-  // Preserve local operation without reviving any retired role-settings reader.
   if (
     !roster.length &&
     String(options.settings.ai_provider || '').toLowerCase() === 'local' &&
@@ -175,6 +174,7 @@ export async function runBoundedRoleTask(options: BoundedRoleTaskOptions): Promi
     try {
       const meta = await callAIWithMeta(options.messages, candidateSettings(options.settings, candidate, options), {
         signal: options.signal,
+        responseSchema: options.responseSchema,
         onToken: options.onToken
           ? (token) => {
               emittedText = true
