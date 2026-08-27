@@ -15,6 +15,14 @@ function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
   return value.filter((tool) => screen_enabled || String(tool) !== 'screen.capabilities')
 }
 
+function automatic_agent_models(value: unknown) {
+  if (!Array.isArray(value)) return value
+  return value.filter((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return true
+    return String((entry as Record<string, unknown>).role || '').toLowerCase() !== 'overwatcher'
+  })
+}
+
 /** Builds execution settings for the selected project-run mode. */
 export function build_core_agent_settings(
   settings: OrbSettings,
@@ -47,6 +55,8 @@ export function build_core_agent_settings(
     agent_web_site_guard: false,
     search_web_require_paid_fallback_confirmation: false,
     agent_search_web_budget: 4,
+    agent_models: automatic_agent_models(base.agent_models),
+    agent_overwatch_continuous: false,
     agent_tool_allowlist: autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled),
   }
 }
