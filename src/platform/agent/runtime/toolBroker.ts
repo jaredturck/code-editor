@@ -52,6 +52,8 @@ const workspaceFileTools = new Set([
   'files.patch',
 ])
 
+const workspaceMutationFileTools = new Set(['files.write', 'files.edit', 'files.patch'])
+
 type LegacyBrokerOptions = Parameters<typeof createLegacyModuleBroker>[0]
 
 interface ApprovalExecutionContext {
@@ -134,7 +136,12 @@ async function attachAgentRuntimeContext(
   if (!workspaceRoot || !result || typeof result !== 'object' || Array.isArray(result)) return result
 
   const workspaceMutated = workspaceMutationForResult(toolName, args, result)
-  if (workspaceMutated) markWorkspaceDiagnosticsDirty(workspaceRoot)
+  if (workspaceMutated) {
+    const mutationPath = workspaceMutationFileTools.has(toolName)
+      ? String((result as Record<string, unknown>).path || '')
+      : ''
+    markWorkspaceDiagnosticsDirty(workspaceRoot, mutationPath)
+  }
 
   const repetitionAdvisory = recordAgentEvidence({
     scope_id: repetitionScope(options, workspaceRoot),
