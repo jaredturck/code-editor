@@ -17,6 +17,11 @@ import {
   type VerificationState,
 } from '@/platform/agent/verificationEvidence'
 import {
+  formatWorkspaceDiagnostics,
+  getWorkspaceDiagnosticsSnapshot,
+  type WorkspaceDiagnosticsSnapshot,
+} from '@/platform/agent/workspaceDiagnosticsState'
+import {
   buildProjectWorkingContext,
   runAgentSession as runLegacyAgentSession,
   type AgentSessionInput,
@@ -25,7 +30,8 @@ import {
 import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/chatSessionStore'
 
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
-const MAX_VERIFICATION_REMEDIATION_PASSES = 2
+const DIAGNOSTICS_GATE_TODO_ID = 'diagnostics-gate'
+const MAX_ACCEPTANCE_REMEDIATION_PASSES = 2
 const STREAM_EVENT_INTERVAL_MS = 80
 
 type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
@@ -260,8 +266,11 @@ function activeVerificationState(input: AgentSessionInput): VerificationState | 
   return state as unknown as VerificationState
 }
 
-function withoutVerificationTodo(todos: Array<Record<string, unknown>> | undefined) {
-  return (Array.isArray(todos) ? todos : []).filter((todo) => String(todo.id || '') !== VERIFICATION_GATE_TODO_ID)
+function withoutAcceptanceTodos(todos: Array<Record<string, unknown>> | undefined) {
+  return (Array.isArray(todos) ? todos : []).filter((todo) => {
+    const id = String(todo.id || '')
+    return id !== VERIFICATION_GATE_TODO_ID && id !== DIAGNOSTICS_GATE_TODO_ID
+  })
 }
 
 function mergeAgentResults(previous: AgentSessionResult, next: AgentSessionResult): AgentSessionResult {
@@ -294,9 +303,33 @@ function formatVerificationGate(gate: VerificationGateResult) {
     .join('\n')
 }
 
-function buildVerificationRemediationPrompt(
+async function currentWorkspaceDiagnostics(input: AgentSessionInput) {
+  const plan = taskPreflightPlan(input)
+  if (plan?.developmentTask !== true || !isWorkspaceProjectRun(input)) return null
+
+  try {
+    return await getWorkspaceDiagnosticsSnapshot(String(input.settings?.agent_working_dir || ''))
+  } catch {
+    return null
+  }
+}
+
+function diagnosticsErrors(snapshot: WorkspaceDiagnosticsSnapshot | null) {
+  return Math.max(0, Number(snapshot?.counts.errors || 0))
+}
+
+function acceptanceBlockers(gate: VerificationGateResult | null, diagnostics: WorkspaceDiagnosticsSnapshot | null) {
+  const blockers: string[] = []
+  if (gate?.required === true && !gate.passed) blockers.push(...gate.blockers)
+  const errors = diagnosticsErrors(diagnostics)
+  if (errors > 0) blockers.push(`Workspace diagnostics still report ${errors} error${errors === 1 ? '' : 's'}.`)
+  return blockers
+}
+
+function buildAcceptanceRemediationPrompt(
   originalRequest: string,
-  gate: VerificationGateResult,
+  gate: VerificationGateResult | null,
+  diagnostics: WorkspaceDiagnosticsSnapshot | null,
   result: AgentSessionResult,
 ) {
   const recentEvidence = (result.stepHistory || [])
@@ -307,53 +340,89 @@ function buildVerificationRemediationPrompt(
       return `- ${tool}: ${step.ok === false ? 'failed' : 'ok'}${detail ? ` — ${cleanLine(detail, 360)}` : ''}`
     })
     .join('\n')
+  const verificationBlocked = gate?.required === true && !gate.passed
+  const errorCount = diagnosticsErrors(diagnostics)
 
   return [
     `Continue the original development request:\n${originalRequest}`,
-    'VERIFICATION GATE REMEDIATION: The runtime cannot accept this task yet because the verification checks chosen by the model are incomplete, stale, failed, or inconclusive.',
-    'Use your own engineering judgment. You decide which checks are relevant to this project; the runtime does not infer checks from framework or language names.',
-    'Use verification.require to declare or revise the checks you consider necessary. Real terminal.exec, launch.run, browser.inspect, diagnostics.check, and agent.review results return verificationCandidateId values. Use verification.record to bind the appropriate candidate to one declared requirement. The runtime derives pass/fail from the real result; do not claim or encode a passed boolean yourself.',
-    'If you change source files after a check passes, that evidence becomes stale. Re-run whichever checks you still consider necessary after the change.',
-    `Current verification state:\n${formatVerificationGate(gate)}`,
-    gate.blockers.length ? `Blocking conditions:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}` : '',
+    'PROJECT ACCEPTANCE REMEDIATION: The runtime cannot accept this development task yet. Fix the blocking evidence below rather than re-declaring completion.',
+    errorCount > 0
+      ? 'LIVE WORKSPACE DIAGNOSTICS ARE A HARD COMPLETION GATE. Every severity=error finding must be fixed before completion. Do not relabel editor errors as cosmetic, validator preferences, false positives, or non-blocking merely because the browser still renders. If a diagnostic rule or configuration is genuinely wrong for this project, correct that configuration so the live error count reaches zero.'
+      : '',
+    errorCount > 0 && diagnostics ? formatWorkspaceDiagnostics(diagnostics) : '',
+    errorCount > 0
+      ? 'Prioritize source/configuration changes that reduce the diagnostics above. Repeating browser inspection, builds, status checks, memory updates, or the same verification command without a relevant mutation does not remediate these errors.'
+      : '',
+    verificationBlocked
+      ? 'The model-defined verification gate is also incomplete, stale, failed, or inconclusive. Use verification.require only when the set of checks genuinely needs revision. Real terminal.exec, launch.run, browser.inspect, diagnostics.check, and agent.review results return verificationCandidateId values; bind the appropriate fresh result with verification.record. The runtime derives pass/fail from real results.'
+      : '',
+    verificationBlocked && gate ? `Current verification state:\n${formatVerificationGate(gate)}` : '',
+    verificationBlocked && gate?.blockers.length
+      ? `Verification blockers:\n${gate.blockers.map((blocker) => `- ${blocker}`).join('\n')}`
+      : '',
+    'If you change source files after a verification check passes, that evidence becomes stale. Re-run only the checks that are necessary after the change.',
     recentEvidence ? `Recent execution evidence:\n${recentEvidence}` : '',
   ]
     .filter(Boolean)
     .join('\n\n')
 }
 
-function annotateVerification(
+function annotateAcceptance(
   result: AgentSessionResult,
   gate: VerificationGateResult | null,
+  diagnostics: WorkspaceDiagnosticsSnapshot | null,
   remediationPasses: number,
   state: VerificationState | null,
   plan: LocalPreflightPlan | null,
 ) {
-  if (!gate) return result
+  const blockers = acceptanceBlockers(gate, diagnostics)
   const summary = {
     ...(result.summary || {}),
-    verification: {
-      ...gate,
-      remediationPasses,
-    },
+    ...(gate
+      ? {
+          verification: {
+            ...gate,
+            remediationPasses,
+          },
+        }
+      : {}),
     verificationState: state ? snapshotVerificationState(state) : null,
     taskPreflightPlan: plan,
+    workspaceDiagnostics: diagnostics
+      ? {
+          refreshedAt: diagnostics.refreshed_at,
+          analyzedFiles: diagnostics.analyzed_files,
+          complete: diagnostics.complete,
+          counts: { ...diagnostics.counts },
+        }
+      : null,
   }
-  if (gate.passed) return { ...result, summary }
+
+  if (!blockers.length) return { ...result, summary }
+
+  const todos = [...withoutAcceptanceTodos(result.todos)]
+  if (gate?.required === true && !gate.passed) {
+    todos.push({
+      id: VERIFICATION_GATE_TODO_ID,
+      text: `Verification gate: ${gate.blockers.join(' ')}`.slice(0, 1200),
+      status: 'in_progress',
+    })
+  }
+  const errors = diagnosticsErrors(diagnostics)
+  if (errors > 0) {
+    todos.push({
+      id: DIAGNOSTICS_GATE_TODO_ID,
+      text: `Diagnostics gate: ${errors} editor error${errors === 1 ? '' : 's'} remain.`.slice(0, 1200),
+      status: 'in_progress',
+    })
+  }
 
   return {
     ...result,
     summary,
-    todos: [
-      ...withoutVerificationTodo(result.todos),
-      {
-        id: VERIFICATION_GATE_TODO_ID,
-        text: `Verification gate: ${gate.blockers.join(' ')}`.slice(0, 1200),
-        status: 'in_progress',
-      },
-    ],
+    todos,
     reply:
-      `${String(result.reply || '').trim()}\n\nThe verification gate remains open, so this run is paused rather than marked complete. ${gate.blockers.join(' ')}`.trim(),
+      `${String(result.reply || '').trim()}\n\nThe project acceptance gate remains open, so this run is paused rather than marked complete. ${blockers.join(' ')}`.trim(),
   }
 }
 
@@ -368,7 +437,7 @@ async function persistOriginalProjectContext(
   await saveCompacted(chatId, compacted)
 }
 
-/** Runs the established project lifecycle, then enforces model-defined verification evidence. */
+/** Runs the established project lifecycle, then enforces verification and live editor diagnostics. */
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const taskInput = await withModelTaskContract(input)
   const stream_events = withThrottledStreamEvents(withAutomaticApprovalPolicy(withVerificationState(taskInput)))
@@ -390,13 +459,15 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
   } finally {
     stream_events.flush()
   }
+
   let gate = state ? evaluateVerificationGate(state) : null
+  let diagnostics = await currentWorkspaceDiagnostics(executionInput)
+  let blockers = acceptanceBlockers(gate, diagnostics)
   let remediationPasses = 0
 
   while (
-    gate?.required === true &&
-    !gate.passed &&
-    remediationPasses < MAX_VERIFICATION_REMEDIATION_PASSES &&
+    blockers.length > 0 &&
+    remediationPasses < MAX_ACCEPTANCE_REMEDIATION_PASSES &&
     !executionInput.abortSignal?.aborted
   ) {
     remediationPasses += 1
@@ -404,7 +475,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
       type: 'notice',
       level: 'warning',
       summary:
-        `Verification gate requested remediation pass ${remediationPasses}/${MAX_VERIFICATION_REMEDIATION_PASSES}: ${gate.blockers.join(' ')}`.slice(
+        `Project acceptance requested remediation pass ${remediationPasses}/${MAX_ACCEPTANCE_REMEDIATION_PASSES}: ${blockers.join(' ')}`.slice(
           0,
           1000,
         ),
@@ -412,9 +483,9 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     })
     const remediationInput: AgentSessionInput = {
       ...executionInput,
-      userInput: buildVerificationRemediationPrompt(input.userInput, gate, combined),
+      userInput: buildAcceptanceRemediationPrompt(input.userInput, gate, diagnostics, combined),
       conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-80),
-      todos: withoutVerificationTodo(combined.todos),
+      todos: withoutAcceptanceTodos(combined.todos),
     }
     let next: AgentSessionResult
     try {
@@ -424,9 +495,18 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     }
     combined = mergeAgentResults(combined, next)
     gate = state ? evaluateVerificationGate(state) : null
+    diagnostics = await currentWorkspaceDiagnostics(executionInput)
+    blockers = acceptanceBlockers(gate, diagnostics)
   }
 
-  const finalResult = annotateVerification(combined, gate, remediationPasses, state, taskPreflightPlan(executionInput))
+  const finalResult = annotateAcceptance(
+    combined,
+    gate,
+    diagnostics,
+    remediationPasses,
+    state,
+    taskPreflightPlan(executionInput),
+  )
   if (state) {
     try {
       await persistOriginalProjectContext(executionInput, finalResult, priorCompacted)
