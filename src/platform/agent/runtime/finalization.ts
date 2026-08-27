@@ -21,36 +21,21 @@ const TASK_TOOLSETS = {
     'files.write',
     'files.patch',
     'files.edit',
-    'rag.retrieve',
-    'browser.inspect',
-    'diagnostics.check',
-    'verification.require',
-    'verification.record',
-    'approval.request',
-    'user.ask',
-  ]),
-  code_read: new Set([
-    'terminal.exec',
-    'files.read',
-    'rag.retrieve',
-    'browser.inspect',
     'diagnostics.check',
     'user.ask',
   ]),
-  file_task: new Set([
-    'terminal.exec',
-    'files.read',
-    'files.write',
-    'files.patch',
-    'files.edit',
-    'approval.request',
-    'user.ask',
-  ]),
+  code_read: new Set(['terminal.exec', 'files.read', 'diagnostics.check', 'user.ask']),
+  file_task: new Set(['terminal.exec', 'files.read', 'files.write', 'files.patch', 'files.edit', 'user.ask']),
   research: new Set(['search.web', 'web.fetch', 'sources.lookup', 'user.ask']),
 } as const
 
+const BROWSER_TASK_PATTERN = /\b(browser|website|webpage|web app|frontend|front-end|ui|visual|render|css|html|dom|responsive)\b/i
+const CODE_SEARCH_PATTERN = /\b(find|locate|search|where|references?|usages?|across (the )?(repo|project|codebase))\b/i
+const WEB_RESEARCH_PATTERN = /\b(latest|current|online|internet|web research|look up|search the web)\b/i
+
 function taskLeanToolAllowed(toolName, userInput) {
-  const plan = inferDirectPreflightPlan(String(userInput || ''))
+  const request = String(userInput || '')
+  const plan = inferDirectPreflightPlan(request)
   if (!plan) return isLeanTool(toolName)
 
   let selected
@@ -60,9 +45,9 @@ function taskLeanToolAllowed(toolName, userInput) {
   else if (plan.developmentTask) selected = TASK_TOOLSETS.code_read
   else return isLeanTool(toolName)
 
-  if (/\b(latest|current|online|web|research|look up|search)\b/i.test(String(userInput || ''))) {
-    if (['search.web', 'web.fetch', 'sources.lookup'].includes(toolName)) return true
-  }
+  if (toolName === 'browser.inspect') return BROWSER_TASK_PATTERN.test(request)
+  if (toolName === 'rag.retrieve') return plan.developmentTask === true && CODE_SEARCH_PATTERN.test(request)
+  if (['search.web', 'web.fetch', 'sources.lookup'].includes(toolName)) return WEB_RESEARCH_PATTERN.test(request)
   return selected.has(toolName)
 }
 
