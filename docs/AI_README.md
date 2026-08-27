@@ -1,458 +1,257 @@
-# Code Editor — AI Development README
+# Code Editor — AI Development Guide
 
-**This is the authoritative operating guide for changing this repository. Source code wins when an intermediate Phase-A implementation temporarily disagrees with documentation.**
+**This is the single authoritative architecture and repository guide. Current source code wins if this document temporarily lags a just-landed change.**
 
-Code Editor is being deliberately conditioned away from the inherited IRIS “general AI desktop” architecture and toward one product: **a fully functioning coding IDE containing a long-running, local, agentic software-engineering runtime**.
+Code Editor is a coding IDE with a long-running, local, agentic software-engineering runtime. Do not reintroduce historical IRIS general-assistant architecture merely for compatibility.
 
-The product target and the architecture below are intentional. Do not reintroduce removed IRIS subsystems for compatibility unless the maintainer explicitly asks for them.
-
----
-
-## 1. Repository rules
+## Repository rules
 
 - Work on the real repository and commit directly to `main` unless the maintainer explicitly asks for another workflow.
-- Fetch current `main` immediately before every write.
+- Fetch current `main` immediately before every GitHub write.
 - Every AI-authored commit must contain exactly:
 
   `Co-authored-by: ChatGPT <noreply@openai.com>`
 
 - Do not create `.github/workflows/`. Full verification is local.
-- Standard eventual full verification command:
+- Final full verification command:
 
 ```bash
 npm ci && ELECTRON_DISABLE_SANDBOX=1 npm run verify:full
 ```
 
-- During an explicitly requested bulk architecture/Phase-A pass, implementation throughput may take priority over compiling, linting, testing, migration polish, and test repair. Do not falsely claim verification was run.
-- Preserve user data and security boundaries while restructuring implementation code.
+- Do not claim verification passed unless it was actually run.
+- Preserve user data, IDE correctness, and security boundaries while simplifying implementation code.
 
----
+## Product boundary
 
-## 2. Product definition
-
-The product is:
+The retained product is:
 
 ```text
 Code Editor
-├── normal coding IDE
-│   ├── workspace/file tree
-│   ├── file opening and editing
-│   ├── syntax highlighting and editor commands
-│   ├── search
-│   ├── Problems / diagnostics
+├── IDE
+│   ├── workspace / file tree
+│   ├── editor tabs and live buffers
+│   ├── file operations
+│   ├── code search and navigation
+│   ├── diagnostics / Problems
 │   ├── terminal
 │   ├── source control
-│   └── browser/runtime inspection where useful for development
-└── long-running local coding-agent runtime
-    ├── project initializer / planner
+│   └── browser/runtime inspection
+└── local coding-agent runtime
+    ├── native Qwen tool loop
+    ├── initializer / planner
     ├── orchestrator
     ├── scouts
     ├── executors
-    ├── evaluator
+    ├── independent evaluator
     ├── durable project ledger
-    ├── isolated worker workspaces
+    ├── dependency scheduler
+    ├── isolated worker worktrees
     ├── managed project processes
     ├── objective verification
-    └── progress / stall watchdog
+    ├── checkpoints / crash recovery
+    └── progress watchdog / fresh replanning
 ```
 
-It is **not** a general desktop AI assistant, cloud-model client, semantic media browser, document assistant, voice assistant, application launcher, or machine-monitoring product.
+It is not a general desktop assistant, semantic media browser, document assistant, voice assistant, application launcher, or machine-monitoring product.
 
-The preserved research context for industry agentic coding practice is `docs/AGENTIC_CODING_AGENTS_README.md`.
+## Native local-model loop
 
----
+The coding runtime is local-model-first. Qwen3/Coder-class models served by a local OpenAI-compatible endpoint are the intended primary model family.
 
-## 3. Local model architecture
-
-The coding runtime is **local-model-only**.
-
-The intended primary model class is Qwen3.6-27B / Qwen3-Coder-class agentic coding models served by a local OpenAI-compatible inference endpoint such as llama.cpp. The exact local model may change, but the runtime architecture must not depend on hosted-provider semantics.
-
-### Native tool calling is the control protocol
-
-Modern Qwen coding models are trained to choose tools. The application should expose real, narrow coding tools and feed their results back into the model conversation.
-
-Preferred loop:
+Normal control flow:
 
 ```text
-project/user context
-→ local Qwen model
+user/project state
+→ local coding model
 → native tool call(s)
-→ runtime executes tools
-→ tool results
-→ same Qwen thread
-→ repeat until final response
+→ deterministic runtime executes tools
+→ tool results return to the same model context
+→ repeat
 ```
 
-Do **not** rebuild an extra model-driven controller whose normal job is to translate model prose into `{tool, args}` actions. Do not add a secondary tool-planner model merely because a native tool call can fail occasionally. Repair the tool schema, server parser, or harness boundary first.
+Do not add a second model-driven tool controller whose routine job is to translate prose into `{tool,args}`. Repair tool schemas, parser boundaries, or deterministic runtime behavior instead.
 
-The harness still owns:
+The harness—not the model—owns containment, permissions, durable state, scheduling, Git/worktrees, managed processes, verification, crash recovery, and stall policy.
 
-- tool implementation;
-- workspace containment;
-- permissions and security;
-- persistent project state;
-- sub-agent scheduling;
-- worktree isolation;
-- managed processes;
-- verification and diagnostics;
-- progress/stall policy;
-- crash recovery.
+## Contexts are bounded; projects are not
 
-The model owns reasoning and semantic tool selection.
+A productive project may run for hours. An individual language-model context must not.
 
-### No cloud-provider architecture
+The native coding loop currently defaults to a context handoff boundary of approximately **18 minutes or 120 executed tool actions**, with narrower budgets allowed for remediation/specialist work. Reaching the boundary is a resumable handoff, not project failure.
 
-Do not add back:
+Durable project state, worker checkpoints, and the outer project lifecycle carry unfinished work into fresh contexts. Do not implement project-wide “15 minute” or ordinary step-count termination while durable progress is still being made.
 
-- OpenAI, Anthropic, Gemini, DeepSeek or OpenRouter hosted adapters;
-- API-key routing for coding models;
-- cloud request budgets;
-- hybrid cloud/local model selection;
-- cloud failover pools;
-- provider proxy infrastructure whose only purpose is hosted model APIs.
+## Agent roles
 
-Role specialization may use different **local** models if configured. Role routing and provider routing are different concepts.
+**Initializer / planner** expands genuinely complex user goals into independently checkable requirements, acceptance criteria, and a dependency-aware work graph. Trivial edits should bypass heavyweight planning.
 
----
+**Orchestrator** owns the global objective and project ledger. It coordinates work; it should not waste context polling infrastructure state that TypeScript can track deterministically.
 
-## 4. Agent architecture
+**Scout** is read/research-heavy. It locates relevant files, symbols, dependencies, external documentation, and implementation constraints and returns compact evidence.
 
-The system should preserve meaningful software-engineering specialization while keeping coordination mechanics in TypeScript rather than forcing the language model to administer a miniature distributed system.
+**Executor** is mutation-heavy. Parallel executor work should use isolated worktrees where Git is available. Partial useful work is checkpointed so a fresh context can resume it.
 
-### Core roles
+**Evaluator** is independent and primarily read/verify-oriented. It judges current code against requirements using fresh deterministic evidence. It may identify a material requirement that the initializer missed when that requirement is clearly present in the original user goal.
 
-**Initializer / planner**
-- Used for genuinely complex project prompts.
-- Expands the user request into durable requirements and acceptance criteria.
-- Does not need to run for trivial edits.
+Role specialization is useful. Model-facing coordination bureaucracy is not.
 
-**Orchestrator**
-- Owns the global objective and project ledger.
-- Selects the next useful work and delegates when specialization or parallelism helps.
-- Should not spend most of its context polling worker status or maintaining bookkeeping.
+## Durable project ledger
 
-**Scout**
-- Read/research-heavy.
-- Locates relevant repository structures, external documentation, defects, dependencies, and implementation constraints.
-- Returns compact evidence.
-
-**Executor**
-- Mutation-heavy.
-- Implements a bounded work item in an isolated workspace when parallelism is used.
-- Runs targeted verification associated with its changes.
-
-**Evaluator**
-- Checks the actual resulting project against requirements.
-- Prefer fresh context and read/test/browser/diagnostic access.
-- Should normally be unable to silently rewrite the implementation it is judging.
-
-### Coordination principle
-
-Preserve semantic role specialization. Remove model-facing bureaucracy.
-
-Good:
-
-```text
-orchestrator → dispatch executor task
-runtime → tracks state/workspace/completion
-executor → returns result
-runtime → updates durable ledger
-```
-
-Bad:
-
-```text
-model checks roster
-→ searches peer registry
-→ checks status
-→ checks status again
-→ manually recalls output
-→ asks a meta-agent whether review is needed
-```
-
-Internal queues, leases, health state and scheduling are useful runtime mechanisms. They do not all need corresponding model tools.
-
----
-
-## 5. Long-running project lifecycle
-
-The project runtime is designed to run for hours when useful.
-
-Do not use normal wall-clock duration or ordinary step count as the reason a productive project must stop.
-
-Model contexts, individual tool calls, subprocesses and delegated tasks may have bounded operational timeouts. The **project lifecycle** should continue across fresh contexts and restarts while progress is being made.
-
-Target lifecycle:
-
-```text
-initialize requirements
-→ choose work
-→ investigate / implement
-→ integrate
-→ verify
-→ evaluate requirements
-→ persist project state
-→ continue unfinished work
-→ finish only when accepted or genuinely blocked
-```
-
-### Stop stalls, not elapsed time
-
-Useful progress signals include:
-
-- requirements completed;
-- evaluator findings resolved;
-- meaningful code generations/mutations;
-- changed failure signatures;
-- successful new verification evidence;
-- narrowed investigation hypotheses;
-- completed worker tasks.
-
-Stall signals include:
-
-- identical tool calls against unchanged state;
-- repeated verification without a relevant mutation;
-- repeatedly failing with the same approach;
-- observation loops that do not narrow or advance the active work item;
-- repeated worker churn with no integrated result.
-
-A watchdog should first force a strategy change/replan. A deep persistent stall may surface a blocker. It should not impose an arbitrary fifteen-minute project lifetime.
-
----
-
-## 6. Durable project state
-
-Conversation history is not the project database.
-
-The durable project ledger should retain enough state for a fresh model context or restarted Electron process to continue work without reconstructing the entire project from chat logs.
-
-Important categories include:
+Conversation history is not the project database. The durable ledger retains:
 
 - original goal;
 - requirements and acceptance criteria;
-- requirement status;
-- work items and dependencies;
-- architectural decisions;
-- blockers;
-- failed approaches worth not repeating;
+- requirement status and evidence;
+- work items and dependency edges;
+- architecture decisions;
+- blockers and failed approaches;
 - evaluator findings;
-- worker/task status;
-- isolated workspace/checkpoint information;
-- managed process information;
-- verification evidence tied to the current code generation;
-- project checkpoints.
+- worker/task status and workspace IDs;
+- managed process state;
+- generation-scoped verification records;
+- project checkpoints;
+- current strategy and progress summary.
 
-Prefer explicit structured state over asking the model to maintain chat memory, notes, TODO tools, or status prose manually.
+The work graph is normalized deterministically. Completed dependencies promote pending work. Missing/failed/blocked/cancelled prerequisites block downstream work explicitly instead of leaving immortal pending tasks. Failed approaches are persisted for replanning.
 
----
+## Long-running project lifecycle
 
-## 7. Coding tool surface
+Automatic workspace projects follow roughly:
 
-The default model-facing surface should look like a software-development environment, not an operating system or general AI assistant.
+```text
+initialize / restore ledger
+→ normalize work graph
+→ dispatch ready specialist work
+→ checkpoint worker mutations
+→ serialize integration into shared workspace
+→ mark requirement implementation progress
+→ collect fresh verification evidence
+→ independent evaluation
+→ create targeted repair work or recover missed requirements
+→ evaluate progress
+→ fresh-context replan on stalls
+→ continue
+```
 
-Core categories:
+Interrupted `running` tasks are recovered on restart and returned to resumable state unless repeated interruptions require strategy escalation.
 
-- list/find project files;
-- search text;
-- read bounded file ranges;
-- write/edit/patch files;
-- inspect stat/diff where useful;
-- run terminal commands;
-- inspect editor diagnostics;
-- inspect browser/runtime state for web applications;
+A watchdog reacts to durable lack of progress, not mere elapsed time. Strategy change/replanning comes before deep-stall termination.
+
+## Coding tool surface
+
+Keep the model-facing surface narrow and development-specific. Core capabilities include:
+
+- `files.list`, `files.find`, bounded `files.read`;
+- `files.write`, `files.edit`, `files.patch`, file stat/diff;
+- `terminal.exec`;
+- `code.definition`, `code.references` for known symbols;
+- editor/workspace diagnostics;
+- browser/runtime inspection for web applications;
 - web search/fetch for development research;
-- delegate/consult/review through narrow semantic agent operations;
-- ask the user only when genuine unresolved product ambiguity requires it.
+- narrow `agent.delegate`, `agent.consult`, `agent.review` operations;
+- `user.ask` only for genuine unresolved product ambiguity.
 
-Code-aware symbol/definition/reference navigation is welcome when implemented cleanly.
+The runtime caps ordinary user-question escalation per model context. Do not turn autonomous engineering decisions into an interview loop.
 
-### Search
+Historical aliases such as generic RAG/semantic repository retrieval should not return as primary coding navigation. Use deterministic file/content search and structural symbol navigation.
 
-The IDE search concept stays. Keep simple, high-signal coding search:
+## Search boundary
+
+Retain high-signal IDE/code search:
 
 - file-name search;
 - text-content search;
-- optionally code-aware symbol/definition/reference navigation.
+- definition/reference navigation.
 
-Generic semantic filesystem embeddings, document semantic search, media embeddings, concept clustering, image similarity and launcher semantic search are outside the target architecture and should remain removed.
+Generic semantic filesystem embeddings, media embeddings, concept clustering, image similarity, launcher semantic search, and semantic “everything” are outside the target architecture.
 
-### Python and web tools
+## Editor/file authority
 
-If a coding model needs Python for calculation, data transformation or a small development task, it can use the terminal/runtime capability or a future narrow Python tool. Native model tool selection does not mean the model weights execute Python or browse the web themselves; the harness executes the selected capability.
+Live editor buffers are authoritative. An agent reading an open unsaved file must observe the current editor content rather than stale disk state.
 
----
+Human/agent revision safety matters: an agent that observed revision N must not silently overwrite revision N+1. Re-read and reconcile first.
 
-## 8. IDE invariants that must survive redesign
+Filesystem access remains constrained to the authorized project workspace, including realpath/symlink containment. A `cwd` string by itself is not an authorization boundary.
 
-Do not damage the core editor while simplifying the inherited platform.
+## Git and parallel execution
 
-Preserve:
+Git mutation is harness-owned. Agent shell Git is read-only for status/diff/log/show/rev-parse/ls-files/grep/blame-style inspection. The safety policy blocks model-issued Git mutations.
 
-- workspace opening and tree navigation;
-- file create/read/edit/save/rename/delete behavior expected from a code editor;
-- editor tabs and dirty-state handling;
-- syntax highlighting/language support;
-- editor search/replace;
-- diagnostics and Problems display;
-- terminal UX;
-- source-control UX;
-- browser panel/runtime inspection useful for application development;
-- settings required to configure the editor and local coding agent.
+Parallel executor mutation uses isolated worktrees where available. Workers can execute concurrently, but integration into the shared project workspace is serialized so concurrent cherry-picks cannot race on the index or overlapping files.
 
-Special-purpose PDF/audio/video/media/document AI experiences are not core IDE invariants unless the maintainer explicitly says otherwise.
+Wave/project checkpoints make integrated state recoverable. Preserve the third-party license/attribution files even when historical IRIS documentation is deleted.
 
----
+## Verification and completion
 
-## 9. Editor/file authority and concurrency
+The model cannot certify correctness by saying “done.”
 
-These correctness boundaries are important even during aggressive redesign.
+Completion uses objective evidence:
 
-### Live editor buffers are authoritative
-
-An autonomous agent reading an open file with unsaved edits must observe the live editor content rather than stale disk state.
-
-### Human/agent revision safety
-
-An agent that observed revision N must not silently overwrite a human-created revision N+1. Re-read/reconcile first.
-
-### Workspace containment
-
-Agent filesystem operations remain constrained to the authorized project workspace, including realpath/symlink containment. A `cwd` string is not an authorization boundary.
-
-### Parallel agent isolation
-
-Parallel mutation workers should use isolated worktrees/workspaces where practical. File/write leases remain useful for shared resources and collision protection.
-
-### Harness-owned version control
-
-Do not hand the model unrestricted destructive Git just because Git is useful. The harness may use Git/worktrees/checkpoints to make autonomous changes reversible, isolated and auditable.
-
----
-
-## 10. Verification and completion
-
-The model does not certify its own correctness merely by saying “done.”
-
-Completion should combine:
-
-- requirement-level evaluator acceptance;
-- successful relevant build/test/lint/typecheck/runtime evidence where applicable;
-- browser validation where applicable;
+- requirement-level independent evaluator acceptance;
+- fresh build/test/lint/typecheck evidence where applicable;
+- runtime/browser evidence where applicable;
 - current editor/workspace diagnostics;
-- no unresolved `severity=error` editor diagnostics.
+- **zero unresolved `severity=error` diagnostics**.
 
-A successful render is not enough if editor diagnostics still contain an error.
+Verification records are tagged with the current project generation. Evidence from an older generation must not validate later mutations.
 
-Verification evidence must belong to the current relevant code generation. Old successful evidence must not validate later mutations.
+The evaluator gathers its own evidence rather than trusting executor prose: repository diff/status, diagnostics, inferred project verification commands, managed dev-server state, and browser inspection for UI projects.
 
-Avoid verification bureaucracy. The runtime should infer useful evidence from real tool results rather than forcing the model to call administrative `verification.require` / `verification.record` tools.
+Avoid administrative verification ceremony. Real command/tool evidence is preferred over `verification.require` / `verification.record` bookkeeping tools.
 
----
+## Process ownership
 
-## 11. Runtime processes
-
-Long-running coding needs process ownership.
-
-The harness should know about development servers and other project processes it starts: PID/process group, command, cwd, port when known, health, logs and lifecycle state.
+Development servers and other harness-started project processes should have durable lifecycle state: command, cwd, PID/process group, port when known, status, logs, and owner work item.
 
 The model should not repeatedly rediscover its own dev server through generic machine-process scans.
 
-General CPU/RAM/GPU/system-monitor product features are not required by the coding-agent objective unless the maintainer explicitly restores them.
-
----
-
-## 12. Security boundaries to preserve
-
-Aggressive deletion is encouraged when a subsystem is outside the product goal, but do not casually remove security properties used by retained functionality.
+## Safety boundaries
 
 Preserve as applicable:
 
 - authenticated loopback bridge access;
 - Electron context isolation/preload boundaries;
 - trusted renderer navigation checks;
-- encrypted durable project/chat state;
-- storage-key protection;
+- encrypted durable project/chat state and protected storage keys;
 - workspace containment;
-- file revision collision checks;
-- agent write leases/worktree isolation;
-- package/network safety policy;
-- bounded command execution and cancellation;
+- live-buffer and revision collision checks;
+- write leases/worktree isolation;
+- Git mutation ownership;
+- destructive-command blocking;
+- network/package policy;
+- bounded subprocess/tool execution and cancellation;
 - permission checks at privileged execution boundaries.
 
-Cloud API credential storage may be deleted when it has no remaining local-product caller. Storage-key security for encrypted application data is a different concern and should remain.
+Do not retain a large obsolete subsystem merely to preserve one useful helper. Extract or rewrite the helper while keeping the security property.
 
----
+## Removed architecture should stay removed
 
-## 13. IRIS inheritance and deletion policy
+Do not restore code solely because old IRIS documentation, migration notes, or tests once referenced it. Historical docs were intentionally removed; Git history is the forensic archive.
 
-`docs/iris-reference/` is historical reference material, not product requirements.
+Strong non-goals include infrastructure whose only purpose is:
 
-The repository is intentionally removing inherited functionality that does not serve a coding IDE or the long-running coding runtime. Do not preserve code merely because it existed in IRIS or has compatibility-looking names.
+- hosted/cloud coding-provider matrices and API-key failover;
+- generic semantic filesystem/media/concept indexing;
+- generic document/voice/desktop-assistant experiences;
+- launcher and system-monitor product features;
+- model-managed chat-memory/notes bureaucracy;
+- planner/controller layers that duplicate native model tool calling;
+- status-polling tools for state the runtime can track directly.
 
-Strong removal candidates include code whose purpose is exclusively:
+## Testing and cleanup
 
-- hosted/cloud AI providers;
-- API-key model routing;
-- semantic filesystem/media/concept indexing;
-- generic document AI;
-- voice/transcription assistant UX;
-- desktop automation/mouse-control assistant behavior;
-- general application launcher discovery;
-- system-monitor product UI;
-- model-managed notes/chat-memory bureaucracy;
-- controller/planner layers that duplicate native Qwen tool calling;
-- generic desktop-assistant tools unrelated to software development.
+Tests should protect current product behavior and architecture invariants, not freeze retired implementation layers. During cleanup:
 
-When a retained feature imports a large obsolete subsystem for one small useful helper, extract/rewrite the useful helper rather than keeping the whole subsystem alive.
+- delete tests whose only subject no longer exists;
+- update tests that assert obsolete tool names, provider matrices, nested controller loops, migration state, or old timing semantics;
+- add focused tests for durable ledger normalization, context handoff, verification generation boundaries, worktree integration serialization, requirement recovery, and diagnostics acceptance where practical;
+- prefer behavior/invariant tests over snapshots of huge prompts or internal bureaucracy.
 
-During the current architectural conditioning effort, **deletion and full-system redesign are explicitly allowed**. Preserve core IDE behavior, security boundaries and the target agent architecture—not historical module boundaries.
+The stabilization gate is:
 
----
-
-## 14. Architecture bias
-
-Prefer:
-
-```text
-native agentic coding model
-+ small clear tool schemas
-+ deterministic secure runtime
-+ durable project state
-+ specialized roles
-+ independent evaluation
-+ isolated workspaces
-+ objective verification
+```bash
+npm ci && ELECTRON_DISABLE_SANDBOX=1 npm run verify:full
 ```
 
-Avoid:
-
-```text
-general model
-+ giant system prompt
-+ planner model
-+ controller model
-+ repair model
-+ status-polling tools
-+ semantic everything
-+ cloud-provider matrix
-+ model-managed bookkeeping
-```
-
-Complexity is justified when it provides a distinct engineering function. Specialization, persistence, isolation and evaluation are useful complexity. Duplicate decision layers and general-assistant feature inheritance are not.
-
----
-
-## 15. Current development phase
-
-The repository may be in an intentionally rough Phase-A state while the inherited architecture is being replaced. During that phase:
-
-- large coherent rewrites are acceptable;
-- transitional dead code may temporarily exist;
-- imports/types/tests may temporarily be broken;
-- do not waste the architecture phase polishing code scheduled to be replaced;
-- commit coherent structural progress frequently.
-
-Phase B is the stabilization pass: compile/type repair, lint, tests, integration behavior, dead-code cleanup, migration cleanup, security review, long-run evaluation and optimization.
-
-Do not confuse temporary Phase-A roughness with permission to reintroduce the old architecture.
+Fix failures against the current architecture rather than resurrecting obsolete code to satisfy stale tests.

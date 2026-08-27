@@ -1,17 +1,7 @@
 # Documentation
 
-Start with [`AI_README.md`](./AI_README.md). It is the single authoritative current guide for AI-assisted development in this repository: workflow rules, architecture context, change discipline, cleanup boundaries, review status, verification practice, security invariants, and delivery expectations.
+[`AI_README.md`](./AI_README.md) is the single authoritative current guide for AI-assisted development and the coding-agent architecture.
 
-Current source and local verification results are authoritative when documentation and implementation disagree. GitHub Actions are intentionally absent and must not be recreated unless the maintainer explicitly requests CI work.
+Historical IRIS migration notes, source-project documentation, temporary agent-loop plans, and removal ledgers were deleted after the architecture stopped depending on them. Git history remains the forensic record when provenance is needed.
 
-## Primary current document
-
-- [`AI_README.md`](./AI_README.md) — **read this first**. Future AI models should normally be able to work from this document plus the relevant source code without reading several overlapping instruction files.
-
-## Historical and deeper-reference documents
-
-- [`MIGRATION.md`](./MIGRATION.md) — detailed IRIS migration provenance, subsystem history, architecture background, and security/authority rationale. Useful when changing inherited platform code or investigating why a subsystem exists.
-- [`REMOVED_CODE.md`](./REMOVED_CODE.md) — ledger of deliberate post-migration removals and the evidence used to justify them. Useful when evaluating similar cleanup.
-- [`iris-reference/`](./iris-reference/) — preserved documentation from the source IRIS project. It is historical reference only; its paths, commands, TODOs, versions, and product requirements are not current Code Editor instructions.
-
-Do not create additional overlapping AI instruction documents. Update `AI_README.md` when current development rules or architecture guidance changes.
+Current source code and current local verification results are authoritative when they disagree with old commits or external references. Do not create overlapping architecture instruction documents; update `AI_README.md` instead.
