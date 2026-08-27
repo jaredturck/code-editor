@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { projectRunController } from './chat/projectRunController'
 import ActivityBar from './components/ActivityBar'
 import AIChatPanel from './components/AIChatPanel'
 import type { CodeEditorHandle, EditorCommandState } from './components/CodeEditor'
@@ -47,6 +48,7 @@ function App() {
     onPathDeleted: editor.mark_document_paths_deleted,
     onNotice: editor.show_notice,
   })
+  projectRunController.set_workspace_root(workspace.root_path)
   const terminal_workspace_root = workspace.root_path || readStorageText(last_workspace_storage_key).trim() || null
   const agent_follow_suspended_ref = useRef(false)
   const workspace_open_ref = useRef(workspace.open_workspace)
