@@ -131,8 +131,6 @@ export interface ProjectLedger {
   lastProgressSummary: string
 }
 
-type ProjectRunRecord = Record<string, unknown>
-
 const MAX_REQUIREMENTS = 250
 const MAX_WORK_ITEMS = 500
 const MAX_HISTORY = 300
@@ -243,21 +241,34 @@ export function normalizeProjectLedger(value: unknown, fallback: { chatId?: stri
   }
 }
 
-function projectRun(chatId: string): ProjectRunRecord {
+function legacyRunMetadata(chatId: string) {
   return record(getChatSessionState(chatId)?.projectRun)
 }
 
 export function loadProjectLedger(chatId: string): ProjectLedger | null {
   if (!chatId) return null
-  const run = projectRun(chatId)
-  if (!run.ledger) return null
-  return normalizeProjectLedger(run.ledger, { chatId, projectId: text(run.id, 300), goal: text(run.goal, 20_000) })
+  const session = getChatSessionState(chatId)
+  const run = record(session?.projectRun)
+  const source = session?.projectLedger || run.ledger
+  if (!source) return null
+  const ledger = normalizeProjectLedger(source, {
+    chatId,
+    projectId: text(run.id, 300),
+    goal: text(run.goal, 20_000),
+  })
+  // Opportunistic migration: once a nested Phase-A ledger is read, persist it into the dedicated
+  // slot so subsequent ProjectRunState writes cannot erase it.
+  if (!session?.projectLedger) saveChatSessionState(chatId, { projectLedger: ledger })
+  return ledger
 }
 
 export function saveProjectLedger(chatId: string, ledger: ProjectLedger): ProjectLedger {
-  const normalized = normalizeProjectLedger({ ...ledger, chatId, updatedAt: now() }, { chatId })
-  const run = projectRun(chatId)
-  saveChatSessionState(chatId, { projectRun: { ...run, ledger: normalized } })
+  const run = legacyRunMetadata(chatId)
+  const normalized = normalizeProjectLedger(
+    { ...ledger, chatId, updatedAt: now() },
+    { chatId, projectId: text(run.id, 300), goal: text(run.goal, 20_000) },
+  )
+  saveChatSessionState(chatId, { projectLedger: normalized })
   return normalized
 }
 
