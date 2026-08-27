@@ -7,12 +7,16 @@ import {
   type ProjectEvaluatorFinding,
   type ProjectLedger,
 } from '@/platform/agent/projectLedger'
+import {
+  ensureManagedDevServer,
+  managedProjectRuntimeEvidence,
+} from '@/platform/agent/projectProcessManager'
 
 export interface ProjectEvaluationEvidence {
   diagnostics?: unknown
   verification?: unknown
   diff?: string
-  runtime?: string
+  runtime?: unknown
   notes?: string[]
 }
 
@@ -23,6 +27,8 @@ export interface ProjectEvaluationResult {
   requirementStatus: Array<{ id: string; status: 'verified' | 'implemented' | 'blocked' | 'pending'; evidence: string[] }>
   ledger: ProjectLedger
 }
+
+const UI_PROJECT_PATTERN = /\b(web|website|webpage|frontend|front-end|react|vue|svelte|next|vite|html|css|ui|dashboard|browser|responsive)\b/i
 
 const EVALUATOR_SCHEMA = {
   type: 'object',
@@ -101,6 +107,41 @@ function compactLedger(ledger: ProjectLedger) {
   }
 }
 
+async function prepareRuntimeEvidence(
+  chatId: string,
+  ledger: ProjectLedger,
+  settings: Record<string, any>,
+  supplied: ProjectEvaluationEvidence,
+) {
+  const merged: ProjectEvaluationEvidence = { ...supplied }
+  const workspace = String(settings.agent_working_dir || '').trim()
+  if (workspace && UI_PROJECT_PATTERN.test(`${ledger.goal}\n${ledger.architectureSummary}`)) {
+    try {
+      const runtime = await ensureManagedDevServer(chatId, ledger.goal, workspace)
+      merged.runtime = {
+        supplied: supplied.runtime,
+        managed: managedProjectRuntimeEvidence(chatId),
+        devServer: {
+          status: runtime.process.status,
+          pid: runtime.process.pid,
+          port: runtime.process.port,
+          url: runtime.url,
+          logPath: runtime.process.logPath,
+        },
+      }
+    } catch (error) {
+      merged.runtime = {
+        supplied: supplied.runtime,
+        managed: managedProjectRuntimeEvidence(chatId),
+        devServerError: error instanceof Error ? error.message : String(error || 'Unable to start project runtime.'),
+      }
+    }
+  } else {
+    merged.runtime = supplied.runtime || managedProjectRuntimeEvidence(chatId)
+  }
+  return merged
+}
+
 export async function evaluateProject(
   chatId: string,
   settings: Record<string, any>,
@@ -109,11 +150,10 @@ export async function evaluateProject(
 ): Promise<ProjectEvaluationResult> {
   const ledger = loadProjectLedger(chatId)
   if (!ledger) throw new Error('Project evaluator requires a durable project ledger.')
+  const runtimeEvidence = await prepareRuntimeEvidence(chatId, ledger, settings, evidence)
 
   const result = await runBoundedRoleTask({
     settings,
-    // The current settings UI exposes "overwatcher"; Phase A reuses that binding as the
-    // independent evaluator without forcing a GUI/settings migration yet.
     preferredRoles: ['overwatcher', 'orchestrator'],
     maxAttempts: 2,
     maxOutputTokens: 2600,
@@ -129,7 +169,7 @@ export async function evaluateProject(
       },
       {
         role: 'user',
-        content: JSON.stringify({ project: compactLedger(ledger), evidence }, null, 2).slice(0, 50_000),
+        content: JSON.stringify({ project: compactLedger(ledger), evidence: runtimeEvidence }, null, 2).slice(0, 50_000),
       },
     ],
   })
