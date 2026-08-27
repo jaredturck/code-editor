@@ -215,6 +215,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
   const open_workspace = async (folder_path: string) => {
     const open_version = workspace_open_version_ref.current + 1
     workspace_open_version_ref.current = open_version
+    selection_version_ref.current += 1
     window.editor_api.workspace.unwatch()
 
     if (refresh_timeout_ref.current !== null) {
@@ -357,6 +358,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
             window.editor_api.workspace.read_directory(current_root_path, directory_path),
           ),
         )
+        if (root_path_ref.current !== current_root_path || selection_version !== selection_version_ref.current) return
 
         for (const entries of entry_batches) {
           for (const entry of entries) {
@@ -369,10 +371,11 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
         }
       }
 
-      if (selection_version === selection_version_ref.current) {
+      if (root_path_ref.current === current_root_path && selection_version === selection_version_ref.current) {
         set_selection(next_selected_paths, target_path)
       }
     } catch (error) {
+      if (root_path_ref.current !== current_root_path || selection_version !== selection_version_ref.current) return
       onNotice(error instanceof Error ? error.message : `Unable to select everything inside ${target_node.name}.`)
     }
   }
@@ -397,10 +400,12 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
     try {
       const created_entry = await window.editor_api.workspace.create_entry(current_root_path, parent_path, name, kind)
+      if (root_path_ref.current !== current_root_path) return false
       const next_expanded_paths = new Set(expanded_paths_ref.current).add(parent_path)
       expanded_paths_ref.current = next_expanded_paths
       set_expanded_paths(next_expanded_paths)
       await load_directory(parent_path)
+      if (root_path_ref.current !== current_root_path) return false
       set_selection([created_entry.path], created_entry.path)
 
       if (kind === 'file') {
@@ -409,6 +414,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
       return true
     } catch (error) {
+      if (root_path_ref.current !== current_root_path) return false
       onNotice(error instanceof Error ? error.message : `Unable to create ${name}.`)
       return false
     }
@@ -424,6 +430,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
     try {
       const renamed_entry = await window.editor_api.workspace.rename_entry(current_root_path, source_path, name)
+      if (root_path_ref.current !== current_root_path) return false
       const next_nodes = remap_workspace_path(nodes_ref.current, source_path, renamed_entry.path)
       const next_expanded_paths = remap_workspace_path_set(expanded_paths_ref.current, source_path, renamed_entry.path)
 
@@ -438,8 +445,9 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
       set_selected_path(renamed_entry.path)
       onPathMoved(source_path, renamed_entry.path, source_node.kind === 'directory')
       await load_directory(renamed_entry.parent_path ?? current_root_path)
-      return true
+      return root_path_ref.current === current_root_path
     } catch (error) {
+      if (root_path_ref.current !== current_root_path) return false
       onNotice(error instanceof Error ? error.message : `Unable to rename ${source_node.name}.`)
       return false
     }
@@ -465,6 +473,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
     try {
       for (const target_path of delete_paths) {
         const deleted_entry = await window.editor_api.workspace.trash_entry(current_root_path, target_path)
+        if (root_path_ref.current !== current_root_path) return false
         const next_nodes = remove_workspace_node(nodes_ref.current, target_path)
         const next_expanded_paths = new Set(
           [...expanded_paths_ref.current].filter(
@@ -496,17 +505,20 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
         }
       }
 
+      if (root_path_ref.current !== current_root_path) return false
       const next_focus = [...parent_paths][0] ?? current_root_path
       set_selection([next_focus], next_focus)
 
       for (const parent_path of parent_paths) {
         if (nodes_ref.current.has(parent_path)) {
           await load_directory(parent_path)
+          if (root_path_ref.current !== current_root_path) return false
         }
       }
 
       return true
     } catch (error) {
+      if (root_path_ref.current !== current_root_path) return false
       onNotice(error instanceof Error ? error.message : 'Unable to delete the selected items.')
       return false
     }
@@ -538,6 +550,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
         operation,
         conflict_mode,
       )
+      if (root_path_ref.current !== current_root_path) return false
 
       if (result.status === 'conflict') {
         set_pending_conflict({
@@ -575,6 +588,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
           if (nodes_ref.current.has(old_parent_path)) {
             await load_directory(old_parent_path)
+            if (root_path_ref.current !== current_root_path) return false
           }
         }
 
@@ -582,9 +596,11 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
       }
 
       await load_directory(target_directory)
+      if (root_path_ref.current !== current_root_path) return false
       set_selection([result.path], result.path)
       return true
     } catch (error) {
+      if (root_path_ref.current !== current_root_path) return false
       onNotice(error instanceof Error ? error.message : 'Unable to complete the file operation.')
       return false
     }
@@ -656,6 +672,7 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
     for (const part of directory_parts) {
       if (nodes_ref.current.get(current_path)?.children === null) {
         await load_directory(current_path)
+        if (root_path_ref.current !== current_root_path) return
       }
 
       current_path = join_path(current_path, part)
@@ -664,8 +681,10 @@ function useWorkspace({ active_file_path, onOpenFile, onPathMoved, onPathDeleted
 
     if (nodes_ref.current.get(current_path)?.children === null) {
       await load_directory(current_path)
+      if (root_path_ref.current !== current_root_path) return
     }
 
+    if (root_path_ref.current !== current_root_path) return
     const next_expanded_paths = new Set(expanded_paths_ref.current)
 
     for (const path_to_expand of paths_to_expand) {
