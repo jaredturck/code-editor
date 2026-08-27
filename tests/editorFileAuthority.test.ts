@@ -63,6 +63,44 @@ describe('editor-aware agent filesystem', () => {
     ).rejects.toThrow(/changed after the agent last read/i)
   })
 
+  it('uses optional workspace reads when probing a new file', async () => {
+    const agent_read_file = vi.fn(async (_root: string, target: string, optional = false) => {
+      if (!optional) throw new Error('Missing files must use the optional read path in this test.')
+      return {
+        path: `/workspace/${target}`,
+        content: '',
+        revision: '',
+        size: 0,
+        modified_time: 0,
+        missing: true,
+      }
+    })
+    const agent_write_file = vi.fn(async (_root: string, target: string, content: string) => ({
+      path: `/workspace/${target}`,
+      revision: 'disk-new',
+      size: content.length,
+    }))
+
+    window.editor_api = {
+      platform: 'linux',
+      workspace: {
+        agent_read_file,
+        agent_write_file,
+      },
+    } as unknown as typeof window.editor_api
+
+    const authority = create_editor_file_authority('/workspace', {
+      get_snapshot: () => null,
+      apply_content: vi.fn(),
+    })!
+
+    await authority.execute('files.write', { path: 'new.ts', content: 'export const value = 1\n' })
+
+    expect(agent_read_file).toHaveBeenCalledWith('/workspace', 'new.ts', true)
+    expect(agent_read_file.mock.calls.every((call) => call[2] === true)).toBe(true)
+    expect(agent_write_file).toHaveBeenCalled()
+  })
+
   it('creates missing parent directories for a new nested agent file', async () => {
     const { read_agent_workspace_file, write_agent_workspace_file } = await import('../electron/workspace.cts')
     const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
