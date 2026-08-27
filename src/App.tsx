@@ -49,9 +49,7 @@ function App() {
   })
   const terminal_workspace_root = workspace.root_path || readStorageText(last_workspace_storage_key).trim() || null
   const agent_follow_suspended_ref = useRef(false)
-  const workspace_refresh_ref = useRef(workspace.refresh)
   const workspace_open_ref = useRef(workspace.open_workspace)
-  workspace_refresh_ref.current = workspace.refresh
   workspace_open_ref.current = workspace.open_workspace
   const chat = useAIChat(editor.settings, editor.active_text_document, workspace.root_path, {
     diagnostics: editor.diagnostics,
@@ -103,13 +101,6 @@ function App() {
   useEffect(() => {
     if (chat.generating) agent_follow_suspended_ref.current = false
   }, [chat.generating])
-
-  useEffect(() => {
-    if (!chat.generating || !workspace.root_path) return
-    void workspace_refresh_ref.current()
-    const refresh_interval = window.setInterval(() => void workspace_refresh_ref.current(), 1200)
-    return () => window.clearInterval(refresh_interval)
-  }, [chat.generating, workspace.root_path])
 
   const mark_manual_editor_focus = () => {
     if (chat.generating) agent_follow_suspended_ref.current = true
