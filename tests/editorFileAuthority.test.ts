@@ -144,4 +144,27 @@ describe('editor-aware agent filesystem', () => {
       /outside the open workspace/i,
     )
   })
+
+  it('blocks Explorer directory reads through an outside workspace symlink', async () => {
+    const { read_workspace_directory } = await import('../electron/workspace.cts')
+    const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
+    const outside = await mkdtemp(join(tmpdir(), 'code-editor-outside-'))
+    const escape = join(root, 'escape')
+    await writeFile(join(outside, 'secret.txt'), 'secret', 'utf8')
+    await symlink(outside, escape)
+
+    await expect(read_workspace_directory(root, escape)).rejects.toThrow(/outside the open workspace/i)
+  })
+
+  it('blocks Explorer creates through an outside workspace symlink', async () => {
+    const { create_workspace_entry } = await import('../electron/workspace.cts')
+    const root = await mkdtemp(join(tmpdir(), 'code-editor-workspace-'))
+    const outside = await mkdtemp(join(tmpdir(), 'code-editor-outside-'))
+    const escape = join(root, 'escape')
+    await symlink(outside, escape)
+
+    await expect(create_workspace_entry(root, escape, 'created-outside.txt', 'file')).rejects.toThrow(
+      /outside the open workspace/i,
+    )
+  })
 })
