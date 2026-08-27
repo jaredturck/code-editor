@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
+  get_state: vi.fn(),
   load_context: vi.fn(),
   save_compacted: vi.fn(),
 }))
@@ -16,7 +17,7 @@ vi.mock('@/platform/agent/runtime/sessionRunner', () => ({
 }))
 
 vi.mock('@/platform/chatSessionStore', () => ({
-  getChatSessionState: () => null,
+  getChatSessionState: runtime_state.get_state,
   loadChatContext: runtime_state.load_context,
   saveCompacted: runtime_state.save_compacted,
 }))
@@ -24,6 +25,7 @@ vi.mock('@/platform/chatSessionStore', () => ({
 import {
   buildProjectWorkingContext,
   isProjectWorkingContext,
+  persistedTaskMatchesInput,
   runAgentSession,
   type AgentSessionInput,
   type AgentSessionResult,
@@ -65,8 +67,10 @@ function input_fixture(): AgentSessionInput {
 describe('autonomous project working context', () => {
   beforeEach(() => {
     runtime_state.run.mockReset()
+    runtime_state.get_state.mockReset()
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
+    runtime_state.get_state.mockReturnValue(null)
     runtime_state.run.mockResolvedValue(result_fixture())
     runtime_state.save_compacted.mockResolvedValue(undefined)
   })
@@ -86,6 +90,32 @@ describe('autonomous project working context', () => {
     expect(compacted).toContain('updated src/parser.ts')
     expect(compacted).toContain('Updated the parser and verified the focused test.')
     expect(compacted.length).toBeLessThanOrEqual(12000)
+  })
+
+  it('matches persisted task metadata only to the same original goal', () => {
+    runtime_state.get_state.mockReturnValue({
+      projectRun: {
+        goal: 'Fix the parser regression',
+        runtime_summary: {
+          taskPreflightPlan: {
+            taskType: 'implementation',
+            developmentTask: true,
+            workspaceMutationExpected: true,
+            verificationRequired: true,
+            successCriteria: ['Parser regression is fixed.'],
+            verificationChecks: ['tests'],
+          },
+        },
+      },
+    })
+
+    const resumed = input_fixture()
+    resumed.userInput = 'Continue the original development request:\nFix the parser regression\n\nUse the existing evidence.'
+    expect(persistedTaskMatchesInput(resumed)).toBe(true)
+
+    const new_task = input_fixture()
+    new_task.userInput = 'Add a settings search box'
+    expect(persistedTaskMatchesInput(new_task)).toBe(false)
   })
 
   it('injects the last project checkpoint before a resumed workspace agent segment and refreshes it afterward', async () => {
