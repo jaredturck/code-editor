@@ -8,6 +8,7 @@ export * from '@/platform/agentRuntimeLegacy'
 
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
 import { runLongRunningProject } from '@/platform/agent/longRunningProjectRuntime'
+import { recoverInterruptedProjectTasks } from '@/platform/agent/projectTaskRecovery'
 import {
   persistedTaskMatchesInput,
   runAgentSession as runDirectAgentSession,
@@ -40,12 +41,15 @@ const OBSERVATION_TOOLS = new Set([
 
 const VERIFICATION_TOOLS = new Set(['browser.inspect', 'diagnostics.check', 'agent.review'])
 
-function isWorkspaceProjectRun(input: AgentSessionInput) {
+function projectChatId(input: AgentSessionInput) {
   const session = input.settings?.chat_session
-  const chatId = session && typeof session === 'object' && !Array.isArray(session)
+  return session && typeof session === 'object' && !Array.isArray(session)
     ? String((session as Record<string, unknown>).id || '').trim()
     : ''
-  return Boolean(chatId && String(input.settings?.agent_working_dir || '').trim())
+}
+
+function isWorkspaceProjectRun(input: AgentSessionInput) {
+  return Boolean(projectChatId(input) && String(input.settings?.agent_working_dir || '').trim())
 }
 
 function stepTool(step: Record<string, unknown>) {
@@ -124,6 +128,8 @@ function buildEfficiencyMetrics(result: AgentSessionResult) {
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const workspaceProject = isWorkspaceProjectRun(input)
   const automatic = String(input.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
+  if (workspaceProject && automatic) recoverInterruptedProjectTasks(projectChatId(input))
+
   const result = workspaceProject && automatic ? await runLongRunningProject(input) : await runDirectAgentSession(input)
   if (!workspaceProject) return result
   return {
