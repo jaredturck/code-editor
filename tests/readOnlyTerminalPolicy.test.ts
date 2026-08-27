@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { isReadOnlyWorkspaceCommand } from '../src/platform/agent/runtime/readOnlyTerminalPolicy'
+import {
+  isReadOnlyWorkspaceCommand,
+  terminalCommandEscapesWorkspace,
+} from '../src/platform/agent/runtime/readOnlyTerminalPolicy'
 
 describe('read-only terminal policy', () => {
   it('auto-classifies only conservative project inspection commands', () => {
@@ -31,6 +34,8 @@ describe('read-only terminal policy', () => {
       'cat package.json | sh',
       'ls && rm file',
       'cat /etc/passwd',
+      'cat $OLDPWD/secret.txt',
+      'cat ${TMPDIR}/cache.txt',
       'ls ../',
       'find /tmp -type f',
       'git diff --no-index /etc/passwd package.json',
@@ -43,5 +48,11 @@ describe('read-only terminal policy', () => {
 
     for (const command of allowed) expect(isReadOnlyWorkspaceCommand(command), command).toBe(true)
     for (const command of blocked) expect(isReadOnlyWorkspaceCommand(command), command).toBe(false)
+  })
+
+  it('treats shell variable path expansion as crossing the workspace boundary', () => {
+    expect(terminalCommandEscapesWorkspace('cat $OLDPWD/secret.txt', '/workspace')).toBe(true)
+    expect(terminalCommandEscapesWorkspace('cat ${TMPDIR}/cache.txt', '/workspace')).toBe(true)
+    expect(terminalCommandEscapesWorkspace('stat $XDG_CONFIG_HOME/app/config.json', '/workspace')).toBe(true)
   })
 })
