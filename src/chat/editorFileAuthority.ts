@@ -222,12 +222,25 @@ export function create_editor_file_authority(
   }
 
   const read_optional_state = async (file_path: string, remember: boolean) => {
-    try {
-      return await read_state(file_path, remember)
-    } catch (error) {
-      if (error instanceof Error && /does not exist|not found|enoent/i.test(error.message)) return null
-      throw error
+    const disk = await window.editor_api.workspace.agent_read_file(workspace_root, file_path, true)
+    if (disk.missing) return null
+    const snapshot = host.get_snapshot(disk.path)
+    const content = snapshot?.content ?? disk.content
+    const revision = snapshot ? `editor:${content_revision(content)}` : `disk:${disk.revision}`
+    const state = {
+      path: disk.path,
+      content,
+      revision,
+      disk_revision: disk.revision,
+      dirty: Boolean(snapshot?.dirty),
     }
+
+    if (remember) {
+      observed_revisions.set(normalize_path(disk.path), revision)
+      observed_disk_revisions.set(normalize_path(disk.path), disk.revision)
+    }
+
+    return state
   }
 
   const ensure_unchanged = async (file_path: string) => {
