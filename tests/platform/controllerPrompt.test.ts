@@ -1,6 +1,6 @@
 /**
- * Guards the lean-loop prompt changes: no forced planning ceremony, proportional reasoning,
- * and a state header that omits empty sections so a trivial first turn stays tiny.
+ * Guards the small-model prompt surface: compact stable instructions, no model-size conditioning,
+ * and state headers that only include live task context when it exists.
  */
 import { describe, expect, it } from 'vitest'
 import { buildControllerSystemPrompt, buildControllerStateHeader } from '@/platform/agent/controllerPrompt'
@@ -13,11 +13,22 @@ const basePayload = {
 }
 
 describe('controllerPrompt', () => {
-  it('drops the forced # Planning section and makes reasoning proportional', () => {
+  it('keeps the base controller prompt compact and progress-oriented', () => {
     const prompt = buildControllerSystemPrompt({ tier: 'lean' })
-    expect(prompt).not.toContain('# Planning')
-    expect(prompt).toContain('# Reasoning')
-    expect(prompt.toLowerCase()).toContain('just do it') // proportional, not "always plan"
+    expect(prompt).toContain('Choose the highest-value action')
+    expect(prompt).toContain('Read only what you need')
+    expect(prompt).toContain('fix it instead of gathering equivalent evidence')
+    expect(prompt).not.toContain('Take exactly ONE action per turn')
+    expect(prompt).not.toContain('You are a smaller local model')
+    expect(prompt.length).toBeLessThan(1800)
+  })
+
+  it('keeps structured-format guidance short without strict-format threats or schema examples', () => {
+    const prompt = buildControllerSystemPrompt({ tier: 'structured' })
+    expect(prompt).toContain('# Response')
+    expect(prompt).toContain('Return one JSON object')
+    expect(prompt).not.toContain('STRICT JSON')
+    expect(prompt).not.toContain('{"thinking"')
   })
 
   it('state header omits empty Todos / Recent actions (tiny trivial turn)', () => {
@@ -43,48 +54,33 @@ describe('controllerPrompt', () => {
     })
     const text = typeof header === 'string' ? header : ''
     expect(text).toContain('## Todos')
-    // De-stepped: the action history renders under "## Recent actions" (no step numbers/position).
     expect(text).toContain('## Recent actions')
   })
 
-  // ── Workstream D: tag/role-composed prompt ──────────────────────────────────
-  it('composes capability fragments from ability tags', () => {
+  it('only adds capability text for a capability that changes available input', () => {
     const prompt = buildControllerSystemPrompt({
       tier: 'lean',
-      tags: ['reasoning', 'long-context', 'cheap'],
+      tags: ['reasoning', 'long-context', 'local', 'vision'],
     })
-    expect(prompt).toContain('# Your capabilities')
-    expect(prompt).toContain('deliberate internally') // reasoning fragment
-    expect(prompt).toContain('large context window') // long-context fragment
-    // 'cheap' has no behaviour fragment → must not invent a line for it
-    expect(prompt).not.toContain('cheap')
+    expect(prompt).toContain('# Capabilities')
+    expect(prompt).toContain('visual inputs')
+    expect(prompt).not.toContain('deliberate internally')
+    expect(prompt).not.toContain('large context window')
+    expect(prompt).not.toContain('smaller local model')
   })
 
-  it('adds the role fragment and keeps base prompt when no tags', () => {
+  it('adds a concise assignment when a role is supplied', () => {
     const prompt = buildControllerSystemPrompt({ tier: 'lean', role: 'consultant' })
-    expect(prompt).toContain('# Your role')
-    expect(prompt).toContain('being consulted')
-    expect(prompt).not.toContain('# Your capabilities') // no tags → no capability block
+    expect(prompt).toContain('# Assignment')
+    expect(prompt).toContain('focused question')
   })
 
-  it('adds the light mesh suggestion only when the bridge is on', () => {
+  it('adds peer guidance only when the mesh is enabled', () => {
     const off = buildControllerSystemPrompt({ tier: 'lean' })
     expect(off).not.toContain('# Peers')
     const on = buildControllerSystemPrompt({ tier: 'lean', meshEnabled: true })
     expect(on).toContain('# Peers')
-    expect(on.toLowerCase()).toContain('agent.consult')
-    expect(on.toLowerCase()).toContain('untrusted') // peer answers are untrusted input
-  })
-
-  it('lets a model pull ANY level of peer and mentions the overwatcher', () => {
-    const on = buildControllerSystemPrompt({ tier: 'lean', meshEnabled: true })
-    expect(on).toContain('regardless of its level') // any-to-any, not just downward
-    expect(on.toLowerCase()).toContain('agent.overwatch')
-  })
-
-  it('composes the overwatcher role fragment', () => {
-    const prompt = buildControllerSystemPrompt({ tier: 'lean', role: 'overwatcher' })
-    expect(prompt).toContain('# Your role')
-    expect(prompt).toContain('Overwatcher')
+    expect(on).toContain('real knowledge or reasoning gap')
+    expect(on.toLowerCase()).toContain('untrusted')
   })
 })
