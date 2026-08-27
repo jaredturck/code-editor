@@ -5,6 +5,8 @@ import {
   loadProjectLedger,
   mutateProjectLedger,
   projectLedgerComplete,
+  upsertProjectRequirements,
+  upsertProjectWorkItems,
   type ProjectEvaluatorFinding,
   type ProjectLedger,
 } from '@/platform/agent/projectLedger'
@@ -45,6 +47,20 @@ const EVALUATOR_SCHEMA = {
         required: ['id', 'status', 'evidence'],
       },
     },
+    missingRequirements: {
+      type: 'array',
+      maxItems: 20,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: { type: 'string' },
+          acceptanceCriteria: { type: 'array', items: { type: 'string' }, maxItems: 10 },
+          evidence: { type: 'array', items: { type: 'string' }, maxItems: 10 },
+        },
+        required: ['text', 'acceptanceCriteria', 'evidence'],
+      },
+    },
     findings: {
       type: 'array',
       maxItems: 80,
@@ -61,7 +77,7 @@ const EVALUATOR_SCHEMA = {
       },
     },
   },
-  required: ['accepted', 'summary', 'requirements', 'findings'],
+  required: ['accepted', 'summary', 'requirements', 'missingRequirements', 'findings'],
 } as const
 
 function parseJson(value: string): Record<string, any> | null {
@@ -106,6 +122,58 @@ function compactLedger(ledger: ProjectLedger) {
   }
 }
 
+function normalizedRequirementText(value: unknown) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function materializeMissingRequirements(chatId: string, ledger: ProjectLedger, parsed: Record<string, any>) {
+  const existing = new Set(ledger.requirements.map((item) => normalizedRequirementText(item.text)))
+  const missing = (Array.isArray(parsed.missingRequirements) ? parsed.missingRequirements : [])
+    .filter((item: any) => {
+      const text = normalizedRequirementText(item?.text)
+      return text && !existing.has(text)
+    })
+    .slice(0, 20)
+
+  if (!missing.length) return ledger
+  const stamp = Date.now().toString(36)
+  const requirements = missing.map((item: any, index: number) => ({
+    id: `eval-req-${stamp}-${index + 1}`,
+    text: String(item.text || '').slice(0, 5000),
+    status: 'pending' as const,
+    acceptanceCriteria: Array.isArray(item.acceptanceCriteria) ? item.acceptanceCriteria.map(String).slice(0, 10) : [],
+    dependsOn: [],
+    evidence: Array.isArray(item.evidence) ? item.evidence.map(String).slice(0, 10) : [],
+    notes: ['Recovered by independent evaluator from the original project goal.'],
+  }))
+  let updated = upsertProjectRequirements(chatId, ledger.goal, requirements)
+  updated = upsertProjectWorkItems(
+    chatId,
+    ledger.goal,
+    requirements.flatMap((requirement, index) => [
+      {
+        id: `eval-missing-implement-${stamp}-${index + 1}`,
+        title: `Implement recovered requirement: ${requirement.text.slice(0, 140)}`,
+        description: requirement.text,
+        role: 'executor' as const,
+        requirementIds: [requirement.id],
+        dependsOn: [],
+        status: 'ready' as const,
+      },
+      {
+        id: `eval-missing-verify-${stamp}-${index + 1}`,
+        title: `Verify recovered requirement: ${requirement.text.slice(0, 140)}`,
+        description: `Independently verify this recovered requirement against its acceptance criteria: ${requirement.acceptanceCriteria.join('; ')}`,
+        role: 'evaluator' as const,
+        requirementIds: [requirement.id],
+        dependsOn: [`eval-missing-implement-${stamp}-${index + 1}`],
+        status: 'pending' as const,
+      },
+    ]),
+  )
+  return updated
+}
+
 export async function evaluateProject(
   chatId: string,
   settings: Record<string, any>,
@@ -115,18 +183,13 @@ export async function evaluateProject(
   const ledger = loadProjectLedger(chatId)
   if (!ledger) throw new Error('Project evaluator requires a durable project ledger.')
 
-  // Fresh deterministic evidence is gathered independently of executor summaries. This is the
-  // evaluator's factual substrate: integrated diff/status, diagnostics, inferred build/test/lint
-  // verification, managed runtime state, and browser evidence where applicable.
   const freshEvidence = await collectProjectEvaluationEvidence(chatId, ledger, settings, evidence as Record<string, unknown>)
 
   const result = await runBoundedRoleTask({
     settings,
-    // The settings UI still exposes "overwatcher". The autonomous coding harness treats that
-    // binding as the independent evaluator until the GUI/settings vocabulary is migrated later.
     preferredRoles: ['overwatcher', 'orchestrator'],
     maxAttempts: 2,
-    maxOutputTokens: 3200,
+    maxOutputTokens: 3600,
     reasoningEffort: 'medium',
     signal,
     taskLabel: 'independent project evaluation',
@@ -135,11 +198,11 @@ export async function evaluateProject(
       {
         role: 'system',
         content:
-          'Act as an independent software evaluator. Do not trust implementation claims. Judge each requirement against the current project plus supplied deterministic evidence. Verification failures, severity=error diagnostics, broken runtime/browser behavior, or unmet acceptance criteria prevent verified status. Do not mutate code and do not propose unrelated enhancements. Return concrete requirement statuses and actionable defects only.',
+          'Act as an independent software evaluator. Do not trust implementation claims. Judge each recorded requirement against the current project plus deterministic evidence. Verification failures, severity=error diagnostics, broken runtime/browser behavior, or unmet acceptance criteria prevent verified status. Also compare the requirement ledger against the ORIGINAL goal: if a material requirement clearly stated or necessarily implied by that goal is absent from the ledger, return it in missingRequirements. Do not invent enhancements or preferences. Do not mutate code.',
       },
       {
         role: 'user',
-        content: JSON.stringify({ project: compactLedger(ledger), evidence: freshEvidence }, null, 2).slice(0, 80_000),
+        content: JSON.stringify({ project: compactLedger(ledger), evidence: freshEvidence }, null, 2).slice(0, 90_000),
       },
     ],
   })
@@ -186,6 +249,7 @@ export async function evaluateProject(
   })
 
   if (findings.length) updated = addEvaluatorFindings(chatId, updated.goal, findings)
+  updated = materializeMissingRequirements(chatId, updated, parsed)
 
   const deterministicAccepted = projectLedgerComplete(updated)
   const accepted = parsed.accepted === true && deterministicAccepted
