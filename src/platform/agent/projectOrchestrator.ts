@@ -15,6 +15,7 @@ import {
   removeWorkerWorkspace,
   type ProjectWorkerWorkspace,
 } from '@/platform/agent/projectWorkspaceManager'
+import { resolveActiveSkillProfile } from '@/platform/skillProfiles'
 import { buildSTP, type STPTask, type STPTaskType } from '@/platform/stpBuilder'
 import { executeSTP } from '@/platform/subAgentRuntime'
 
@@ -119,6 +120,17 @@ function availableWork(ledger: ProjectLedger, maxParallel: number) {
     .slice(0, Math.max(1, maxParallel))
 }
 
+function roleSkillProfile(settings: Record<string, any>, runtimeRole: string) {
+  if (settings.skills_enabled === false) return []
+  const identity = resolveAgentIdentity(runtimeRole, settings)
+  const profile = resolveActiveSkillProfile({
+    ...settings,
+    ai_provider: identity.provider || settings.ai_provider,
+    ai_model: identity.model || settings.ai_model,
+  })
+  return profile ? [profile] : []
+}
+
 function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Record<string, any>, cwd: string): STPTask {
   const runtimeRole = roleForRuntime(item.role)
   const identity = resolveAgentIdentity(runtimeRole, settings)
@@ -138,6 +150,10 @@ function buildTask(item: ProjectWorkItem, ledger: ProjectLedger, settings: Recor
     tools: {
       available: toolsForRole(item.role),
       preferred: item.role === 'scout' ? ['search.ripgrep', 'files.read'] : ['files.read', 'files.edit', 'terminal.exec'],
+    },
+    skills: {
+      load: roleSkillProfile(settings, runtimeRole),
+      variant: item.role === 'scout' || item.role === 'evaluator' ? 'simple' : 'default',
     },
     budget: {
       maxSteps: item.role === 'scout' ? 24 : 48,
@@ -291,9 +307,7 @@ export async function dispatchReadyProjectWork(
 
   ledger = mutateProjectLedger(chatId, ledger.goal, (draft) => {
     const timestamp = Date.now()
-    const executionByTask = new Map(
-      prepared.map((entry, index) => [entry.task.taskId, executions[index]]),
-    )
+    const executionByTask = new Map(prepared.map((entry, index) => [entry.task.taskId, executions[index]]))
 
     draft.workItems = draft.workItems.map((item) => {
       if (!item.taskId || !taskIds.includes(item.taskId)) return item
