@@ -1,2 +1,2 @@
-/** Feature service surface for the corresponding desktop bridge routes. */
-export { getSessionInfo, getSystemStats, getTopProcesses, readJsonBody, sendJson } from './bridgeServiceRuntime.js'
+/** Minimal core service surface for local coding runtime health/session state. */
+export { getSessionInfo, sendJson } from './bridgeServiceRuntime.js'
