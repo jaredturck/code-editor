@@ -5,7 +5,7 @@ import {
   ensureManagedDevServer,
   managedProjectRuntimeEvidence,
 } from '@/platform/agent/projectProcessManager'
-import type { ProjectLedger } from '@/platform/agent/projectLedger'
+import { mutateProjectLedger, type ProjectLedger } from '@/platform/agent/projectLedger'
 
 const UI_PROJECT_PATTERN = /\b(web|website|webpage|frontend|front-end|react|vue|svelte|next|vite|html|css|ui|dashboard|browser|responsive)\b/i
 const COMMAND_TIMEOUT_MS = 8 * 60_000
@@ -77,6 +77,44 @@ async function inferredVerification(cwd: string) {
   return results
 }
 
+function verificationKind(command: string) {
+  const value = command.toLowerCase()
+  if (/typecheck|tsc\b|mypy|pyright/.test(value)) return 'typecheck'
+  if (/\blint\b|eslint|oxlint|ruff/.test(value)) return 'lint'
+  if (/\btest\b|vitest|jest|pytest|cargo test|go test/.test(value)) return 'test'
+  if (/\bbuild\b|vite build|next build|cargo build/.test(value)) return 'build'
+  return 'verification'
+}
+
+function persistVerification(chatId: string, ledger: ProjectLedger, verification: any[]) {
+  if (!verification.length) return
+  mutateProjectLedger(chatId, ledger.goal, (draft) => {
+    const bySignature = new Map(
+      draft.verification.map((record) => [`${record.generation}:${record.command}`, record]),
+    )
+    for (const result of verification) {
+      const command = String(result?.command || '').trim()
+      if (!command) continue
+      const summary = [String(result?.stdout || '').trim(), String(result?.stderr || '').trim()]
+        .filter(Boolean)
+        .join('\n')
+        .slice(-6000)
+      const record = {
+        id: `verify-${ledger.generation}-${Math.random().toString(36).slice(2, 9)}`,
+        generation: ledger.generation,
+        kind: verificationKind(command),
+        command,
+        ok: result?.ok === true,
+        summary: summary || `Exit code ${Number(result?.exitCode ?? -1)}`,
+        files: [],
+        createdAt: Date.now(),
+      }
+      bySignature.set(`${ledger.generation}:${command}`, record)
+    }
+    draft.verification = [...bySignature.values()].slice(-300)
+  })
+}
+
 async function gitEvidence(cwd: string) {
   const [status, diffStat, diff] = await Promise.all([
     runCommand(cwd, 'git status --porcelain=v1'),
@@ -127,12 +165,7 @@ async function browserEvidence(chatId: string, ledger: ProjectLedger, settings: 
       timeout_ms: 45_000,
       max_text_chars: 20_000,
     })
-    return {
-      applicable: true,
-      url,
-      managed: managedProjectRuntimeEvidence(chatId),
-      inspection,
-    }
+    return { applicable: true, url, managed: managedProjectRuntimeEvidence(chatId), inspection }
   } catch (error) {
     return {
       applicable: true,
@@ -142,7 +175,7 @@ async function browserEvidence(chatId: string, ledger: ProjectLedger, settings: 
   }
 }
 
-/** Gather fresh evaluator evidence independently of executor claims. */
+/** Gather and persist fresh evaluator evidence independently of executor claims. */
 export async function collectProjectEvaluationEvidence(
   chatId: string,
   ledger: ProjectLedger,
@@ -158,6 +191,8 @@ export async function collectProjectEvaluationEvidence(
     inferredVerification(cwd),
     browserEvidence(chatId, ledger, settings),
   ])
+
+  persistVerification(chatId, ledger, verification)
 
   return {
     supplied,
