@@ -1,8 +1,7 @@
 /**
- * Small project-run policy facade around the inherited Agent Chat integration.
- *
- * The established chat/runtime adapter remains in agentChatLegacy.ts. This layer owns the
- * current autonomous-mode policy and project guidance without reopening the large legacy file.
+ * Project-run policy facade around the inherited Agent Chat integration.
+ * Automatic mode is intentionally small-model friendly: one primary agent, project tools,
+ * objective runtime gates, and no model-managed orchestration ceremony.
  */
 export * from '@/chat/agentChatLegacy'
 
@@ -10,16 +9,52 @@ import { build_core_agent_settings as buildLegacyCoreAgentSettings } from '@/cha
 import type { ProjectRunMode } from '@/chat/projectRunController'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
+const automatic_blocked_tools = new Set([
+  'approval.request',
+  'user.ask',
+  'todo.update',
+  'chat.remember',
+  'chat.recall',
+  'context.summarize',
+  'system.stats',
+  'system.processes',
+  'launcher.list',
+  'skills.list',
+  'skills.search',
+  'skills.load',
+  'skills.offload',
+  'resources.list',
+  'agent.available',
+  'agent.delegate',
+  'agent.recall',
+  'agent.readOutput',
+  'agent.status',
+  'agent.roster',
+  'agent.broadcast',
+  'agent.verify',
+  'agent.recallAll',
+  'agent.find',
+  'agent.consult',
+  'agent.review',
+  'agent.overwatch',
+])
+
 function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
   if (!Array.isArray(value)) return value
-  return value.filter((tool) => screen_enabled || String(tool) !== 'screen.capabilities')
+  return value.filter((tool) => {
+    const name = String(tool || '')
+    if (automatic_blocked_tools.has(name)) return false
+    if (!screen_enabled && name === 'screen.capabilities') return false
+    return true
+  })
 }
 
 function automatic_agent_models(value: unknown) {
   if (!Array.isArray(value)) return value
   return value.filter((entry) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return true
-    return String((entry as Record<string, unknown>).role || '').toLowerCase() !== 'overwatcher'
+    const role = String((entry as Record<string, unknown>).role || '').toLowerCase()
+    return !['overwatcher', 'reviewer', 'consultant'].includes(role)
   })
 }
 
@@ -59,6 +94,9 @@ export function build_core_agent_settings(
     agent_search_web_budget: Math.min(2, Math.max(1, Number(base.agent_search_web_budget) || 2)),
     agent_session_minutes: Math.min(8, configured_session_minutes),
     agent_tool_repeat_cap: Math.min(2, configured_repeat_cap),
+    agent_multi_enabled: false,
+    agent_peer_consult_enabled: false,
+    agent_peer_review: 'off',
     agent_models: automatic_agent_models(base.agent_models),
     agent_overwatch_continuous: false,
     context_budget_warn_ratio: 0.05,
