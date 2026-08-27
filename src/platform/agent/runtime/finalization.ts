@@ -5,24 +5,70 @@
  * and reward information.
  */
 
-// Transitional extraction: behavior is preserved verbatim while runtime contracts are typed incrementally.
 import { UNTRUSTED_CONTENT_SYSTEM_RULES } from '@/platform/security'
-
 import { buildUsageSummary } from '@/platform/agent/usageMetrics'
-
 import { trimMessageContent } from '@/platform/agent/agentJsonUtils'
-
 import { TOOL_DEFINITIONS, isLeanTool } from '@/platform/agent/toolCatalog'
-
+import { inferDirectPreflightPlan } from '@/platform/agent/localPlanner'
 import * as runtimeSupport from '@/platform/agent/runtime/runtimeSupport'
-const { MAX_AGENT_STEPS, SEARCH_WEB_DEFAULT_CALL_BUDGET, INSUFFICIENT_ACCESS_REPLY, isCapabilityOrPermissionError } =
-  runtimeSupport
 
-// Determines whether the final reply incorrectly claims that no user request was provided.
+const { MAX_AGENT_STEPS, INSUFFICIENT_ACCESS_REPLY, isCapabilityOrPermissionError } = runtimeSupport
+
+const TASK_TOOLSETS = {
+  code_change: new Set([
+    'terminal.exec',
+    'files.read',
+    'files.write',
+    'files.patch',
+    'files.edit',
+    'rag.retrieve',
+    'browser.inspect',
+    'diagnostics.check',
+    'verification.require',
+    'verification.record',
+    'approval.request',
+    'user.ask',
+  ]),
+  code_read: new Set([
+    'terminal.exec',
+    'files.read',
+    'rag.retrieve',
+    'browser.inspect',
+    'diagnostics.check',
+    'user.ask',
+  ]),
+  file_task: new Set([
+    'terminal.exec',
+    'files.read',
+    'files.write',
+    'files.patch',
+    'files.edit',
+    'approval.request',
+    'user.ask',
+  ]),
+  research: new Set(['search.web', 'web.fetch', 'sources.lookup', 'user.ask']),
+} as const
+
+function taskLeanToolAllowed(toolName, userInput) {
+  const plan = inferDirectPreflightPlan(String(userInput || ''))
+  if (!plan) return isLeanTool(toolName)
+
+  let selected
+  if (plan.taskType === 'research') selected = TASK_TOOLSETS.research
+  else if (plan.taskType === 'file_task') selected = TASK_TOOLSETS.file_task
+  else if (plan.developmentTask && plan.workspaceMutationExpected) selected = TASK_TOOLSETS.code_change
+  else if (plan.developmentTask) selected = TASK_TOOLSETS.code_read
+  else return isLeanTool(toolName)
+
+  if (/\b(latest|current|online|web|research|look up|search)\b/i.test(String(userInput || ''))) {
+    if (['search.web', 'web.fetch', 'sources.lookup'].includes(toolName)) return true
+  }
+  return selected.has(toolName)
+}
+
 export function looksLikeMissingRequestReply(text, userInput) {
   const latestRequest = String(userInput || '').trim()
   if (!latestRequest) return false
-
   const reply = String(text || '').toLowerCase()
   if (!reply) return false
 
@@ -32,7 +78,6 @@ export function looksLikeMissingRequestReply(text, userInput) {
     /no (actual )?(request|task|instruction)/,
     /without (a )?(specific )?(request|task|context|instruction)/,
   ]
-
   const clarificationSignals = [
     /ask(ing)? (the )?user (for )?(clarification|details)/,
     /ask the user what they would like me to do/,
@@ -43,14 +88,11 @@ export function looksLikeMissingRequestReply(text, userInput) {
     /i will respond by/,
     /self-correction/,
   ]
-
   const claimsMissingRequest = missingRequestSignals.some((pattern) => pattern.test(reply))
   if (!claimsMissingRequest) return false
-
   return clarificationSignals.some((pattern) => pattern.test(reply))
 }
 
-// Synthesizes a final reply only when tool evidence is too weak to summarize deterministically.
 export async function synthesizeFinalReply({
   userInput,
   conversation,
@@ -108,8 +150,6 @@ export async function synthesizeFinalReply({
   return 'I could not produce a complete answer from the available run state.'
 }
 
-// Assembles controller payload from lower-level state so callers receive one consistent
-// representation.
 export function buildControllerPayload({
   userInput,
   conversation,
@@ -142,8 +182,6 @@ export function buildControllerPayload({
             ok: item.ok !== false,
             result: item.ok === false ? String(item.error || '') : String(item.summary || ''),
           })),
-          instruction:
-            'Reason about why the previous action failed using the exact error, original goal, and evidence gathered so far. Decide the next action yourself. Do not blindly repeat the same action unless you have a concrete reason the result may now differ.',
         }
       : null
 
@@ -157,13 +195,13 @@ export function buildControllerPayload({
     previous_steps: recentSteps,
     ...(recoveryContext ? { recovery_context: recoveryContext } : {}),
     tools: TOOL_DEFINITIONS.filter((tool) => {
-      const alwaysOn = tool.name === 'todo.update' || tool.name === 'trace.log' || tool.name === 'browser.inspect'
+      const runtimeControl = tool.name === 'browser.inspect'
       const advertisedTools = Array.isArray(capabilitySnapshot?.advertisedTools)
         ? capabilitySnapshot.advertisedTools
         : capabilitySnapshot?.availableTools
-      const allowed = alwaysOn || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
-      if (!allowed) return false
-      if (toolset === 'lean' && !alwaysOn) return isLeanTool(tool.name)
+      const available = runtimeControl || (Array.isArray(advertisedTools) && advertisedTools.includes(tool.name))
+      if (!available) return false
+      if (toolset === 'lean') return taskLeanToolAllowed(tool.name, userInput)
       return true
     }).map((tool) => ({
       name: tool.name,
@@ -173,21 +211,19 @@ export function buildControllerPayload({
       args: tool.args,
     })),
     skills: {
-      enabled: Boolean(skillContext?.enabled),
-      profile: skillContext?.profile || '',
-      token_budget: Number(skillContext?.tokenBudget || 0),
-      max_active: Number(skillContext?.maxActive || 0),
-      tokens_used: Number(skillContext?.tokensUsed || 0),
-      available: Number(skillContext?.available || 0),
-      cards: Array.isArray(skillContext?.cards) ? skillContext.cards : [],
+      cards: Array.isArray(skillContext?.cards)
+        ? skillContext.cards.slice(0, 8).map((card) => ({
+            id: card.id,
+            title: card.title,
+            summary: card.summary,
+          }))
+        : [],
       active_skills: Array.isArray(skillContext?.active)
         ? skillContext.active.map((skill) => ({
             id: skill.id,
             title: skill.title,
             summary: skill.summary,
-            triggers: skill.triggers,
-            instructions: skill.instructions,
-            examples: skill.examples,
+            instructions: String(skill.instructions || '').slice(0, 1800),
           }))
         : [],
     },
@@ -195,37 +231,10 @@ export function buildControllerPayload({
       resume_intent: Boolean(continuityContext?.resumeIntent),
       notes: Array.isArray(relevantMemory) ? relevantMemory : [],
     },
-    chat_memory: String(chatMemory || ''),
-    memory_hygiene: {
-      web_search_calls_used: Number.isFinite(Number(webSearchState?.callsUsed)) ? Number(webSearchState.callsUsed) : 0,
-      web_search_call_budget: Number.isFinite(Number(webSearchState?.maxCalls))
-        ? Number(webSearchState.maxCalls)
-        : SEARCH_WEB_DEFAULT_CALL_BUDGET,
-      web_search_calls_remaining: Number.isFinite(Number(webSearchState?.maxCalls))
-        ? Math.max(0, Number(webSearchState.maxCalls) - Number(webSearchState?.callsUsed || 0))
-        : SEARCH_WEB_DEFAULT_CALL_BUDGET,
-      web_search_recent_queries: Array.isArray(webSearchState?.queryHistory)
-        ? webSearchState.queryHistory.slice(0, 6)
-        : [],
-    },
-    constraints: {
-      guardrails: {
-        safety_profile: safetyConfig?.profile || 'strict',
-        block_sudo: safetyConfig?.blockSudo !== false,
-        allow_network_commands: Boolean(safetyConfig?.allowNetworkCommands),
-        require_explicit_approval: Boolean(safetyConfig?.requireExplicitApproval),
-        user_approved_for_risky_tools: Boolean(userApprovalGranted),
-        max_steps: Number.isFinite(Number(sessionStepBudget))
-          ? Number(sessionStepBudget)
-          : Number.isFinite(Number(safetyConfig?.maxSteps))
-            ? Number(safetyConfig.maxSteps)
-            : MAX_AGENT_STEPS,
-      },
-    },
+    chat_memory: String(chatMemory || '').slice(0, 1200),
   }
 }
 
-// Assembles run summary from lower-level state so callers receive one consistent representation.
 export function buildRunSummary({
   timeline,
   stepHistory,
@@ -242,8 +251,7 @@ export function buildRunSummary({
   const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
   const toolRetries = stepHistory.filter((step) => step.retried).length
   const invalidArgErrors = stepHistory.filter(
-    (step) =>
-      !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
+    (step) => !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
   ).length
   let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {
