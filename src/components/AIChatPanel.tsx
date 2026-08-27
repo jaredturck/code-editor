@@ -202,16 +202,23 @@ function ApprovalCard({ request, onDecision, onAnswer }: ApprovalCardProps) {
 }
 
 function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
-  const message_end_ref = useRef<HTMLDivElement>(null)
+  const messages_scroll_ref = useRef<HTMLDivElement>(null)
+  const messages_pinned_to_bottom_ref = useRef(true)
   const project_run_needs_resolution =
     chat.project_run?.status === 'paused' || chat.project_run?.status === 'interrupted'
 
   useEffect(() => {
-    message_end_ref.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'end',
-    })
+    const container = messages_scroll_ref.current
+    if (!container || !messages_pinned_to_bottom_ref.current) return
+    container.scrollTop = container.scrollHeight
   }, [chat.messages])
+
+  const handle_messages_scroll = () => {
+    const container = messages_scroll_ref.current
+    if (!container) return
+    const remaining = container.scrollHeight - container.scrollTop - container.clientHeight
+    messages_pinned_to_bottom_ref.current = remaining <= 80
+  }
 
   const status_label = chat.restoring_chat
     ? 'Restoring secure chat'
@@ -303,7 +310,11 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
 
       <AgentRuntimePanel generating={chat.generating} />
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-4">
+      <div
+        className="min-h-0 flex-1 overflow-auto px-3 py-4"
+        onScroll={handle_messages_scroll}
+        ref={messages_scroll_ref}
+      >
         {chat.messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-xs text-[var(--muted)]">
             <div className="mb-2 text-2xl opacity-50">✦</div>
@@ -361,7 +372,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
                 )}
               </article>
             ))}
-            <div ref={message_end_ref} />
           </div>
         )}
       </div>
