@@ -45,6 +45,8 @@ interface StartMessage {
 }
 
 const SCREEN_CAPTURE_PROVIDER_KEY = '__irisScreenCaptureProvider'
+const SCREEN_RPC_TIMEOUT_MS = 20_000
+const DDG_RPC_TIMEOUT_MS = 70_000
 const pending_requests = new Map<string, PendingRequest>()
 let bridge_handle: BridgeHandle | null = null
 let request_sequence = 0
@@ -60,6 +62,12 @@ const parent_port = get_parent_port()
 
 function error_message(value: unknown) {
   return value instanceof Error ? value.message : String(value || 'Unknown utility-process error')
+}
+
+function abort_error() {
+  const error = new Error('Search cancelled')
+  error.name = 'AbortError'
+  return error
 }
 
 function next_request_id(prefix: string) {
@@ -97,24 +105,58 @@ function handle_rpc_response(message: Record<string, unknown>) {
 function request_screen_capture(request: ScreenCaptureProviderRequest = {}): Promise<ScreenCaptureProviderResult> {
   const id = next_request_id('screen')
   return new Promise<ScreenCaptureProviderResult>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const pending = pending_requests.get(id)
+      if (!pending) return
+      pending_requests.delete(id)
+      pending.cleanup?.()
+      pending.reject(new Error('Screen capture request timed out waiting for the Electron main process.'))
+    }, SCREEN_RPC_TIMEOUT_MS)
+    timeout.unref?.()
     pending_requests.set(id, {
       resolve: (value) => resolve(value as ScreenCaptureProviderResult),
       reject,
+      cleanup: () => clearTimeout(timeout),
     })
     parent_port.postMessage({ type: 'screen-request', id, request })
   })
 }
 
 function request_browser_search(request: DuckDuckGoBrowserSearchRequest): Promise<DuckDuckGoBrowserSearchResponse> {
+  if (request.signal?.aborted) return Promise.reject(abort_error())
+
   const id = next_request_id('ddg')
   return new Promise<DuckDuckGoBrowserSearchResponse>((resolve, reject) => {
-    const handle_abort = () => parent_port.postMessage({ type: 'ddg-cancel', id })
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const handle_abort = () => {
+      const pending = pending_requests.get(id)
+      if (!pending) return
+      pending_requests.delete(id)
+      pending.cleanup?.()
+      parent_port.postMessage({ type: 'ddg-cancel', id })
+      pending.reject(abort_error())
+    }
+    const cleanup = () => {
+      request.signal?.removeEventListener('abort', handle_abort)
+      if (timeout) clearTimeout(timeout)
+      timeout = null
+    }
+
     request.signal?.addEventListener('abort', handle_abort, { once: true })
+    timeout = setTimeout(() => {
+      const pending = pending_requests.get(id)
+      if (!pending) return
+      pending_requests.delete(id)
+      pending.cleanup?.()
+      parent_port.postMessage({ type: 'ddg-cancel', id })
+      pending.reject(new Error('DuckDuckGo browser search timed out waiting for the Electron main process.'))
+    }, DDG_RPC_TIMEOUT_MS)
+    timeout.unref?.()
     pending_requests.set(id, {
       resolve: (value) => resolve(value as DuckDuckGoBrowserSearchResponse),
       reject,
       onProgress: request.onProgress,
-      cleanup: () => request.signal?.removeEventListener('abort', handle_abort),
+      cleanup,
     })
     parent_port.postMessage({
       type: 'ddg-request',
