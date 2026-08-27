@@ -26,6 +26,7 @@ export interface ProjectRunTodo {
 export interface ProjectRunState {
   id: string
   chat_id: string
+  workspace_binding_version: number
   workspace_root: string
   goal: string
   mode: ProjectRunMode
@@ -87,6 +88,7 @@ let abort_controller: AbortController | null = null
 let pause_requested = false
 const listeners = new Set<Listener>()
 
+const WORKSPACE_BINDING_VERSION = 1
 const MAX_RUN_ID_LENGTH = 200
 const MAX_WORKSPACE_ROOT_LENGTH = 4096
 const MAX_GOAL_LENGTH = 20_000
@@ -227,6 +229,7 @@ export function normalize_project_run_state(value: unknown): ProjectRunState | n
   return {
     id: String(source.id).slice(0, MAX_RUN_ID_LENGTH),
     chat_id: String(source.chat_id).slice(0, MAX_RUN_ID_LENGTH),
+    workspace_binding_version: Number(source.workspace_binding_version) === WORKSPACE_BINDING_VERSION ? 1 : 0,
     workspace_root: normalize_workspace_root(source.workspace_root),
     goal: String(source.goal || '').slice(0, MAX_GOAL_LENGTH),
     mode: mode === 'plan_first' ? 'plan_first' : 'automatic',
@@ -362,6 +365,7 @@ function begin(input: BeginProjectRunInput) {
   current_state = {
     id: String(input.id).slice(0, MAX_RUN_ID_LENGTH),
     chat_id: String(input.chat_id).slice(0, MAX_RUN_ID_LENGTH),
+    workspace_binding_version: WORKSPACE_BINDING_VERSION,
     workspace_root: current_workspace_root,
     goal: String(input.goal).slice(0, MAX_GOAL_LENGTH),
     mode: input.mode,
@@ -389,11 +393,14 @@ function begin(input: BeginProjectRunInput) {
 
 function resume(provider = '', model = '') {
   if (!current_state || !is_resumable_project_run_status(current_state.status)) return null
-  if (!current_state.workspace_root || current_state.workspace_root !== current_workspace_root) {
-    const expected = current_state.workspace_root
-      ? 'Open the workspace where this project run started before resuming it.'
-      : 'This older project run has no workspace binding and cannot be resumed safely.'
-    checkpoint({ error: expected, last_activity: expected })
+  if (current_state.workspace_binding_version !== WORKSPACE_BINDING_VERSION) {
+    const message = 'This older project run has no workspace binding and cannot be resumed safely.'
+    checkpoint({ error: message, last_activity: message })
+    return null
+  }
+  if (current_state.workspace_root !== current_workspace_root) {
+    const message = 'Open the workspace where this project run started before resuming it.'
+    checkpoint({ error: message, last_activity: message })
     return null
   }
   abort_controller = new AbortController()
