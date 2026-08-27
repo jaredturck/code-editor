@@ -48,6 +48,13 @@ describe('agent repetition advisory', () => {
 
     expect(blocked).toContain('REPETITION BLOCK')
     expect(blocked).toContain('browser runtime inspection')
+    expect(() =>
+      recordAgentEvidence({
+        scope_id: '/project::chat-1',
+        tool_name: 'browser.inspect',
+        args: { url: 'http://localhost:5180/' },
+      }),
+    ).toThrow('REPETITION BLOCK')
   })
 
   it('resets repeated evidence after a meaningful workspace mutation', () => {
