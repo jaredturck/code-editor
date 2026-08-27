@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   commit_agent_changes,
   ensure_workspace_repository,
+  get_git_diff,
   get_git_history,
   get_git_status,
   prepare_agent_git_run,
@@ -58,5 +59,20 @@ describe('workspace Git service', () => {
     await expect(remove_nested_repository(root, join(root, '.git'))).rejects.toThrow(
       /workspace root Git repository cannot be removed/i,
     )
+  })
+
+  it('does not follow an untracked symlink target while rendering its diff', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'code-editor-git-link-'))
+    const outside = await mkdtemp(join(tmpdir(), 'code-editor-git-outside-'))
+    const secret_path = join(outside, 'secret.txt')
+    const link_path = join(root, 'linked.txt')
+    await writeFile(secret_path, 'outside-secret-content\n', 'utf8')
+    await ensure_workspace_repository(root)
+    await symlink(secret_path, link_path)
+
+    const diff = await get_git_diff(root, link_path)
+
+    expect(diff.working).toContain('Symbolic link ->')
+    expect(diff.working).not.toContain('outside-secret-content')
   })
 })

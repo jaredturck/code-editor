@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { access, lstat, readFile, readdir, realpath, rm, stat } from 'node:fs/promises'
+import { access, lstat, readFile, readdir, readlink, realpath, rm, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -346,6 +346,15 @@ export async function get_git_diff(root_path: string, file_path: string) {
 
   if (change?.untracked) {
     const absolute_path = resolve(canonical_root, relative_path)
+    const entry_stat = await lstat(absolute_path)
+    if (entry_stat.isSymbolicLink()) {
+      const link_target = await readlink(absolute_path)
+      return {
+        path: relative_path,
+        staged: '',
+        working: `--- /dev/null\n+++ b/${relative_path}\nSymbolic link -> ${link_target.slice(0, max_diff_chars)}`,
+      }
+    }
     const content = await readFile(absolute_path)
     const binary = content.includes(0)
     const text = binary ? 'Binary file (untracked)' : content.toString('utf8')
