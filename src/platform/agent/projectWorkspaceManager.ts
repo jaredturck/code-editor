@@ -9,6 +9,8 @@ export interface ProjectWorkerWorkspace {
   createdAt: number
 }
 
+let integrationQueue: Promise<unknown> = Promise.resolve()
+
 function quote(value: string) {
   return `'${String(value || '').replace(/'/g, `'"'"'`)}'`
 }
@@ -32,6 +34,15 @@ async function git(workspaceRoot: string, args: string) {
 
 function terminalText(result: any) {
   return String(result?.stdout || result?.output || result?.text || '').trim()
+}
+
+function serializeIntegration<T>(operation: () => Promise<T>): Promise<T> {
+  const next = integrationQueue.then(operation, operation)
+  integrationQueue = next.then(
+    () => undefined,
+    () => undefined,
+  )
+  return next
 }
 
 export async function projectGitAvailable(workspaceRoot: string) {
@@ -146,18 +157,25 @@ export async function abortWorkerIntegration(workspaceRoot: string) {
   }
 }
 
+/**
+ * Integrate one worker at a time into the shared project workspace. Executors may run in parallel,
+ * but integration is intentionally serialized so concurrent cherry-picks cannot corrupt the index
+ * or race on overlapping files.
+ */
 export async function integrateWorkerCommit(workspaceRoot: string, commit: string) {
   const ref = String(commit || '').trim()
   if (!ref) throw new Error('Worker commit is required for integration.')
-  try {
-    return await git(workspaceRoot, `cherry-pick --no-commit ${quote(ref)}`)
-  } catch (error) {
-    await abortWorkerIntegration(workspaceRoot)
-    throw error
-  }
+  return serializeIntegration(async () => {
+    try {
+      return await git(workspaceRoot, `cherry-pick --no-commit ${quote(ref)}`)
+    } catch (error) {
+      await abortWorkerIntegration(workspaceRoot)
+      throw error
+    }
+  })
 }
 
 export async function restoreProjectCheckpoint(workspaceRoot: string, checkpoint: ProjectCheckpoint) {
   if (!checkpoint.ref) throw new Error('Checkpoint has no restorable Git ref.')
-  return git(workspaceRoot, `restore --source=${quote(checkpoint.ref)} --staged --worktree .`)
+  return serializeIntegration(() => git(workspaceRoot, `restore --source=${quote(checkpoint.ref)} --staged --worktree .`))
 }
