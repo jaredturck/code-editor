@@ -13,6 +13,7 @@ import {
   createWorkerWorkspace,
   integrateWorkerCommit,
   projectGitAvailable,
+  recoverWorkerWorkspace,
   removeWorkerWorkspace,
   type ProjectWorkerWorkspace,
 } from '@/platform/agent/projectWorkspaceManager'
@@ -40,6 +41,13 @@ interface PreparedWork {
   workspace: ProjectWorkerWorkspace | null
   cwd: string
   navigation: CodeNavigationEvidence
+}
+
+interface WorkExecution {
+  result: any
+  checkpoint: string
+  integrationError: string
+  workspacePreserved: boolean
 }
 
 function roleForRuntime(role: ProjectAgentRole) {
@@ -133,10 +141,11 @@ function buildTask(
       `Work item: ${item.id}`,
       `Project generation: ${ledger.generation}`,
       `Assigned workspace: ${cwd}`,
+      item.attempts > 0 ? `Resume attempt ${item.attempts + 1}; preserve useful partial work already in this workspace.` : '',
       readOnly ? 'Do not mutate project files.' : 'Make the requested implementation changes in the assigned workspace.',
       'Do not redo work already recorded as complete.',
       'Return concrete evidence, changed files, failures, and remaining blockers.',
-    ],
+    ].filter(Boolean),
     tools: {
       available: toolsForRole(item.role),
       preferred: item.role === 'scout' ? ['search.ripgrep', 'files.read'] : ['files.read', 'files.edit', 'terminal.exec'],
@@ -146,10 +155,10 @@ function buildTask(
       variant: item.role === 'scout' || item.role === 'evaluator' ? 'simple' : 'default',
     },
     budget: {
-      maxSteps: item.role === 'scout' ? 24 : 48,
-      maxTokens: item.role === 'scout' ? 16000 : 40000,
-      timeoutMs: item.role === 'scout' ? 20 * 60_000 : 60 * 60_000,
-      maxOutputChars: 16000,
+      maxSteps: item.role === 'scout' ? 32 : 96,
+      maxTokens: item.role === 'scout' ? 20000 : 60000,
+      timeoutMs: item.role === 'scout' ? 30 * 60_000 : 90 * 60_000,
+      maxOutputChars: 20000,
     },
     context: {
       projectId: ledger.projectId,
@@ -191,12 +200,18 @@ async function prepareWork(
   let cwd = mainRoot
 
   if (item.role === 'executor' && gitAvailable && mainRoot) {
-    try {
-      workspace = await createWorkerWorkspace(mainRoot, `${ledger.projectId}-${item.id}`)
-      cwd = workspace.root
-    } catch {
-      workspace = null
-      cwd = mainRoot
+    if (item.workspaceId && item.workspaceId !== mainRoot) {
+      workspace = await recoverWorkerWorkspace(item.workspaceId)
+      if (workspace) cwd = workspace.root
+    }
+    if (!workspace) {
+      try {
+        workspace = await createWorkerWorkspace(mainRoot, `${ledger.projectId}-${item.id}`)
+        cwd = workspace.root
+      } catch {
+        workspace = null
+        cwd = mainRoot
+      }
     }
   }
 
@@ -208,16 +223,10 @@ async function prepareWork(
   }
 
   const preparedItem = { ...item, workspaceId: cwd }
-  return {
-    item: preparedItem,
-    task: buildTask(preparedItem, ledger, settings, cwd, navigation),
-    workspace,
-    cwd,
-    navigation,
-  }
+  return { item: preparedItem, task: buildTask(preparedItem, ledger, settings, cwd, navigation), workspace, cwd, navigation }
 }
 
-async function runPreparedWork(prepared: PreparedWork, settings: Record<string, any>, signal?: AbortSignal) {
+async function runPreparedWork(prepared: PreparedWork, settings: Record<string, any>, signal?: AbortSignal): Promise<WorkExecution> {
   const taskSettings = {
     ...settings,
     agent_working_dir: prepared.cwd,
@@ -227,28 +236,33 @@ async function runPreparedWork(prepared: PreparedWork, settings: Record<string, 
   const result = await executeSTP(prepared.task, taskSettings, () => {}, signal)
   let integrationError = ''
   let checkpoint = ''
-
-  if (prepared.workspace && taskSucceeded(result)) {
-    try {
-      checkpoint = await checkpointWorkerWorkspace(
-        prepared.workspace,
-        `IRIS ${prepared.item.role} checkpoint: ${prepared.item.title || prepared.item.id}`,
-      )
-      if (checkpoint) await integrateWorkerCommit(String(settings.agent_working_dir || ''), checkpoint)
-    } catch (error) {
-      integrationError = error instanceof Error ? error.message : String(error || 'Worker integration failed')
-    }
-  }
+  let workspacePreserved = Boolean(prepared.workspace)
 
   if (prepared.workspace) {
     try {
-      await removeWorkerWorkspace(String(settings.agent_working_dir || ''), prepared.workspace, true)
+      // Checkpoint successful AND partial work. A fresh executor context can resume the branch even
+      // when this bounded STP stopped early or returned a recoverable failure.
+      checkpoint = await checkpointWorkerWorkspace(
+        prepared.workspace,
+        `IRIS ${prepared.item.role} checkpoint: ${prepared.item.title || prepared.item.id} (attempt ${prepared.item.attempts + 1})`,
+      )
     } catch {
-      // Cleanup is best-effort in Phase A; stale worktrees can be pruned later.
+      checkpoint = ''
+    }
+
+    if (taskSucceeded(result) && checkpoint) {
+      try {
+        await integrateWorkerCommit(String(settings.agent_working_dir || ''), checkpoint)
+        await removeWorkerWorkspace(String(settings.agent_working_dir || ''), prepared.workspace, true)
+        workspacePreserved = false
+      } catch (error) {
+        integrationError = error instanceof Error ? error.message : String(error || 'Worker integration failed')
+        workspacePreserved = true
+      }
     }
   }
 
-  return { result, checkpoint, integrationError }
+  return { result, checkpoint, integrationError, workspacePreserved }
 }
 
 export async function dispatchReadyProjectWork(
@@ -311,28 +325,38 @@ export async function dispatchReadyProjectWork(
   ledger = mutateProjectLedger(chatId, ledger.goal, (draft) => {
     const timestamp = Date.now()
     const executionByTask = new Map(prepared.map((entry, index) => [entry.task.taskId, executions[index]]))
+    const preparedByTask = new Map(prepared.map((entry) => [entry.task.taskId, entry]))
 
     draft.workItems = draft.workItems.map((item) => {
       if (!item.taskId || !taskIds.includes(item.taskId)) return item
       const settled = executionByTask.get(item.taskId)
       const execution = settled?.status === 'fulfilled' ? settled.value : null
+      const preparedItem = preparedByTask.get(item.taskId)
       const result = execution?.result
       const integrationError = execution?.integrationError || ''
-      const ok = taskSucceeded(result) && !integrationError
+      const ok = taskSucceeded(result) && !integrationError && execution?.workspacePreserved !== true
       if (ok) completed += 1
       else failed += 1
+      const resumable = !ok && Boolean(execution?.workspacePreserved && preparedItem?.workspace) && item.attempts < 8
       return {
         ...item,
-        status: ok ? 'done' : 'failed',
-        resultSummary: resultText(result).slice(0, 5000),
+        status: ok ? 'done' : resumable ? 'ready' : 'failed',
+        workspaceId: ok ? '' : preparedItem?.cwd || item.workspaceId,
+        taskId: '',
+        resultSummary: [resultText(result), execution?.checkpoint ? `Checkpoint: ${execution.checkpoint}` : '']
+          .filter(Boolean)
+          .join('\n')
+          .slice(0, 5000),
         blockers: ok
           ? []
-          : [
-              integrationError ||
-                (settled?.status === 'rejected'
-                  ? String(settled.reason instanceof Error ? settled.reason.message : settled.reason)
-                  : String((result as any)?.error || 'Delegated task failed.')),
-            ].slice(0, 20),
+          : resumable
+            ? []
+            : [
+                integrationError ||
+                  (settled?.status === 'rejected'
+                    ? String(settled.reason instanceof Error ? settled.reason.message : settled.reason)
+                    : String((result as any)?.error || 'Delegated task failed.')),
+              ].slice(0, 20),
         updatedAt: timestamp,
       }
     })
@@ -342,11 +366,11 @@ export async function dispatchReadyProjectWork(
       const settled = executionByTask.get(state.id)
       const execution = settled?.status === 'fulfilled' ? settled.value : null
       const result = execution?.result
-      const ok = taskSucceeded(result) && !execution?.integrationError
+      const ok = taskSucceeded(result) && !execution?.integrationError && execution?.workspacePreserved !== true
       return {
         ...state,
         status: ok ? 'done' : 'failed',
-        outputPath: String((result as any)?.outputPath || ''),
+        outputPath: String((result as any)?.outputPath || execution?.checkpoint || ''),
         error: ok
           ? ''
           : String(
@@ -355,7 +379,7 @@ export async function dispatchReadyProjectWork(
                   ? settled.reason instanceof Error
                     ? settled.reason.message
                     : settled.reason
-                  : (result as any)?.error || 'Delegated task failed.'),
+                  : (result as any)?.error || 'Task context ended; partial workspace preserved for resume.'),
             ).slice(0, 2000),
         updatedAt: timestamp,
       }
@@ -365,6 +389,9 @@ export async function dispatchReadyProjectWork(
       draft.generation += 1
       draft.lastProgressAt = timestamp
       draft.lastProgressSummary = `${completed} isolated project task${completed === 1 ? '' : 's'} completed and integrated.`
+    } else if (prepared.some((entry, index) => executions[index]?.status === 'fulfilled' && executions[index].value?.checkpoint)) {
+      draft.lastProgressAt = timestamp
+      draft.lastProgressSummary = 'Partial executor work checkpointed for continuation in a fresh context.'
     }
   })
 
