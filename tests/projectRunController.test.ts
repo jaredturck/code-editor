@@ -23,6 +23,7 @@ import {
 describe('project run controller', () => {
   beforeEach(() => {
     session_storage.values.clear()
+    projectRunController.set_workspace_root(null)
     projectRunController.clear('chat-1')
     session_storage.values.clear()
   })
@@ -62,6 +63,39 @@ describe('project run controller', () => {
     projectRunController.request_cancel()
     expect(resumed?.signal.aborted).toBe(true)
     expect(projectRunController.get_state()?.status).toBe('cancelled')
+  })
+
+  it('pauses an active run when the open workspace changes', () => {
+    projectRunController.set_workspace_root('/workspace-a')
+    const segment = projectRunController.begin({
+      id: 'run-1',
+      chat_id: 'chat-1',
+      goal: 'Change workspace safely',
+      mode: 'automatic',
+      provider: 'openai',
+      model: 'gpt-test',
+      todos: [],
+    })
+    projectRunController.set_status('running')
+
+    projectRunController.set_workspace_root('/workspace-b')
+
+    expect(segment.signal.aborted).toBe(true)
+    expect(projectRunController.get_state()).toMatchObject({
+      status: 'paused',
+      workspace_root: '/workspace-a',
+    })
+    expect(projectRunController.get_state()?.error).toContain('Workspace changed')
+
+    projectRunController.finish_segment()
+    expect(projectRunController.resume('openai', 'gpt-test')).toBeNull()
+    expect(projectRunController.get_state()?.error).toContain('Open the workspace')
+
+    projectRunController.set_workspace_root('/workspace-a')
+    const resumed = projectRunController.resume('openai', 'gpt-test')
+    expect(resumed?.signal.aborted).toBe(false)
+    expect(projectRunController.get_state()?.status).toBe('running')
+    projectRunController.request_cancel()
   })
 
   it('persists bounded structured runtime summary for autonomous resume', () => {
