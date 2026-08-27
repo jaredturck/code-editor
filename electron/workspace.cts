@@ -126,6 +126,32 @@ async function resolve_agent_workspace_target(root_path: string, target_path: st
   return { path: resolved_target, canonical_path: resolved_target, exists: false }
 }
 
+async function resolve_workspace_directory_target(root_path: string, directory_path: string) {
+  const resolved_directory = resolve_workspace_target(root_path, directory_path)
+  ensure_workspace_path(root_path, resolved_directory)
+  const canonical_root = await canonical_workspace_root(root_path)
+  const canonical_directory = await realpath(resolved_directory)
+  if (!path_is_inside(canonical_root, canonical_directory)) {
+    throw new Error('The requested path resolves outside the open workspace.')
+  }
+  const directory_stat = await stat(canonical_directory)
+  if (!directory_stat.isDirectory()) {
+    throw new Error(`${basename(resolved_directory)} is not a folder.`)
+  }
+  return { path: resolved_directory, canonical_path: canonical_directory }
+}
+
+async function resolve_workspace_entry_target(root_path: string, target_path: string) {
+  const resolved_target = resolve_workspace_target(root_path, target_path)
+  ensure_workspace_path(root_path, resolved_target)
+  const canonical_root = await canonical_workspace_root(root_path)
+  const canonical_parent = await realpath(dirname(resolved_target))
+  if (!path_is_inside(canonical_root, canonical_parent)) {
+    throw new Error('The requested path resolves outside the open workspace.')
+  }
+  return resolved_target
+}
+
 function text_revision(content: string) {
   return createHash('sha256').update(content, 'utf8').digest('hex')
 }
@@ -328,16 +354,10 @@ function sort_entries(entries: WorkspaceEntry[]) {
 }
 
 export async function read_workspace_directory(root_path: string, directory_path: string) {
-  ensure_workspace_path(root_path, directory_path)
-  const directory_stat = await stat(directory_path)
-
-  if (!directory_stat.isDirectory()) {
-    throw new Error(`${basename(directory_path)} is not a folder.`)
-  }
-
-  const entries = await readdir(directory_path, { withFileTypes: true })
+  const directory = await resolve_workspace_directory_target(root_path, directory_path)
+  const entries = await readdir(directory.canonical_path, { withFileTypes: true })
   const workspace_entries = await Promise.all(
-    entries.map((entry) => get_entry(join(directory_path, entry.name), directory_path)),
+    entries.map((entry) => get_entry(join(directory.path, entry.name), directory.path)),
   )
 
   return sort_entries(workspace_entries)
@@ -349,10 +369,9 @@ export async function create_workspace_entry(
   name: string,
   kind: WorkspaceEntryKind,
 ) {
-  ensure_workspace_path(root_path, parent_path)
+  const parent = await resolve_workspace_directory_target(root_path, parent_path)
   const normalized_name = validate_workspace_name(name)
-  const new_path = join(parent_path, normalized_name)
-  ensure_workspace_path(root_path, new_path)
+  const new_path = await resolve_workspace_entry_target(root_path, join(parent.path, normalized_name))
 
   if (await path_exists(new_path)) {
     throw new Error(`${normalized_name} already exists.`)
@@ -364,24 +383,26 @@ export async function create_workspace_entry(
     await writeFile(new_path, '', { encoding: 'utf8', flag: 'wx' })
   }
 
-  return get_entry(new_path, parent_path)
+  return get_entry(new_path, parent.path)
 }
 
 export async function rename_workspace_entry(root_path: string, source_path: string, name: string) {
-  ensure_workspace_path(root_path, source_path)
+  const safe_source_path = await resolve_workspace_entry_target(root_path, source_path)
   const normalized_name = validate_workspace_name(name)
-  const destination_path = join(dirname(source_path), normalized_name)
-  ensure_workspace_path(root_path, destination_path)
+  const destination_path = await resolve_workspace_entry_target(
+    root_path,
+    join(dirname(safe_source_path), normalized_name),
+  )
 
-  if (normalize_case(resolve(source_path)) === normalize_case(resolve(destination_path))) {
-    return get_entry(source_path, dirname(source_path))
+  if (normalize_case(resolve(safe_source_path)) === normalize_case(resolve(destination_path))) {
+    return get_entry(safe_source_path, dirname(safe_source_path))
   }
 
   if (await path_exists(destination_path)) {
     throw new Error(`${normalized_name} already exists.`)
   }
 
-  await rename(source_path, destination_path)
+  await rename(safe_source_path, destination_path)
   return get_entry(destination_path, dirname(destination_path))
 }
 
@@ -437,72 +458,78 @@ export async function paste_workspace_entry(
   operation: WorkspaceClipboardOperation,
   conflict_mode: WorkspaceConflictMode,
 ): Promise<WorkspaceMutationResult> {
-  ensure_workspace_path(root_path, source_path)
-  ensure_workspace_path(root_path, target_directory)
-  const source_stat = await stat(source_path)
+  const safe_source_path = await resolve_workspace_entry_target(root_path, source_path)
+  const safe_target_directory = await resolve_workspace_directory_target(root_path, target_directory)
+  const source_stat = await lstat(safe_source_path)
   const source_is_directory = source_stat.isDirectory()
-  let destination_path = join(target_directory, basename(source_path))
+  let destination_path = join(safe_target_directory.path, basename(safe_source_path))
 
-  if (normalize_case(resolve(source_path)) === normalize_case(resolve(destination_path))) {
+  if (normalize_case(resolve(safe_source_path)) === normalize_case(resolve(destination_path))) {
     if (operation === 'cut') {
       return {
         status: 'ok',
-        path: source_path,
-        old_path: source_path,
+        path: safe_source_path,
+        old_path: safe_source_path,
         kind: source_is_directory ? 'directory' : 'file',
       }
     }
 
-    destination_path = await get_keep_both_path(target_directory, source_path, source_is_directory)
+    destination_path = await get_keep_both_path(safe_target_directory.path, safe_source_path, source_is_directory)
   }
 
-  if (source_is_directory && path_is_inside(source_path, target_directory)) {
+  if (source_is_directory && path_is_inside(safe_source_path, safe_target_directory.path)) {
     throw new Error('A folder cannot be moved or copied into itself.')
   }
+
+  destination_path = await resolve_workspace_entry_target(root_path, destination_path)
 
   if (await path_exists(destination_path)) {
     if (conflict_mode === 'ask') {
       return {
         status: 'conflict',
-        source_path,
+        source_path: safe_source_path,
         destination_path,
         operation,
       }
     }
 
     if (conflict_mode === 'keep_both') {
-      destination_path = await get_keep_both_path(target_directory, source_path, source_is_directory)
+      destination_path = await get_keep_both_path(
+        safe_target_directory.path,
+        safe_source_path,
+        source_is_directory,
+      )
     } else {
       await shell.trashItem(destination_path)
     }
   }
 
   if (operation === 'copy') {
-    await copy_workspace_path(source_path, destination_path)
+    await copy_workspace_path(safe_source_path, destination_path)
   } else {
-    await move_workspace_path(source_path, destination_path)
+    await move_workspace_path(safe_source_path, destination_path)
   }
 
   return {
     status: 'ok',
     path: destination_path,
-    old_path: operation === 'cut' ? source_path : undefined,
+    old_path: operation === 'cut' ? safe_source_path : undefined,
     kind: source_is_directory ? 'directory' : 'file',
   }
 }
 
 export async function trash_workspace_entry(root_path: string, target_path: string) {
-  ensure_workspace_path(root_path, target_path)
+  const safe_target_path = await resolve_workspace_entry_target(root_path, target_path)
 
-  if (normalize_case(resolve(root_path)) === normalize_case(resolve(target_path))) {
+  if (normalize_case(resolve(root_path)) === normalize_case(resolve(safe_target_path))) {
     throw new Error('The workspace root cannot be deleted from the Explorer.')
   }
 
-  const target_stat = await stat(target_path)
-  await shell.trashItem(target_path)
+  const target_stat = await lstat(safe_target_path)
+  await shell.trashItem(safe_target_path)
 
   return {
-    path: target_path,
+    path: safe_target_path,
     kind: target_stat.isDirectory() ? ('directory' as const) : ('file' as const),
   }
 }
