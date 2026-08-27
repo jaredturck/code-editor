@@ -1,16 +1,16 @@
 /**
  * Stable agent-runtime API.
  *
- * Legacy helpers remain exported for compatibility. Workspace project execution is owned by
- * projectAgentRuntime and Automatic mode is explicitly bounded rather than masquerading as
- * another run mode.
+ * Legacy helpers remain exported for compatibility. Automatic workspace projects are owned by
+ * the durable long-running lifecycle; plan-first and non-project chat retain the direct runtime.
  */
 export * from '@/platform/agentRuntimeLegacy'
 
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
+import { runLongRunningProject } from '@/platform/agent/longRunningProjectRuntime'
 import {
   persistedTaskMatchesInput,
-  runAgentSession as runProjectAgentSession,
+  runAgentSession as runDirectAgentSession,
   withAutomaticApprovalPolicy,
   withThrottledStreamEvents,
 } from '@/platform/projectAgentRuntime'
@@ -46,18 +46,6 @@ function isWorkspaceProjectRun(input: AgentSessionInput) {
     ? String((session as Record<string, unknown>).id || '').trim()
     : ''
   return Boolean(chatId && String(input.settings?.agent_working_dir || '').trim())
-}
-
-function withBoundedProjectMode(input: AgentSessionInput): AgentSessionInput {
-  if (!isWorkspaceProjectRun(input)) return input
-  if (String(input.settings?.agent_project_run_mode || 'automatic') === 'plan_first') return input
-  return {
-    ...input,
-    settings: {
-      ...input.settings,
-      agent_bounded_automatic: true,
-    },
-  }
 }
 
 function stepTool(step: Record<string, unknown>) {
@@ -134,9 +122,10 @@ function buildEfficiencyMetrics(result: AgentSessionResult) {
 }
 
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
-  const projectInput = withBoundedProjectMode(input)
-  const result = await runProjectAgentSession(projectInput)
-  if (!isWorkspaceProjectRun(projectInput)) return result
+  const workspaceProject = isWorkspaceProjectRun(input)
+  const automatic = String(input.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
+  const result = workspaceProject && automatic ? await runLongRunningProject(input) : await runDirectAgentSession(input)
+  if (!workspaceProject) return result
   return {
     ...result,
     summary: {
