@@ -1,7 +1,7 @@
 /**
  * Project-run policy facade around the inherited Agent Chat integration.
- * Automatic mode is intentionally small-model friendly: one primary agent, project tools,
- * objective runtime gates, and no model-managed orchestration ceremony.
+ * Automatic mode is optimized for long-running autonomous project work: project-scoped
+ * permissions, specialist roles, durable runtime state, and progress-based safety controls.
  */
 export * from '@/chat/agentChatLegacy'
 
@@ -11,32 +11,13 @@ import type { OrbSettings } from '@/platform/settingsStorage'
 
 const automatic_blocked_tools = new Set([
   'approval.request',
-  'user.ask',
   'todo.update',
   'chat.remember',
   'chat.recall',
   'context.summarize',
-  'system.stats',
-  'system.processes',
   'launcher.list',
-  'skills.list',
-  'skills.search',
-  'skills.load',
-  'skills.offload',
   'resources.list',
-  'agent.available',
-  'agent.delegate',
-  'agent.recall',
-  'agent.readOutput',
-  'agent.status',
-  'agent.roster',
-  'agent.broadcast',
-  'agent.verify',
-  'agent.recallAll',
-  'agent.find',
-  'agent.consult',
-  'agent.review',
-  'agent.overwatch',
+  'trace.log',
 ])
 
 function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
@@ -46,15 +27,6 @@ function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
     if (automatic_blocked_tools.has(name)) return false
     if (!screen_enabled && name === 'screen.capabilities') return false
     return true
-  })
-}
-
-function automatic_agent_models(value: unknown) {
-  if (!Array.isArray(value)) return value
-  return value.filter((entry) => {
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return true
-    const role = String((entry as Record<string, unknown>).role || '').toLowerCase()
-    return !['overwatcher', 'reviewer', 'consultant'].includes(role)
   })
 }
 
@@ -77,7 +49,6 @@ export function build_core_agent_settings(
 
   const project_scoped = Boolean(workspace_root)
   const screen_enabled = base.permissions_screen_capture === true
-  const configured_session_minutes = Math.max(1, Number(base.agent_session_minutes) || 15)
   const configured_repeat_cap = Math.max(2, Number(base.agent_tool_repeat_cap) || 4)
 
   return {
@@ -87,21 +58,32 @@ export function build_core_agent_settings(
     permissions_terminal: project_scoped,
     agent_permission_tier_orchestrator: 3,
     agent_permission_tier_executor: 3,
+    agent_permission_tier_scout: 1,
+    agent_permission_tier_overwatcher: 1,
     agent_allow_network_commands: project_scoped || base.agent_allow_network_commands === true,
     agent_require_explicit_approval: false,
     agent_web_site_guard: false,
     search_web_require_paid_fallback_confirmation: false,
-    agent_search_web_budget: Math.min(2, Math.max(1, Number(base.agent_search_web_budget) || 2)),
-    agent_session_minutes: Math.min(8, configured_session_minutes),
-    agent_tool_repeat_cap: Math.min(2, configured_repeat_cap),
-    agent_multi_enabled: false,
-    agent_peer_consult_enabled: false,
-    agent_peer_review: 'off',
-    agent_model_routing: 'off',
-    agent_models: automatic_agent_models(base.agent_models),
+    agent_search_web_budget: Math.max(2, Number(base.agent_search_web_budget) || 2),
+
+    // A project run is not a chat-turn timer. Individual model/tool calls remain bounded,
+    // but the outer project lifecycle is allowed to continue for hours while it progresses.
+    agent_session_minutes: 0,
+    agent_bounded_automatic: false,
+    agent_tool_repeat_cap: configured_repeat_cap,
+
+    // Restore semantic specialization. Runtime code owns queueing/status/persistence; models
+    // own role-level decisions such as investigate, implement, review, and escalate.
+    agent_multi_enabled: base.agent_multi_enabled !== false,
+    agent_peer_consult_enabled: base.agent_peer_consult_enabled !== false,
+    agent_peer_review: base.agent_peer_review || 'suggested',
+    agent_model_routing: base.agent_model_routing || 'auto',
     agent_overwatch_continuous: false,
+
+    // Skills remain available through progressive disclosure / role filtering. The agent is
+    // not required to maintain skill state manually during ordinary project execution.
+    skills_enabled: base.skills_enabled !== false,
     agent_finish_open_todos: false,
-    skills_enabled: false,
     context_budget_warn_ratio: 0.05,
     agent_tool_allowlist: autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled),
   }
@@ -112,7 +94,7 @@ export function build_core_agent_settings(
 export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
   const clean_goal = String(goal || '').trim()
   if (resume) {
-    return `Resume this project goal from the current files and persisted run state. Do not redo completed work.\n\n${clean_goal}`
+    return `Resume this project goal from the current files and persisted project ledger. Continue unfinished requirements without redoing completed work.\n\n${clean_goal}`
   }
   if (run_mode === 'plan_first') {
     return `Plan before substantive changes and ask for approval once the plan is ready.\n\nGoal:\n${clean_goal}`
