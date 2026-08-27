@@ -1,7 +1,7 @@
 /**
- * Lightweight task preflight. Obvious requests are classified deterministically so the
- * coding model can start useful work immediately; a local planner model is reserved for
- * genuinely ambiguous requests.
+ * Lightweight task preflight. Workspace projects are classified deterministically so coding
+ * starts immediately; a local planner model is reserved for genuinely ambiguous non-workspace
+ * requests where a second inference can add useful routing information.
  */
 
 import { callAIWithMeta } from '@/platform/aiService'
@@ -36,9 +36,9 @@ const SOCIAL_TURN_PATTERN =
 const DEVELOPMENT_NOUN_PATTERN =
   /\b(code|codebase|repo|repository|project|app|application|website|webpage|page|component|function|class|module|api|endpoint|ui|interface|css|html|typescript|javascript|python|react|electron|backend|frontend|test|tests|bug|provider|agent|runtime|prompt|database|schema|build)\b/i
 const MUTATION_VERB_PATTERN =
-  /\b(build|create|implement|add|change|update|fix|repair|refactor|remove|delete|rename|rewrite|migrate|wire|integrate|debug|optimi[sz]e|improve|redesign|replace|convert|edit|write)\b/i
+  /\b(build|create|implement|add|change|update|fix|repair|refactor|remove|delete|rename|rewrite|migrate|wire|integrate|debug|optimi[sz]e|improve|redesign|replace|convert|edit|write|make|style|move)\b/i
 const READ_ONLY_DEVELOPMENT_PATTERN =
-  /\b(review|audit|analy[sz]e|explain|inspect|investigate|trace|understand|find|locate|summari[sz]e)\b/i
+  /\b(review|audit|analy[sz]e|explain|inspect|investigate|trace|understand|find|locate|summari[sz]e|check)\b/i
 const FILE_MUTATION_PATTERN = /\b(create|write|edit|update|change|rename|move|delete|remove|replace)\b[\s\S]{0,80}\b(file|folder|directory|document)\b/i
 const WEB_RESEARCH_PATTERN =
   /\b(research|look up|search the web|browse|latest|current|today|recent|sources?|citations?|online)\b/i
@@ -131,22 +131,21 @@ function directPlan(
   }
 }
 
-/**
- * Returns a deterministic task contract only when the request is clear enough that another
- * inference would add ceremony rather than useful judgment.
- */
+/** Returns a deterministic contract whenever another inference would add more ceremony than value. */
 export function inferDirectPreflightPlan(userInput: string, settings: SettingsLike = {}): LocalPreflightPlan | null {
   const text = String(userInput || '').trim()
   if (!text || SOCIAL_TURN_PATTERN.test(text)) return null
 
   const hasWorkspace = Boolean(String(settings.agent_working_dir || '').trim())
   const development = DEVELOPMENT_NOUN_PATTERN.test(text)
+  const mutation = MUTATION_VERB_PATTERN.test(text)
+  const readOnly = READ_ONLY_DEVELOPMENT_PATTERN.test(text)
 
-  if (development && MUTATION_VERB_PATTERN.test(text)) {
+  if ((development || hasWorkspace) && mutation) {
     return directPlan('code_change', true, true, true, hasWorkspace, false)
   }
 
-  if (development && READ_ONLY_DEVELOPMENT_PATTERN.test(text)) {
+  if ((development || hasWorkspace) && readOnly) {
     return directPlan('code_change', true, false, false, hasWorkspace, false)
   }
 
@@ -158,12 +157,17 @@ export function inferDirectPreflightPlan(userInput: string, settings: SettingsLi
     return directPlan('research', false, false, false, false, true)
   }
 
+  // Workspace ambiguity belongs to the main agent, which has the live files and tools needed
+  // to resolve it. Do not pay for a separate model interpretation first.
+  if (hasWorkspace) return directPlan('other', false, false, false, true, false)
+
   return null
 }
 
 export function shouldRunLocalPlanning(userInput: string, settings: SettingsLike = {}): boolean {
   const text = String(userInput || '').trim()
   if (!text || SOCIAL_TURN_PATTERN.test(text)) return false
+  if (String(settings.agent_working_dir || '').trim()) return false
   return inferDirectPreflightPlan(text, settings) === null
 }
 
@@ -189,20 +193,14 @@ export async function buildLocalPreflightPlan(
   if (!planner) return null
 
   const recent = (Array.isArray(conversation) ? conversation : [])
-    .slice(-3)
-    .map((message) => `${message.role || 'user'}: ${String(message.content || '').slice(0, 600)}`)
+    .slice(-2)
+    .map((message) => `${message.role || 'user'}: ${String(message.content || '').slice(0, 400)}`)
     .join('\n')
-  const prompt = [
-    `Request:\n${userInput}`,
-    recent ? `Recent context:\n${recent}` : '',
-    'Classify only what the executor needs to know. Keep success criteria short and observable.',
-  ]
-    .filter(Boolean)
-    .join('\n\n')
+  const prompt = [`Request:\n${userInput}`, recent ? `Context:\n${recent}` : ''].filter(Boolean).join('\n\n')
 
   const meta = await callAIWithMeta(
     [
-      { role: 'system', content: 'Classify this task for execution. Return JSON.' },
+      { role: 'system', content: 'Classify this task for execution.' },
       { role: 'user', content: prompt },
     ],
     {
@@ -210,7 +208,7 @@ export async function buildLocalPreflightPlan(
       ai_provider: 'local',
       ai_model: planner.model,
       ai_runtime_api_key: '',
-      agent_max_output_tokens: 450,
+      agent_max_output_tokens: 320,
     },
     {
       signal: signal || undefined,
@@ -231,7 +229,5 @@ export function formatLocalPreflightPlan(plan: LocalPreflightPlan | null): strin
   if (normalized.workspaceMutationExpected) parts.push('Workspace change required.')
   if (normalized.verificationRequired) parts.push('Verify the result before finishing.')
   if (normalized.successCriteria.length) parts.push(`Done when: ${normalized.successCriteria.join(' | ')}.`)
-  if (normalized.needsLocalFiles) parts.push('Use project files as needed.')
-  if (normalized.needsWebResearch) parts.push('Use web research as needed.')
   return parts.join(' ')
 }
