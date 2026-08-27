@@ -47,8 +47,6 @@ export async function createProjectCheckpoint(
 ): Promise<ProjectCheckpoint> {
   const status = await git(workspaceRoot, 'status --porcelain')
   const statusText = String((status as any)?.stdout || (status as any)?.output || '')
-  // Stash-like snapshots are represented as tree commits without moving the user's branch.
-  // `git stash create` returns a commit object while leaving index/worktree untouched.
   const created = await git(workspaceRoot, 'stash create')
   const ref = String((created as any)?.stdout || (created as any)?.output || '').trim()
   const checkpoint: ProjectCheckpoint = {
@@ -101,21 +99,12 @@ export async function workerWorkspaceStatus(worker: ProjectWorkerWorkspace) {
 }
 
 export async function checkpointWorkerWorkspace(worker: ProjectWorkerWorkspace, message: string) {
-  // Worker branches are harness-owned and safe to commit. The user's active branch is never moved.
   await executeTerminalCommand('git add -A', worker.root)
   const status = await workerWorkspaceStatus(worker)
   if (!status.trim()) return ''
   await executeTerminalCommand(`git commit -m ${quote(String(message || 'IRIS worker checkpoint').slice(0, 200))}`, worker.root)
   const result = await executeTerminalCommand('git rev-parse HEAD', worker.root)
   return String((result as any)?.stdout || (result as any)?.output || '').trim()
-}
-
-export async function integrateWorkerCommit(workspaceRoot: string, commit: string) {
-  const ref = String(commit || '').trim()
-  if (!ref) throw new Error('Worker commit is required for integration.')
-  // Apply without committing to the user's branch. The editor/harness can inspect and verify
-  // before deciding how the final repository history should be represented.
-  return git(workspaceRoot, `cherry-pick --no-commit ${quote(ref)}`)
 }
 
 export async function abortWorkerIntegration(workspaceRoot: string) {
@@ -126,8 +115,22 @@ export async function abortWorkerIntegration(workspaceRoot: string) {
   }
 }
 
+export async function integrateWorkerCommit(workspaceRoot: string, commit: string) {
+  const ref = String(commit || '').trim()
+  if (!ref) throw new Error('Worker commit is required for integration.')
+  try {
+    // Apply without creating history on the user's branch. Acceptance can verify the integrated
+    // worktree before the editor decides how final history should be represented.
+    return await git(workspaceRoot, `cherry-pick --no-commit ${quote(ref)}`)
+  } catch (error) {
+    // Never leave the integration workspace inside a half-resolved cherry-pick. The failed worker
+    // can be retried/replanned from its durable work item instead.
+    await abortWorkerIntegration(workspaceRoot)
+    throw error
+  }
+}
+
 export async function restoreProjectCheckpoint(workspaceRoot: string, checkpoint: ProjectCheckpoint) {
   if (!checkpoint.ref) throw new Error('Checkpoint has no restorable Git ref.')
-  // Restore files only; do not rewrite branch history.
   return git(workspaceRoot, `restore --source=${quote(checkpoint.ref)} --staged --worktree .`)
 }
