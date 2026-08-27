@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   recordAgentEvidence,
+  repeatedAgentEvidenceBlock,
   resetRepetitionAdvisoryForTests,
   terminalCommandLikelyMutatesSource,
 } from '../src/platform/agent/repetitionAdvisory'
@@ -10,7 +11,7 @@ describe('agent repetition advisory', () => {
     resetRepetitionAdvisoryForTests()
   })
 
-  it('advises after equivalent verification repeats without blocking the action', () => {
+  it('advises after equivalent verification repeats', () => {
     const first = recordAgentEvidence({
       scope_id: '/project::chat-1',
       tool_name: 'terminal.exec',
@@ -27,7 +28,34 @@ describe('agent repetition advisory', () => {
     expect(second).toContain('build verification')
   })
 
+  it('blocks another equivalent verification after repeated unchanged evidence', () => {
+    recordAgentEvidence({
+      scope_id: '/project::chat-1',
+      tool_name: 'browser.inspect',
+      args: { url: 'http://localhost:5174/' },
+    })
+    recordAgentEvidence({
+      scope_id: '/project::chat-1',
+      tool_name: 'browser.inspect',
+      args: { url: 'http://localhost:5177/' },
+    })
+
+    const blocked = repeatedAgentEvidenceBlock({
+      scope_id: '/project::chat-1',
+      tool_name: 'browser.inspect',
+      args: { url: 'http://localhost:5180/' },
+    })
+
+    expect(blocked).toContain('REPETITION BLOCK')
+    expect(blocked).toContain('browser runtime inspection')
+  })
+
   it('resets repeated evidence after a meaningful workspace mutation', () => {
+    recordAgentEvidence({
+      scope_id: '/project::chat-1',
+      tool_name: 'terminal.exec',
+      args: { command: 'npm run build' },
+    })
     recordAgentEvidence({
       scope_id: '/project::chat-1',
       tool_name: 'terminal.exec',
@@ -40,12 +68,18 @@ describe('agent repetition advisory', () => {
       workspace_mutated: true,
     })
 
+    const blocked = repeatedAgentEvidenceBlock({
+      scope_id: '/project::chat-1',
+      tool_name: 'terminal.exec',
+      args: { command: 'npm run build' },
+    })
     const after_mutation = recordAgentEvidence({
       scope_id: '/project::chat-1',
       tool_name: 'terminal.exec',
       args: { command: 'npm run build' },
     })
 
+    expect(blocked).toBe('')
     expect(after_mutation).toBe('')
   })
 
