@@ -30,6 +30,15 @@ const GIT_MUTATION = /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s
 const FORK_BOMB = /:\(\)\s*\{\s*:\|:&\s*;\s*\}\s*;/
 const PIPE_TO_SHELL = /(?:curl|wget)[^\n|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b/i
 const SUDO = /(?:^|[;&|]\s*)sudo\b/i
+const PROCESS_TERMINATION = [
+  /(?:^|[;&|]\s*)(?:(?:sudo|doas|command|env)\s+)*(?:\S*\/)?(?:kill|pkill|killall|killall5|taskkill|kill-port)(?:\s|$)/i,
+  /(?:^|[;&|]\s*)(?:(?:sudo|doas|command|env)\s+)*(?:\S*\/)?fuser\b[^\n;&|]*(?:\s|^)(?:-k|--kill)(?:\s|$)/i,
+  /\bxargs\b[^\n;&|]*(?:\s|^)(?:\S*\/)?(?:kill|pkill|killall)(?:\s|$)/i,
+  /\b(?:npx|bunx|pnpm\s+dlx|yarn\s+dlx|npm\s+exec(?:\s+--)?)\s+kill-port(?:\s|$)/i,
+  /\bStop-Process\b/i,
+  /\bprocess\.kill\s*\(/i,
+  /\bos\.kill\s*\(/i,
+]
 const DESTRUCTIVE = [
   /(?:^|[;&|]\s*)rm\s+(?:-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\s+(?:\/|~)(?:\s|$)/i,
   /(?:^|[;&|]\s*)(?:mkfs(?:\.\w+)?|fdisk|parted)\b/i,
@@ -109,6 +118,11 @@ export function assertSafeCommand(
   if (GIT_MUTATION.test(text)) {
     throw new Error(
       'Git mutations are owned by Source Control. Agent shell Git is read-only; use status, diff, log, show, rev-parse, ls-files, grep, or blame.',
+    )
+  }
+  if (PROCESS_TERMINATION.some((pattern) => pattern.test(text))) {
+    throw new Error(
+      'Process termination is blocked for agent terminal commands. Do not kill processes or reclaim ports; use an alternate dev-server port or an IRIS-managed process lifecycle instead.',
     )
   }
   if (FORK_BOMB.test(text) || DESTRUCTIVE.some((pattern) => pattern.test(text))) {
