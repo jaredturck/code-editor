@@ -102,8 +102,6 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
             image_generation_enabled: true,
             image_generation_auto_enabled_v1: true,
           })
-        } else if (!status.ready && current.image_generation_enabled === true) {
-          writeOrbSettings({ ...current, image_generation_enabled: false })
         }
       })
       .catch((error) => {
