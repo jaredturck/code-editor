@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
 import { testConnection } from '@/platform/aiService'
+import {
+  getImageGenerationStatus,
+  installImageGenerationModels,
+  type ImageGenerationStatus,
+} from '@/platform/imageGenerationBridge'
 import type { AgentRoleId } from '@/platform/agent/agentIdentity'
 import {
   readOrbSettings,
@@ -78,8 +83,29 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
   const [settings, set_settings] = useState<OrbSettings>(() => readOrbSettings())
   const [connection_busy, set_connection_busy] = useState(false)
   const [connection_message, set_connection_message] = useState('')
+  const [image_status, set_image_status] = useState<ImageGenerationStatus | null>(null)
+  const [image_busy, set_image_busy] = useState(false)
+  const [image_message, set_image_message] = useState('')
 
   useEffect(() => subscribeSettingsChanged(set_settings), [])
+
+  useEffect(() => {
+    let cancelled = false
+    void getImageGenerationStatus()
+      .then((status) => {
+        if (cancelled) return
+        set_image_status(status)
+        if (!status.ready && readOrbSettings().image_generation_enabled === true) {
+          writeOrbSettings({ ...readOrbSettings(), image_generation_enabled: false })
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) set_image_message(error instanceof Error ? error.message : 'Image generation status is unavailable.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const update = (patch: Partial<OrbSettings>) => {
     const next = writeOrbSettings({ ...settings, ...patch })
@@ -98,6 +124,34 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
       set_connection_message(error instanceof Error ? error.message : 'Local model connection failed.')
     } finally {
       set_connection_busy(false)
+    }
+  }
+
+  const refresh_image_status = async () => {
+    const status = await getImageGenerationStatus()
+    set_image_status(status)
+    return status
+  }
+
+  const install_image_models = async () => {
+    set_image_busy(true)
+    set_image_message('Downloading and verifying the pinned Z-Image Turbo models…')
+    const poll = window.setInterval(() => {
+      void refresh_image_status().catch(() => undefined)
+    }, 1000)
+    try {
+      const status = await installImageGenerationModels()
+      set_image_status(status)
+      set_image_message(
+        status.engineAvailable
+          ? 'Z-Image Turbo is ready for the coding agent.'
+          : 'Model weights are installed. A packaged stable-diffusion.cpp sd-server runtime is still required.',
+      )
+    } catch (error) {
+      set_image_message(error instanceof Error ? error.message : 'Z-Image Turbo installation failed.')
+    } finally {
+      window.clearInterval(poll)
+      set_image_busy(false)
     }
   }
 
@@ -146,8 +200,57 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           </button>
         </div>
       </SettingsSection>
+      <SettingsSection title="Image generation">
+        <SettingsRow
+          description="Expose one native image.generate tool to the coding agent. It uses fixed square, landscape, or portrait resolutions and writes the generated asset directly into the project."
+          highlighted={highlighted('image-generation-enabled')}
+          id="image-generation-enabled"
+          label="Z-Image Turbo tool"
+        >
+          <SettingsToggle
+            checked={image_status?.ready === true && settings.image_generation_enabled === true}
+            disabled={image_status?.ready !== true || image_busy}
+            onChange={(value) => update({ image_generation_enabled: value })}
+          />
+        </SettingsRow>
+        <SettingsRow
+          description="Pinned Q3_K S3-DiT + Q4_K_M Qwen3-4B text encoder + full VAE. About 6 GB of model weights; generation is isolated to GPU 1 and unloads after five idle minutes."
+          highlighted={highlighted('image-generation-runtime')}
+          id="image-generation-runtime"
+          label="Local image runtime"
+        >
+          <div className="flex items-center gap-2">
+            {!image_status?.installed ? (
+              <button
+                className="h-9 rounded-md border border-sky-500/30 px-3 text-xs text-sky-300 hover:bg-sky-500/10 disabled:opacity-40"
+                disabled={image_busy}
+                onClick={() => void install_image_models()}
+                type="button"
+              >
+                {image_busy ? `${image_status?.installPercent || 0}%` : 'Install models (~6 GB)'}
+              </button>
+            ) : null}
+            <button
+              className="h-9 rounded-md border border-[var(--input-border)] px-3 text-xs text-[var(--muted)] hover:bg-[var(--hover)]"
+              onClick={() => void refresh_image_status().catch((error) => set_image_message(error instanceof Error ? error.message : 'Status refresh failed.'))}
+              type="button"
+            >
+              Refresh
+            </button>
+          </div>
+        </SettingsRow>
+        <div className="px-4 py-3 text-[10px] leading-4 text-[var(--muted)]">
+          {image_message || (image_status?.ready
+            ? `Ready · GPU ${image_status.gpuIndex} · ${image_status.running ? 'model loaded' : 'loads on first use'}`
+            : image_status?.installed && !image_status.engineAvailable
+              ? 'Models installed · stable-diffusion.cpp sd-server runtime not found'
+              : image_status
+                ? 'Image generation models are not installed.'
+                : 'Checking local image runtime…')}
+        </div>
+      </SettingsSection>
       <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3 text-[10px] leading-4 text-[var(--muted)]">
-        Hosted-provider credentials, cloud failover, semantic indexing, voice models and automatic model download are intentionally not part of this product.
+        Hosted-provider credentials, cloud failover, semantic indexing and automatic coding-model download are intentionally not part of this product.
       </div>
     </>
   )
