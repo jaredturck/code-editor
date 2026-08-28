@@ -34,10 +34,7 @@ export function buildCapabilitySnapshot(input: CapabilitySnapshotInput) {
  * Keep individual tool results small enough for local models to retain the surrounding task.
  * The base renderer still appends pagination guidance whenever the result is truncated.
  */
-export function toToolResultContent(
-  result: unknown,
-  options: { cap?: number; toolName?: string } = {},
-) {
+export function toToolResultContent(result: unknown, options: { cap?: number; toolName?: string } = {}) {
   return baseToolResultContent(result, {
     ...options,
     cap: Number.isFinite(Number(options.cap)) ? Number(options.cap) : DEFAULT_MODEL_TOOL_RESULT_CAP,

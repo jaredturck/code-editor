@@ -44,9 +44,9 @@ describe('local Qwen tool-call recovery', () => {
   })
 
   it('does not retry unrelated server failures', async () => {
-    const fetch_mock = vi.fn().mockResolvedValue(
-      jsonResponse({ error: { message: 'model unavailable' } }, { ok: false, status: 500 }),
-    )
+    const fetch_mock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: { message: 'model unavailable' } }, { ok: false, status: 500 }))
 
     await expect(
       callLocalLLM([{ role: 'user', content: 'Hello' }], 'http://127.0.0.1:11434', 'qwen3.5:9b', fetch_mock),

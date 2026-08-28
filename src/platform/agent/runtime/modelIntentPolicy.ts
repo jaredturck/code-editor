@@ -20,9 +20,7 @@ const WEB_RESEARCH_PATTERN = /\b(research|look up|search the web|browse|latest|c
 function availableToolSet(snapshot: CapabilitySnapshot) {
   const advertised = Array.isArray(snapshot?.advertisedTools) ? snapshot.advertisedTools : snapshot?.availableTools
   return new Set(
-    (Array.isArray(advertised) ? advertised : [])
-      .map(String)
-      .filter((name) => Boolean(getToolCatalogEntry(name))),
+    (Array.isArray(advertised) ? advertised : []).map(String).filter((name) => Boolean(getToolCatalogEntry(name))),
   )
 }
 

@@ -31,9 +31,10 @@ export async function runAutomaticSetup(settings: Record<string, unknown>): Prom
     String(settings.ai_model || ''),
     DEFAULT_AI_MODEL,
   ])
-  const discovered = settings.discovered_models && typeof settings.discovered_models === 'object'
-    ? settings.discovered_models as Record<string, unknown>
-    : {}
+  const discovered =
+    settings.discovered_models && typeof settings.discovered_models === 'object'
+      ? (settings.discovered_models as Record<string, unknown>)
+      : {}
   const workingSettings = {
     ...settings,
     ai_provider: 'local',
@@ -51,10 +52,7 @@ export async function runAutomaticSetup(settings: Record<string, unknown>): Prom
       ...plan.patch,
       connection_status: 'connected',
     },
-    summary: [
-      `Local runtime connected · ${plan.patch.ai_model}`,
-      ...plan.summary,
-    ],
+    summary: [`Local runtime connected · ${plan.patch.ai_model}`, ...plan.summary],
     testedKeys: 0,
     validKeys: 0,
     localDetected: true,

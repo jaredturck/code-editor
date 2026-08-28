@@ -21,12 +21,14 @@ interface CommandApprovalState {
 }
 
 const MAX_TERMINAL_COMMAND_LENGTH = 16_000
-const SECRET_PATH = /(?:^|\/)(?:\.ssh|\.gnupg|\.aws|\.azure|\.config\/gcloud|\.kube|\.npmrc|\.pypirc|\.netrc)(?:\/|$)|(?:^|\/)(?:id_rsa|id_ed25519|credentials|shadow)(?:$|\/)/i
+const SECRET_PATH =
+  /(?:^|\/)(?:\.ssh|\.gnupg|\.aws|\.azure|\.config\/gcloud|\.kube|\.npmrc|\.pypirc|\.netrc)(?:\/|$)|(?:^|\/)(?:id_rsa|id_ed25519|credentials|shadow)(?:$|\/)/i
 const SYSTEM_WRITE_PATH = /^(?:\/etc|\/usr|\/bin|\/sbin|\/boot|\/proc|\/sys|\/dev|\/run)(?:\/|$)/i
 const STARTUP_WRITE_PATH = /(?:^|\/)(?:\.bashrc|\.zshrc|\.profile|\.bash_profile|\.config\/autostart)(?:$|\/)/i
 const GIT_METADATA_PATH = /(?:^|\/)\.git(?:\/|$)/i
 
-const GIT_MUTATION = /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i
+const GIT_MUTATION =
+  /(?:^|[;&|\n]\s*)(?:(?:env|command)\s+)*(?:\S*[/])?git(?:\s+-C\s+\S+|\s+-c\s+\S+|\s+--(?:git-dir|work-tree|namespace|config-env)(?:=\S+|\s+\S+))*\s+(?:init|clone|add|commit|reset|clean|checkout|switch|restore|rm|mv|merge|rebase|cherry-pick|revert|tag|stash|worktree|submodule|remote|fetch|pull|push|branch|config|update-index|apply|am)(?:\s|$)/i
 const FORK_BOMB = /:\(\)\s*\{\s*:\|:&\s*;\s*\}\s*;/
 const PIPE_TO_SHELL = /(?:curl|wget)[^\n|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b/i
 const SUDO = /(?:^|[;&|]\s*)sudo\b/i
@@ -46,7 +48,8 @@ const DESTRUCTIVE = [
   /(?:^|[;&|]\s*)(?:shutdown|reboot|poweroff|halt)\b/i,
   /(?:^|[;&|]\s*)chmod\s+-R\s+777\s+(?:\/|~)(?:\s|$)/i,
 ]
-const NETWORK_COMMAND = /(?:^|[;&|]\s*)(?:curl|wget|ssh|scp|sftp|ftp|nc|ncat|telnet)\b|(?:^|[;&|]\s*)(?:npm|pnpm|yarn|pip|pip3|uv|cargo|go)\s+(?:install|add|get)\b/i
+const NETWORK_COMMAND =
+  /(?:^|[;&|]\s*)(?:curl|wget|ssh|scp|sftp|ftp|nc|ncat|telnet)\b|(?:^|[;&|]\s*)(?:npm|pnpm|yarn|pip|pip3|uv|cargo|go)\s+(?:install|add|get)\b/i
 
 function normalizePath(value: unknown): string {
   return String(value || '')

@@ -61,8 +61,12 @@ describe('forced project planning', () => {
 
     const second_messages = ai_state.call.mock.calls[1][0] as Array<Record<string, unknown>>
     const fourth_messages = ai_state.call.mock.calls[3][0] as Array<Record<string, unknown>>
-    expect(second_messages.some((message) => message.role === 'assistant' && message.content === 'first ideas')).toBe(true)
-    expect(fourth_messages.some((message) => message.role === 'assistant' && message.content === 'chosen direction')).toBe(true)
+    expect(second_messages.some((message) => message.role === 'assistant' && message.content === 'first ideas')).toBe(
+      true,
+    )
+    expect(
+      fourth_messages.some((message) => message.role === 'assistant' && message.content === 'chosen direction'),
+    ).toBe(true)
   })
 
   it('stops before execution when a planning stage returns no usable output', async () => {

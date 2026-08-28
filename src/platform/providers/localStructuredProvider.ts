@@ -14,7 +14,9 @@ function injectSchema(init: RequestInit, options: ProviderCallOptions): RequestI
   body.response_format = {
     type: 'json_schema',
     json_schema: {
-      name: String(response.name || 'response').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64),
+      name: String(response.name || 'response')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 64),
       strict: response.strict !== false,
       schema: response.schema,
     },

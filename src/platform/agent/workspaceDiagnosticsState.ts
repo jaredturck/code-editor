@@ -218,7 +218,10 @@ async function analyze_diagnostic_file(root_path: string, file_path: string) {
   }
 }
 
-function append_diagnostics(findings: WorkspaceDiagnosticFinding[], result: Awaited<ReturnType<typeof analyzeWorkspaceText>>) {
+function append_diagnostics(
+  findings: WorkspaceDiagnosticFinding[],
+  result: Awaited<ReturnType<typeof analyzeWorkspaceText>>,
+) {
   for (const diagnostic of result.diagnostics) {
     findings.push({
       path: result.path,
@@ -364,7 +367,9 @@ export function formatWorkspaceDiagnostics(snapshot: WorkspaceDiagnosticsSnapsho
   ]
 
   if (!snapshot.complete) {
-    lines.push(`Diagnostics scan was incomplete in ${snapshot.scan_errors.length} location(s); do not assume unscanned files are clean.`)
+    lines.push(
+      `Diagnostics scan was incomplete in ${snapshot.scan_errors.length} location(s); do not assume unscanned files are clean.`,
+    )
   }
 
   const visible = snapshot.findings.slice(0, Math.max(1, max_findings))
@@ -386,7 +391,10 @@ export function formatWorkspaceDiagnostics(snapshot: WorkspaceDiagnosticsSnapsho
   }
 
   if (total > visible.length) {
-    lines.push('', `${total - visible.length} additional diagnostic(s) omitted from this prompt; the counts above include them.`)
+    lines.push(
+      '',
+      `${total - visible.length} additional diagnostic(s) omitted from this prompt; the counts above include them.`,
+    )
   }
   if (snapshot.scan_errors.length > 0) {
     lines.push('', `Scan issue: ${snapshot.scan_errors[0]}`)

@@ -91,7 +91,10 @@ async function responseErrorDetail(response: Awaited<ReturnType<ProviderFetch>>)
 }
 
 function isRetryableQwenToolParseFailure(status: number, detail: string) {
-  return status === 500 && /expected element type <function> but have <parameter>|qwen(?:3\.5)? tool call parsing failed/i.test(detail)
+  return (
+    status === 500 &&
+    /expected element type <function> but have <parameter>|qwen(?:3\.5)? tool call parsing failed/i.test(detail)
+  )
 }
 
 export async function callLocalLLM(

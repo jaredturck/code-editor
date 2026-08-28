@@ -64,10 +64,7 @@ export async function fetchAIStream(
   return { ok: true, status: response.status }
 }
 
-export async function discoverModelsForProvider(
-  provider: unknown,
-  settings: AISettings,
-): Promise<string[]> {
+export async function discoverModelsForProvider(provider: unknown, settings: AISettings): Promise<string[]> {
   if (String(provider || DEFAULT_AI_PROVIDER_ID).toLowerCase() !== 'local') return []
   try {
     const registration = getAIProvider('local')

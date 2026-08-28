@@ -1,7 +1,13 @@
 /** Single local model provider for the agentic coding IDE. */
 import { listLocalModels } from '@/platform/providers/localProvider'
 import { callStructuredLocalLLM } from '@/platform/providers/localStructuredProvider'
-import type { AIProvider, AIProviderDefinition, AIProviderId, ProviderDiscoveryContext, ProviderInvokeContext } from '@/platform/providers/types'
+import type {
+  AIProvider,
+  AIProviderDefinition,
+  AIProviderId,
+  ProviderDiscoveryContext,
+  ProviderInvokeContext,
+} from '@/platform/providers/types'
 
 export type { AIProvider, AIProviderDefinition, AIProviderId } from '@/platform/providers/types'
 
@@ -47,7 +53,11 @@ export function listAIProviderDefinitions(): readonly AIProviderDefinition[] {
 }
 
 export function isAIProviderId(value: unknown): value is AIProviderId {
-  return String(value || '').trim().toLowerCase() === 'local'
+  return (
+    String(value || '')
+      .trim()
+      .toLowerCase() === 'local'
+  )
 }
 
 export function findAIProvider(value: unknown): AIProvider | null {

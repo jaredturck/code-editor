@@ -70,7 +70,9 @@ function successfulMutation(step: Record<string, unknown>) {
 function terminalVerification(step: Record<string, unknown>) {
   if (stepTool(step) !== 'terminal.exec') return false
   const command = String(stepArgs(step).command || '')
-  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(command)
+  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(
+    command,
+  )
 }
 
 function buildEfficiencyMetrics(result: AgentSessionResult) {
@@ -118,7 +120,8 @@ function buildEfficiencyMetrics(result: AgentSessionResult) {
     browserInspections: toolCounts['browser.inspect'] || 0,
     diagnosticsChecks: toolCounts['diagnostics.check'] || 0,
     repetitionBlocks,
-    observationToMutationRatio: sourceMutations > 0 ? Number((observations / sourceMutations).toFixed(2)) : observations,
+    observationToMutationRatio:
+      sourceMutations > 0 ? Number((observations / sourceMutations).toFixed(2)) : observations,
     toolCounts,
   }
 }

@@ -37,7 +37,11 @@ interface SettingsLike {
 }
 
 export function isLocalProvider(provider: unknown): boolean {
-  return String(provider || '').trim().toLowerCase() === 'local'
+  return (
+    String(provider || '')
+      .trim()
+      .toLowerCase() === 'local'
+  )
 }
 
 export function isCloudProvider(_provider: unknown): boolean {
@@ -107,10 +111,7 @@ export function selectCloudConsultModel(
   throw new Error('Cloud model execution is disabled in the local-only runtime.')
 }
 
-export function buildCloudRequestSettings(
-  _settings: SettingsLike,
-  _candidate: CloudResponder,
-): Record<string, any> {
+export function buildCloudRequestSettings(_settings: SettingsLike, _candidate: CloudResponder): Record<string, any> {
   throw new Error('Cloud model execution is disabled in the local-only runtime.')
 }
 

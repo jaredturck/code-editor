@@ -115,7 +115,10 @@ const LEGACY_TOOL_ALIASES: Record<string, string> = {
 
 function generateTaskId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  const hex = (n: number) => Math.floor(Math.random() * n).toString(16).padStart(2, '0')
+  const hex = (n: number) =>
+    Math.floor(Math.random() * n)
+      .toString(16)
+      .padStart(2, '0')
   return [
     Array.from({ length: 4 }, () => hex(256)).join(''),
     Array.from({ length: 2 }, () => hex(256)).join(''),
@@ -132,9 +135,7 @@ function canonicalToolName(value: unknown) {
 
 function normalizeStringArray(value: unknown, maxItems = 20): string[] {
   if (!Array.isArray(value)) return []
-  return Array.from(
-    new Set(value.map((item) => String(item || '').trim()).filter(Boolean)),
-  ).slice(0, maxItems)
+  return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean))).slice(0, maxItems)
 }
 
 function normalizeToolArray(value: unknown, maxItems = 20): string[] {
@@ -260,7 +261,8 @@ export function buildSTPSystemPrompt(
   const lines = [`Task: ${stp.objective.goal}`]
   if (stp.objective.scope) lines.push(`Scope: ${stp.objective.scope}`)
   if (stp.objective.constraints.length) lines.push(`Constraints: ${stp.objective.constraints.slice(0, 8).join(' | ')}`)
-  if (stp.context && Object.keys(stp.context).length > 0) lines.push(`Context: ${JSON.stringify(stp.context).slice(0, 10000)}`)
+  if (stp.context && Object.keys(stp.context).length > 0)
+    lines.push(`Context: ${JSON.stringify(stp.context).slice(0, 10000)}`)
   if (injectedSkillInstructions.length > 0) lines.push(`Skills:\n${injectedSkillInstructions.join('\n\n')}`)
   if (!options.native && stp.tools.available.length > 0) {
     lines.push(`Tools: ${stp.tools.available.join(', ')}`)

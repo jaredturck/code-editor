@@ -141,7 +141,9 @@ function now() {
 }
 
 function text(value: unknown, max = MAX_TEXT) {
-  return String(value || '').trim().slice(0, max)
+  return String(value || '')
+    .trim()
+    .slice(0, max)
 }
 
 function strings(value: unknown, limit = 40, max = 1000) {
@@ -213,7 +215,10 @@ function normalizeWorkItem(value: unknown, index: number): ProjectWorkItem {
   }
 }
 
-export function normalizeProjectLedger(value: unknown, fallback: { chatId?: string; projectId?: string; goal?: string } = {}): ProjectLedger {
+export function normalizeProjectLedger(
+  value: unknown,
+  fallback: { chatId?: string; projectId?: string; goal?: string } = {},
+): ProjectLedger {
   const source = record(value)
   const timestamp = now()
   return {
@@ -225,15 +230,29 @@ export function normalizeProjectLedger(value: unknown, fallback: { chatId?: stri
     strategyGeneration: Math.max(0, Number(source.strategyGeneration) || 0),
     createdAt: Math.max(0, Number(source.createdAt) || timestamp),
     updatedAt: Math.max(0, Number(source.updatedAt) || timestamp),
-    requirements: (Array.isArray(source.requirements) ? source.requirements : []).slice(0, MAX_REQUIREMENTS).map(normalizeRequirement),
-    workItems: (Array.isArray(source.workItems) ? source.workItems : []).slice(0, MAX_WORK_ITEMS).map(normalizeWorkItem),
+    requirements: (Array.isArray(source.requirements) ? source.requirements : [])
+      .slice(0, MAX_REQUIREMENTS)
+      .map(normalizeRequirement),
+    workItems: (Array.isArray(source.workItems) ? source.workItems : [])
+      .slice(0, MAX_WORK_ITEMS)
+      .map(normalizeWorkItem),
     decisions: (Array.isArray(source.decisions) ? source.decisions : []).slice(-MAX_HISTORY) as ProjectDecision[],
-    failedApproaches: (Array.isArray(source.failedApproaches) ? source.failedApproaches : []).slice(-MAX_HISTORY) as ProjectFailedApproach[],
-    evaluatorFindings: (Array.isArray(source.evaluatorFindings) ? source.evaluatorFindings : []).slice(-MAX_HISTORY) as ProjectEvaluatorFinding[],
+    failedApproaches: (Array.isArray(source.failedApproaches) ? source.failedApproaches : []).slice(
+      -MAX_HISTORY,
+    ) as ProjectFailedApproach[],
+    evaluatorFindings: (Array.isArray(source.evaluatorFindings) ? source.evaluatorFindings : []).slice(
+      -MAX_HISTORY,
+    ) as ProjectEvaluatorFinding[],
     processes: (Array.isArray(source.processes) ? source.processes : []).slice(0, 100) as ProjectManagedProcess[],
-    verification: (Array.isArray(source.verification) ? source.verification : []).slice(-MAX_HISTORY) as ProjectVerificationRecord[],
-    checkpoints: (Array.isArray(source.checkpoints) ? source.checkpoints : []).slice(-MAX_HISTORY) as ProjectCheckpoint[],
-    agentTasks: (Array.isArray(source.agentTasks) ? source.agentTasks : []).slice(-MAX_WORK_ITEMS) as ProjectAgentTaskState[],
+    verification: (Array.isArray(source.verification) ? source.verification : []).slice(
+      -MAX_HISTORY,
+    ) as ProjectVerificationRecord[],
+    checkpoints: (Array.isArray(source.checkpoints) ? source.checkpoints : []).slice(
+      -MAX_HISTORY,
+    ) as ProjectCheckpoint[],
+    agentTasks: (Array.isArray(source.agentTasks) ? source.agentTasks : []).slice(
+      -MAX_WORK_ITEMS,
+    ) as ProjectAgentTaskState[],
     architectureSummary: text(source.architectureSummary, 12_000),
     currentStrategy: text(source.currentStrategy, 8000),
     lastProgressAt: Math.max(0, Number(source.lastProgressAt) || timestamp),
@@ -279,23 +298,37 @@ export function ensureProjectLedger(chatId: string, goal: string, projectId = ''
   return saveProjectLedger(chatId, normalizeProjectLedger(null, { chatId, goal, projectId }))
 }
 
-export function mutateProjectLedger(chatId: string, goal: string, mutate: (ledger: ProjectLedger) => void): ProjectLedger {
+export function mutateProjectLedger(
+  chatId: string,
+  goal: string,
+  mutate: (ledger: ProjectLedger) => void,
+): ProjectLedger {
   const ledger = ensureProjectLedger(chatId, goal)
   mutate(ledger)
   ledger.updatedAt = now()
   return saveProjectLedger(chatId, ledger)
 }
 
-export function replaceProjectRequirements(chatId: string, goal: string, requirements: Array<Partial<ProjectRequirement>>): ProjectLedger {
+export function replaceProjectRequirements(
+  chatId: string,
+  goal: string,
+  requirements: Array<Partial<ProjectRequirement>>,
+): ProjectLedger {
   return mutateProjectLedger(chatId, goal, (ledger) => {
-    ledger.requirements = requirements.slice(0, MAX_REQUIREMENTS).map((item, index) => normalizeRequirement(item, index))
+    ledger.requirements = requirements
+      .slice(0, MAX_REQUIREMENTS)
+      .map((item, index) => normalizeRequirement(item, index))
     ledger.lastProgressAt = now()
     ledger.lastProgressSummary = 'Initialized project requirements.'
   })
 }
 
 /** Add or revise requirements without replacing already verified project state. */
-export function upsertProjectRequirements(chatId: string, goal: string, requirements: Array<Partial<ProjectRequirement>>): ProjectLedger {
+export function upsertProjectRequirements(
+  chatId: string,
+  goal: string,
+  requirements: Array<Partial<ProjectRequirement>>,
+): ProjectLedger {
   return mutateProjectLedger(chatId, goal, (ledger) => {
     const byId = new Map(ledger.requirements.map((item) => [item.id, item]))
     for (const raw of requirements.slice(0, MAX_REQUIREMENTS)) {
@@ -320,13 +353,20 @@ export function upsertProjectRequirements(chatId: string, goal: string, requirem
   })
 }
 
-export function upsertProjectWorkItems(chatId: string, goal: string, items: Array<Partial<ProjectWorkItem>>): ProjectLedger {
+export function upsertProjectWorkItems(
+  chatId: string,
+  goal: string,
+  items: Array<Partial<ProjectWorkItem>>,
+): ProjectLedger {
   return mutateProjectLedger(chatId, goal, (ledger) => {
     const byId = new Map(ledger.workItems.map((item) => [item.id, item]))
     for (const raw of items) {
       const normalized = normalizeWorkItem(raw, byId.size)
       const previous = byId.get(normalized.id)
-      byId.set(normalized.id, previous ? { ...previous, ...normalized, createdAt: previous.createdAt, updatedAt: now() } : normalized)
+      byId.set(
+        normalized.id,
+        previous ? { ...previous, ...normalized, createdAt: previous.createdAt, updatedAt: now() } : normalized,
+      )
     }
     ledger.workItems = [...byId.values()].slice(0, MAX_WORK_ITEMS)
   })
@@ -349,7 +389,11 @@ export function advanceProjectStrategy(chatId: string, goal: string, strategy: s
   })
 }
 
-export function addEvaluatorFindings(chatId: string, goal: string, findings: Array<Partial<ProjectEvaluatorFinding>>): ProjectLedger {
+export function addEvaluatorFindings(
+  chatId: string,
+  goal: string,
+  findings: Array<Partial<ProjectEvaluatorFinding>>,
+): ProjectLedger {
   return mutateProjectLedger(chatId, goal, (ledger) => {
     const timestamp = now()
     for (const raw of findings) {
@@ -371,7 +415,9 @@ export function addEvaluatorFindings(chatId: string, goal: string, findings: Arr
 export function projectLedgerComplete(ledger: ProjectLedger): boolean {
   if (!ledger.requirements.length) return false
   const requirementsComplete = ledger.requirements.every((requirement) => requirement.status === 'verified')
-  const openFindings = ledger.evaluatorFindings.some((finding) => finding.status === 'open' && finding.severity === 'error')
+  const openFindings = ledger.evaluatorFindings.some(
+    (finding) => finding.status === 'open' && finding.severity === 'error',
+  )
   const activeWork = ledger.workItems.some((item) => ['ready', 'running', 'pending'].includes(item.status))
   return requirementsComplete && !openFindings && !activeWork
 }

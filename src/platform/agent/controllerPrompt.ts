@@ -81,7 +81,10 @@ function _fmtRecentSteps(steps: unknown) {
     .slice(-3)
     .map((s) => {
       const status = s?.ok ? 'ok' : `error: ${String(s?.error || '').slice(0, 90)}`
-      const summary = String(s?.summary || '').replace(/\s+/g, ' ').trim().slice(0, 110)
+      const summary = String(s?.summary || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 110)
       return `- ${String(s?.tool || '?')}: ${status}${summary ? ` — ${summary}` : ''}`
     })
     .join('\n')
@@ -115,7 +118,10 @@ export function buildControllerStateHeader(
   if (recallNotes.length) {
     const note = recallNotes[0]
     parts.push(
-      `## Relevant memory\n- ${String(note.title || 'note')}: ${String(note.excerpt || '').replace(/\s+/g, ' ').trim().slice(0, 160)}`,
+      `## Relevant memory\n- ${String(note.title || 'note')}: ${String(note.excerpt || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160)}`,
     )
   }
 

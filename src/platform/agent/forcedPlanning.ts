@@ -12,12 +12,14 @@ export const FORCED_PLANNING_STAGES = Object.freeze([
   {
     id: 'expand',
     label: 'Developing ideas',
-    prompt: 'Develop these ideas further. Explore them in more depth and discover additional ideas that follow from them.',
+    prompt:
+      'Develop these ideas further. Explore them in more depth and discover additional ideas that follow from them.',
   },
   {
     id: 'direction',
     label: 'Choosing direction',
-    prompt: 'Decide how you want to approach the project. Choose and develop the direction you think will produce the best result.',
+    prompt:
+      'Decide how you want to approach the project. Choose and develop the direction you think will produce the best result.',
   },
   {
     id: 'plan',
@@ -77,7 +79,9 @@ export async function runForcedPlanning(input: ForcedPlanningInput): Promise<For
   for (const stage of FORCED_PLANNING_STAGES) {
     thread.push({ role: 'user', content: stage.prompt })
     const response = await callAIWithMeta(thread, input.settings as AISettings, { signal: input.signal || undefined })
-    const content = String(response?.text || '').trim().slice(0, PLANNING_OUTPUT_MAX_CHARS)
+    const content = String(response?.text || '')
+      .trim()
+      .slice(0, PLANNING_OUTPUT_MAX_CHARS)
     if (!content) throw new Error(`Planning stage "${stage.label}" returned an empty response.`)
 
     const artifact = { id: stage.id, label: stage.label, content }

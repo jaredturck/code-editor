@@ -27,7 +27,10 @@ import {
   type BridgeSecurityContext,
 } from './desktopBridge/shared/bridgeAuthorization.js'
 import { hostnameFromHeader, isLoopbackHost } from './desktopBridge/services/bridgeServiceRuntime.js'
-import { closeImageGenerationRuntime, configureImageGenerationRuntime } from './desktopBridge/services/imageGenerationService.js'
+import {
+  closeImageGenerationRuntime,
+  configureImageGenerationRuntime,
+} from './desktopBridge/services/imageGenerationService.js'
 
 const TOKEN_HEADER = 'x-iris-bridge-token'
 const TOKEN_QUERY = '__token' // EventSource cannot attach custom request headers.

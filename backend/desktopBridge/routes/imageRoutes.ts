@@ -33,7 +33,7 @@ export async function handleImageRoutes(
     const body = await readJsonBody(req)
     const workspaceRoot = await resolveDirectoryWithinRoot(String(body.workspaceRoot || ''), baseDir)
     const format = ['square', 'landscape', 'portrait'].includes(String(body.format || ''))
-      ? String(body.format) as 'square' | 'landscape' | 'portrait'
+      ? (String(body.format) as 'square' | 'landscape' | 'portrait')
       : 'landscape'
     const result = await generateProjectImage({
       prompt: String(body.prompt || ''),

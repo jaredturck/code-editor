@@ -32,12 +32,14 @@ function normalizeModelList(value: unknown): string[] {
 }
 
 function localModels(settings: Record<string, unknown>) {
-  const discovered = settings.discovered_models && typeof settings.discovered_models === 'object'
-    ? settings.discovered_models as Record<string, unknown>
-    : {}
-  const selected = settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
-    ? settings.provider_selected_models as Record<string, unknown>
-    : {}
+  const discovered =
+    settings.discovered_models && typeof settings.discovered_models === 'object'
+      ? (settings.discovered_models as Record<string, unknown>)
+      : {}
+  const selected =
+    settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
+      ? (settings.provider_selected_models as Record<string, unknown>)
+      : {}
   return normalizeModelList([
     ...normalizeModelList(discovered.local),
     ...normalizeModelList(selected.local),
@@ -108,9 +110,6 @@ export function buildAutomaticSetupPlan(settings: Record<string, unknown>): Auto
       scout,
       overwatcher,
     },
-    summary: [
-      `Local worker: ${orchestrator.model}`,
-      'Cloud use disabled: the coding runtime is local-only',
-    ],
+    summary: [`Local worker: ${orchestrator.model}`, 'Cloud use disabled: the coding runtime is local-only'],
   }
 }

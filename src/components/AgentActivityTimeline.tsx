@@ -251,9 +251,7 @@ function fallback_tool_title(tool: string, label: string) {
   const clean_label = label.replace(/\s+(complete|failed)$/i, '').trim()
   if (clean_label && !/^tool(?: call)?$/i.test(clean_label)) return clean_label
   if (!tool) return 'Agent action'
-  return tool
-    .replace(/[._-]+/g, ' ')
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+  return tool.replace(/[._-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
 function row_title(row: ActivityRow) {

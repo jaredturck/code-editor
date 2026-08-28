@@ -177,7 +177,9 @@ describe('project verification acceptance', () => {
 
   it('treats live editor errors as blocking even when model verification passed', async () => {
     runtime_state.diagnostics
-      .mockResolvedValueOnce(workspace_diagnostics(2, ['Raw "&" must be encoded as "&amp;"', 'Inline style is not allowed']))
+      .mockResolvedValueOnce(
+        workspace_diagnostics(2, ['Raw "&" must be encoded as "&amp;"', 'Inline style is not allowed']),
+      )
       .mockResolvedValue(workspace_diagnostics())
 
     runtime_state.run.mockImplementationOnce(async (input: AgentSessionInput) => {
@@ -225,9 +227,7 @@ describe('project verification acceptance', () => {
   })
 
   it('stops after bounded diagnostics remediation instead of claiming completion', async () => {
-    runtime_state.diagnostics.mockResolvedValue(
-      workspace_diagnostics(1, ['Trailing whitespace']),
-    )
+    runtime_state.diagnostics.mockResolvedValue(workspace_diagnostics(1, ['Trailing whitespace']))
     runtime_state.run.mockResolvedValue(result('Still calling the page complete.', 1))
 
     const output = await runAgentSession({

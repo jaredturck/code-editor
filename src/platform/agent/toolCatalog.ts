@@ -70,7 +70,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'files.find',
     module: 'Files',
-    description: 'Search project file names or text contents. Prefer this for repository navigation instead of semantic search.',
+    description:
+      'Search project file names or text contents. Prefer this for repository navigation instead of semantic search.',
     args: {
       path: 'string',
       query: 'string',
@@ -84,7 +85,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'files.read',
     module: 'Files',
-    description: 'Read a bounded text-file range or search within one file. Read only the context needed for the current work.',
+    description:
+      'Read a bounded text-file range or search within one file. Read only the context needed for the current work.',
     args: {
       path: 'string',
       startLine: 'number (optional)',
@@ -117,7 +119,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'files.edit',
     module: 'Files',
-    description: 'Edit a project file by exact string replacement. Prefer this for precise changes after reading the target.',
+    description:
+      'Edit a project file by exact string replacement. Prefer this for precise changes after reading the target.',
     args: {
       path: 'string',
       oldText: 'string',
@@ -134,7 +137,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'image.generate',
     module: 'Files',
-    description: 'Generate a quick synthetic image asset for the current project. Use for website photography, hero imagery, backgrounds, product-style imagery, or other visual assets when generated imagery is useful.',
+    description:
+      'Generate a quick synthetic image asset for the current project. Use for website photography, hero imagery, backgrounds, product-style imagery, or other visual assets when generated imagery is useful.',
     args: {
       prompt: 'string',
       path: 'string',
@@ -144,7 +148,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'terminal.exec',
     module: 'Terminal',
-    description: 'Run a shell command inside the authorized project workspace for builds, tests, package commands, scripts, or targeted inspection.',
+    description:
+      'Run a shell command inside the authorized project workspace for builds, tests, package commands, scripts, or targeted inspection.',
     args: { command: 'string', cwd: 'project-relative string (optional)' },
   },
   {
@@ -175,7 +180,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'agent.delegate',
     module: 'Agent',
     internal: true,
-    description: 'Delegate a bounded software-engineering work item to a specialist scout or executor. Runtime owns scheduling and status tracking.',
+    description:
+      'Delegate a bounded software-engineering work item to a specialist scout or executor. Runtime owns scheduling and status tracking.',
     args: {
       toAgent: 'executor | scout',
       type: 'execute | discover | summarize | verify',
@@ -208,20 +214,27 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'user.ask',
     module: 'System',
     internal: true,
-    description: 'Ask the user only when a material product requirement cannot be resolved safely from the prompt or project.',
+    description:
+      'Ask the user only when a material product requirement cannot be resolved safely from the prompt or project.',
     args: { question: 'string', options: 'string[] (2-5 choices)' },
   },
   {
     name: 'approval.request',
     module: 'System',
     internal: true,
-    description: 'Request explicit approval for an operation that the runtime security policy cannot authorize automatically.',
+    description:
+      'Request explicit approval for an operation that the runtime security policy cannot authorize automatically.',
     args: { reason: 'string', action: 'string (optional)', tool: 'string (optional)', command: 'string (optional)' },
   },
 ]
 
-export const TOOL_BY_NAME = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name, tool])) as Record<string, ToolDefinition>
-const TOOL_BY_NAME_LOWER = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name.toLowerCase(), tool.name])) as Record<string, string>
+export const TOOL_BY_NAME = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name, tool])) as Record<
+  string,
+  ToolDefinition
+>
+const TOOL_BY_NAME_LOWER = Object.fromEntries(
+  TOOL_DEFINITIONS.map((tool) => [tool.name.toLowerCase(), tool.name]),
+) as Record<string, string>
 
 const TOOL_ALIAS_MAP: Record<string, string> = {
   list_files: 'files.list',
@@ -293,9 +306,9 @@ const SUB_AGENT_MIN_TIER: Record<string, number> = {
 }
 
 const SUB_AGENT_NATIVE_DEFINITIONS: Record<string, SubAgentToolDefinition> = Object.fromEntries(
-  TOOL_DEFINITIONS
-    .filter((tool) => !['agent.delegate', 'user.ask', 'approval.request'].includes(tool.name))
-    .map((tool) => [tool.name, { name: tool.name, description: tool.description, args: tool.args }]),
+  TOOL_DEFINITIONS.filter((tool) => !['agent.delegate', 'user.ask', 'approval.request'].includes(tool.name)).map(
+    (tool) => [tool.name, { name: tool.name, description: tool.description, args: tool.args }],
+  ),
 )
 
 const MODULE_ICONS: Record<string, string> = {
@@ -353,7 +366,9 @@ export function getSubAgentNativeToolDefinitions(
   const forbidden = new Set((forbiddenNames || []).map((name) => String(name || '').trim()))
   return (availableNames || [])
     .map((name) => SUB_AGENT_NATIVE_DEFINITIONS[String(name || '').trim()])
-    .filter((definition): definition is SubAgentToolDefinition => Boolean(definition) && !forbidden.has(definition.name))
+    .filter(
+      (definition): definition is SubAgentToolDefinition => Boolean(definition) && !forbidden.has(definition.name),
+    )
 }
 
 export function listSubAgentNativeToolNames(): string[] {
@@ -375,7 +390,8 @@ export function getToolPresentation(toolName: unknown): ToolPresentation {
       actionVerb: edit ? 'Edited' : name === 'files.find' ? 'Searched' : 'Read',
     }
   }
-  if (name.startsWith('search.') || name === 'web.fetch') return { kind: 'search', icon: 'search', moduleIcon, language: 'json' }
+  if (name.startsWith('search.') || name === 'web.fetch')
+    return { kind: 'search', icon: 'search', moduleIcon, language: 'json' }
   return { kind: 'other', icon: moduleIcon, moduleIcon, language: 'json' }
 }
 

@@ -34,7 +34,15 @@ interface AISettingsPanelProps {
 const input_class =
   'h-9 rounded-md border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-xs text-[var(--text)] outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/25'
 
-function SettingsToggle({ checked, disabled = false, onChange }: { checked: boolean; disabled?: boolean; onChange: (value: boolean) => void }) {
+function SettingsToggle({
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (value: boolean) => void
+}) {
   return (
     <button
       aria-checked={checked}
@@ -46,12 +54,26 @@ function SettingsToggle({ checked, disabled = false, onChange }: { checked: bool
       role="switch"
       type="button"
     >
-      <span className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+      <span
+        className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}
+      />
     </button>
   )
 }
 
-function SettingsRow({ children, description, highlighted, id, label }: { children: React.ReactNode; description: string; highlighted: boolean; id: string; label: string }) {
+function SettingsRow({
+  children,
+  description,
+  highlighted,
+  id,
+  label,
+}: {
+  children: React.ReactNode
+  description: string
+  highlighted: boolean
+  id: string
+  label: string
+}) {
   return (
     <div
       className={`flex min-h-16 items-center gap-5 rounded-xl border px-4 py-3 transition ${
@@ -79,7 +101,13 @@ function SettingsSection({ children, title }: { children: React.ReactNode; title
   )
 }
 
-function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_editor_ai_change, on_section_change }: AISettingsPanelProps) {
+function AISettingsPanel({
+  active_section,
+  editor_ai,
+  highlighted_setting,
+  on_editor_ai_change,
+  on_section_change,
+}: AISettingsPanelProps) {
   const [settings, set_settings] = useState<OrbSettings>(() => readOrbSettings())
   const [connection_busy, set_connection_busy] = useState(false)
   const [connection_message, set_connection_message] = useState('')
@@ -105,7 +133,8 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
         }
       })
       .catch((error) => {
-        if (!cancelled) set_image_message(error instanceof Error ? error.message : 'Image generation status is unavailable.')
+        if (!cancelled)
+          set_image_message(error instanceof Error ? error.message : 'Image generation status is unavailable.')
       })
     return () => {
       cancelled = true
@@ -124,7 +153,9 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
     set_connection_message('')
     try {
       const result = await testConnection({ ...settings, ai_provider: 'local' } as never)
-      set_connection_message(result.message || (result.ok ? 'Local model server connected.' : 'Local model server did not respond.'))
+      set_connection_message(
+        result.message || (result.ok ? 'Local model server connected.' : 'Local model server did not respond.'),
+      )
     } catch (error) {
       set_connection_message(error instanceof Error ? error.message : 'Local model connection failed.')
     } finally {
@@ -197,7 +228,11 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           />
         </SettingsRow>
         <div className="flex items-center justify-end gap-3 px-4 py-3">
-          {connection_message ? <span className="min-w-0 flex-1 text-[10px] text-[var(--muted)]">{connection_message}</span> : <span className="flex-1" />}
+          {connection_message ? (
+            <span className="min-w-0 flex-1 text-[10px] text-[var(--muted)]">{connection_message}</span>
+          ) : (
+            <span className="flex-1" />
+          )}
           <button
             className="h-9 rounded-md border border-sky-500/30 px-3 text-xs text-sky-300 hover:bg-sky-500/10 disabled:opacity-40"
             disabled={connection_busy}
@@ -240,7 +275,11 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
             ) : null}
             <button
               className="h-9 rounded-md border border-[var(--input-border)] px-3 text-xs text-[var(--muted)] hover:bg-[var(--hover)]"
-              onClick={() => void refresh_image_status().catch((error) => set_image_message(error instanceof Error ? error.message : 'Status refresh failed.'))}
+              onClick={() =>
+                void refresh_image_status().catch((error) =>
+                  set_image_message(error instanceof Error ? error.message : 'Status refresh failed.'),
+                )
+              }
               type="button"
             >
               Refresh
@@ -248,17 +287,19 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           </div>
         </SettingsRow>
         <div className="px-4 py-3 text-[10px] leading-4 text-[var(--muted)]">
-          {image_message || (image_status?.ready
-            ? `Ready · GPU ${image_status.gpuIndex} · ${image_status.running ? 'model loaded' : 'loads on first use'}`
-            : image_status?.installed && !image_status.engineAvailable
-              ? 'Models installed · local image-generation runtime not found'
-              : image_status
-                ? 'Image generation models are not installed.'
-                : 'Checking image generation…')}
+          {image_message ||
+            (image_status?.ready
+              ? `Ready · GPU ${image_status.gpuIndex} · ${image_status.running ? 'model loaded' : 'loads on first use'}`
+              : image_status?.installed && !image_status.engineAvailable
+                ? 'Models installed · local image-generation runtime not found'
+                : image_status
+                  ? 'Image generation models are not installed.'
+                  : 'Checking image generation…')}
         </div>
       </SettingsSection>
       <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3 text-[10px] leading-4 text-[var(--muted)]">
-        Coding models run locally. Cloud model providers, semantic indexing, and automatic coding-model downloads are not used.
+        Coding models run locally. Cloud model providers, semantic indexing, and automatic coding-model downloads are
+        not used.
       </div>
     </>
   )
@@ -283,7 +324,9 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
                 <div className="flex items-center gap-2">
                   <input
                     className={`${input_class} w-52`}
-                    onChange={(event) => update({ agent_models: set_primary_agent_model(settings, role, { model: event.target.value }) })}
+                    onChange={(event) =>
+                      update({ agent_models: set_primary_agent_model(settings, role, { model: event.target.value }) })
+                    }
                     placeholder={String(settings.ai_model || 'local model')}
                     value={binding?.model || ''}
                   />
@@ -293,7 +336,11 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
                     onChange={(event) => update({ [tierKey]: Number(event.target.value) } as Partial<OrbSettings>)}
                     value={Number(settings[tierKey] ?? detail.default_tier)}
                   >
-                    {permission_tier_options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    {permission_tier_options.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </SettingsRow>
@@ -301,11 +348,27 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           })}
         </SettingsSection>
         <SettingsSection title="Coordination">
-          <SettingsRow description="Use specialist agents for research, implementation, and review when helpful." highlighted={highlighted('agent-multi-enabled')} id="agent-multi-enabled" label="Specialist agents">
-            <SettingsToggle checked={settings.agent_multi_enabled === true} onChange={(value) => update({ agent_multi_enabled: value })} />
+          <SettingsRow
+            description="Use specialist agents for research, implementation, and review when helpful."
+            highlighted={highlighted('agent-multi-enabled')}
+            id="agent-multi-enabled"
+            label="Specialist agents"
+          >
+            <SettingsToggle
+              checked={settings.agent_multi_enabled === true}
+              onChange={(value) => update({ agent_multi_enabled: value })}
+            />
           </SettingsRow>
-          <SettingsRow description="Allow an agent to ask another specialist for focused help when useful." highlighted={highlighted('agent-peer-consult')} id="agent-peer-consult" label="Specialist consultation">
-            <SettingsToggle checked={settings.agent_peer_consult_enabled !== false} onChange={(value) => update({ agent_peer_consult_enabled: value })} />
+          <SettingsRow
+            description="Allow an agent to ask another specialist for focused help when useful."
+            highlighted={highlighted('agent-peer-consult')}
+            id="agent-peer-consult"
+            label="Specialist consultation"
+          >
+            <SettingsToggle
+              checked={settings.agent_peer_consult_enabled !== false}
+              onChange={(value) => update({ agent_peer_consult_enabled: value })}
+            />
           </SettingsRow>
         </SettingsSection>
       </>
@@ -315,27 +378,80 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
   const render_autonomy = () => (
     <>
       <SettingsSection title="Workspace access">
-        <SettingsRow description="Allow the coding agent to read files in the current project." highlighted={highlighted('permissions-file-read')} id="permissions-file-read" label="Read project files">
-          <SettingsToggle checked={settings.permissions_file_read === true} onChange={(value) => update({ permissions_file_read: value })} />
+        <SettingsRow
+          description="Allow the coding agent to read files in the current project."
+          highlighted={highlighted('permissions-file-read')}
+          id="permissions-file-read"
+          label="Read project files"
+        >
+          <SettingsToggle
+            checked={settings.permissions_file_read === true}
+            onChange={(value) => update({ permissions_file_read: value })}
+          />
         </SettingsRow>
-        <SettingsRow description="Allow the coding agent to create and edit files in the current project." highlighted={highlighted('permissions-file-write')} id="permissions-file-write" label="Write project files">
-          <SettingsToggle checked={settings.permissions_file_write === true} onChange={(value) => update({ permissions_file_write: value })} />
+        <SettingsRow
+          description="Allow the coding agent to create and edit files in the current project."
+          highlighted={highlighted('permissions-file-write')}
+          id="permissions-file-write"
+          label="Write project files"
+        >
+          <SettingsToggle
+            checked={settings.permissions_file_write === true}
+            onChange={(value) => update({ permissions_file_write: value })}
+          />
         </SettingsRow>
-        <SettingsRow description="Allow the coding agent to run terminal commands for the current project." highlighted={highlighted('permissions-terminal')} id="permissions-terminal" label="Run terminal commands">
-          <SettingsToggle checked={settings.permissions_terminal === true} onChange={(value) => update({ permissions_terminal: value })} />
+        <SettingsRow
+          description="Allow the coding agent to run terminal commands for the current project."
+          highlighted={highlighted('permissions-terminal')}
+          id="permissions-terminal"
+          label="Run terminal commands"
+        >
+          <SettingsToggle
+            checked={settings.permissions_terminal === true}
+            onChange={(value) => update({ permissions_terminal: value })}
+          />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Execution safety">
-        <SettingsRow description="Allow terminal commands that access the network, such as package managers." highlighted={highlighted('agent-network')} id="agent-network" label="Network commands">
-          <SettingsToggle checked={settings.agent_allow_network_commands === true} onChange={(value) => update({ agent_allow_network_commands: value })} />
+        <SettingsRow
+          description="Allow terminal commands that access the network, such as package managers."
+          highlighted={highlighted('agent-network')}
+          id="agent-network"
+          label="Network commands"
+        >
+          <SettingsToggle
+            checked={settings.agent_allow_network_commands === true}
+            onChange={(value) => update({ agent_allow_network_commands: value })}
+          />
         </SettingsRow>
-        <SettingsRow description="Ask for approval before installing dependencies that have not already been allowed." highlighted={highlighted('agent-package-guard')} id="agent-package-guard" label="Confirm package installs">
-          <SettingsToggle checked={settings.agent_package_install_guard !== false} onChange={(value) => update({ agent_package_install_guard: value })} />
+        <SettingsRow
+          description="Ask for approval before installing dependencies that have not already been allowed."
+          highlighted={highlighted('agent-package-guard')}
+          id="agent-package-guard"
+          label="Confirm package installs"
+        >
+          <SettingsToggle
+            checked={settings.agent_package_install_guard !== false}
+            onChange={(value) => update({ agent_package_install_guard: value })}
+          />
         </SettingsRow>
-        <SettingsRow description="Prevent the coding agent from running sudo or other elevated shell commands." highlighted={highlighted('agent-block-sudo')} id="agent-block-sudo" label="Block elevated commands">
-          <SettingsToggle checked={settings.agent_block_sudo !== false} onChange={(value) => update({ agent_block_sudo: value })} />
+        <SettingsRow
+          description="Prevent the coding agent from running sudo or other elevated shell commands."
+          highlighted={highlighted('agent-block-sudo')}
+          id="agent-block-sudo"
+          label="Block elevated commands"
+        >
+          <SettingsToggle
+            checked={settings.agent_block_sudo !== false}
+            onChange={(value) => update({ agent_block_sudo: value })}
+          />
         </SettingsRow>
-        <SettingsRow description="Start a fresh model context after this many minutes. The overall project continues." highlighted={highlighted('agent-context-minutes')} id="agent-context-minutes" label="Context handoff time">
+        <SettingsRow
+          description="Start a fresh model context after this many minutes. The overall project continues."
+          highlighted={highlighted('agent-context-minutes')}
+          id="agent-context-minutes"
+          label="Context handoff time"
+        >
           <input
             className={`${input_class} w-24`}
             min={1}
@@ -345,12 +461,21 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
             value={Number(settings.agent_session_minutes || 18)}
           />
         </SettingsRow>
-        <SettingsRow description="Start a fresh model context after this many tool actions." highlighted={highlighted('agent-context-actions')} id="agent-context-actions" label="Context action limit">
+        <SettingsRow
+          description="Start a fresh model context after this many tool actions."
+          highlighted={highlighted('agent-context-actions')}
+          id="agent-context-actions"
+          label="Context action limit"
+        >
           <input
             className={`${input_class} w-24`}
             min={16}
             max={400}
-            onChange={(event) => update({ agent_context_action_limit: clamp_number(event.target.value, 16, 400, 120) } as Partial<OrbSettings>)}
+            onChange={(event) =>
+              update({
+                agent_context_action_limit: clamp_number(event.target.value, 16, 400, 120),
+              } as Partial<OrbSettings>)
+            }
             type="number"
             value={Number(settings.agent_context_action_limit || 120)}
           />
@@ -361,19 +486,49 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
 
   const render_skills = () => (
     <SettingsSection title="Development skills">
-      <SettingsRow description="Load task-specific coding instructions when they are relevant." highlighted={highlighted('skills-enabled')} id="skills-enabled" label="Skills">
-        <SettingsToggle checked={settings.skills_enabled !== false} onChange={(value) => update({ skills_enabled: value })} />
+      <SettingsRow
+        description="Load task-specific coding instructions when they are relevant."
+        highlighted={highlighted('skills-enabled')}
+        id="skills-enabled"
+        label="Skills"
+      >
+        <SettingsToggle
+          checked={settings.skills_enabled !== false}
+          onChange={(value) => update({ skills_enabled: value })}
+        />
       </SettingsRow>
-      <SettingsRow description="Automatically choose the most relevant installed skill for the current work." highlighted={highlighted('skills-auto-switch')} id="skills-auto-switch" label="Automatic skill selection">
-        <SettingsToggle checked={settings.skills_auto_switch !== false} onChange={(value) => update({ skills_auto_switch: value })} />
+      <SettingsRow
+        description="Automatically choose the most relevant installed skill for the current work."
+        highlighted={highlighted('skills-auto-switch')}
+        id="skills-auto-switch"
+        label="Automatic skill selection"
+      >
+        <SettingsToggle
+          checked={settings.skills_auto_switch !== false}
+          onChange={(value) => update({ skills_auto_switch: value })}
+        />
       </SettingsRow>
-      <SettingsRow description="Maximum amount of skill instructions loaded into one model context." highlighted={highlighted('skills-token-budget')} id="skills-token-budget" label="Skill context budget">
-        <input className={`${input_class} w-28`} min={256} max={16000} onChange={(event) => update({ skills_token_budget: clamp_number(event.target.value, 256, 16000, 2200) })} type="number" value={Number(settings.skills_token_budget || 2200)} />
+      <SettingsRow
+        description="Maximum amount of skill instructions loaded into one model context."
+        highlighted={highlighted('skills-token-budget')}
+        id="skills-token-budget"
+        label="Skill context budget"
+      >
+        <input
+          className={`${input_class} w-28`}
+          min={256}
+          max={16000}
+          onChange={(event) => update({ skills_token_budget: clamp_number(event.target.value, 256, 16000, 2200) })}
+          type="number"
+          value={Number(settings.skills_token_budget || 2200)}
+        />
       </SettingsRow>
     </SettingsSection>
   )
 
-  const visibleSection: AISettingsSection = ai_settings_sections.some((section) => section.id === active_section) ? active_section : 'providers'
+  const visibleSection: AISettingsSection = ai_settings_sections.some((section) => section.id === active_section)
+    ? active_section
+    : 'providers'
   let content: React.ReactNode
   if (visibleSection === 'providers') content = render_local_model()
   else if (visibleSection === 'agents') content = render_agents()

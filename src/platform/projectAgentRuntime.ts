@@ -1,4 +1,8 @@
-import { runForcedPlanning, type ForcedPlanningArtifact, type ForcedPlanningResult } from '@/platform/agent/forcedPlanning'
+import {
+  runForcedPlanning,
+  type ForcedPlanningArtifact,
+  type ForcedPlanningResult,
+} from '@/platform/agent/forcedPlanning'
 import { buildLocalPreflightPlan, type LocalPreflightPlan } from '@/platform/agent/localPlanner'
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
 import { runAgentSession as runCoreAgentSession } from '@/platform/agent/runtime/sessionRunner'
@@ -22,7 +26,9 @@ import {
 } from '@/platform/agentRuntimeLegacy'
 import { getChatSessionState, loadChatContext, saveChatSessionState, saveCompacted } from '@/platform/chatSessionStore'
 
-const runNativeAgentSession = runCoreAgentSession as unknown as (input: AgentSessionInput) => Promise<AgentSessionResult>
+const runNativeAgentSession = runCoreAgentSession as unknown as (
+  input: AgentSessionInput,
+) => Promise<AgentSessionResult>
 
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const DIAGNOSTICS_GATE_TODO_ID = 'diagnostics-gate'
@@ -82,7 +88,9 @@ export function withThrottledStreamEvents(input: AgentSessionInput, intervalMs =
 }
 
 function cleanLine(value: unknown, maxChars = 500) {
-  const clean = String(value || '').replace(/\s+/g, ' ').trim()
+  const clean = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   return clean.length <= maxChars ? clean : `${clean.slice(0, maxChars)}…`
 }
 
@@ -108,9 +116,7 @@ function persistedProjectRun(input: AgentSessionInput) {
 function persistedProjectSummary(input: AgentSessionInput) {
   const run = persistedProjectRun(input)
   const summary = run?.runtime_summary || run?.summary
-  return summary && typeof summary === 'object' && !Array.isArray(summary)
-    ? (summary as Record<string, unknown>)
-    : null
+  return summary && typeof summary === 'object' && !Array.isArray(summary) ? (summary as Record<string, unknown>) : null
 }
 
 function projectGoal(input: AgentSessionInput) {
@@ -213,9 +219,10 @@ function stepMutatedWorkspace(step: Record<string, unknown>) {
   const tool = String(step.tool || step.requestedTool || '')
   if (['files.write', 'files.edit', 'files.patch'].includes(tool)) return true
   if (tool !== 'terminal.exec') return false
-  const args = step.args && typeof step.args === 'object' && !Array.isArray(step.args)
-    ? (step.args as Record<string, unknown>)
-    : {}
+  const args =
+    step.args && typeof step.args === 'object' && !Array.isArray(step.args)
+      ? (step.args as Record<string, unknown>)
+      : {}
   return terminalCommandLikelyMutatesSource(args.command)
 }
 
@@ -234,7 +241,9 @@ function preservePlanningTimeline(value: Array<Record<string, unknown>>, limit =
 function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): AgentSessionResult {
   const artifacts = new Map<string, Record<string, unknown>>()
   for (const artifact of [...(previous.artifacts || []), ...(next.artifacts || [])]) {
-    const key = String(artifact.id || artifact.artifactId || artifact.path || artifact.filename || JSON.stringify(artifact))
+    const key = String(
+      artifact.id || artifact.artifactId || artifact.path || artifact.filename || JSON.stringify(artifact),
+    )
     artifacts.set(key, artifact)
   }
   return {
@@ -297,10 +306,9 @@ function emitForcedPlanning(input: AgentSessionInput, planning: ForcedPlanningRe
 function withForcedPlanningContext(input: AgentSessionInput, planning: ForcedPlanningResult): AgentSessionInput {
   return {
     ...input,
-    conversation: [
-      ...(input.conversation || []),
-      { role: 'user', content: planning.context, _injected: true },
-    ].slice(-50),
+    conversation: [...(input.conversation || []), { role: 'user', content: planning.context, _injected: true }].slice(
+      -50,
+    ),
   }
 }
 
@@ -398,7 +406,11 @@ function annotateAcceptance(
   const todos = withoutGateTodos(result.todos)
   const errors = diagnosticsErrors(diagnostics)
   if (plan?.workspaceMutationExpected === true && !hasSuccessfulMutation(result)) {
-    todos.push({ id: MUTATION_GATE_TODO_ID, text: 'Required workspace change has not completed.', status: 'in_progress' })
+    todos.push({
+      id: MUTATION_GATE_TODO_ID,
+      text: 'Required workspace change has not completed.',
+      status: 'in_progress',
+    })
   }
   if (gate?.required === true && !gate.passed) {
     todos.push({

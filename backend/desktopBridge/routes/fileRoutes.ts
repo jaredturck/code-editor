@@ -21,13 +21,27 @@ import {
   runCommand,
   sendJson,
 } from '../services/fileService.js'
-import { getDevEnvironmentStatus, startManagedDevEnvironment, stopManagedDevEnvironment } from '../services/launcherService.js'
+import {
+  getDevEnvironmentStatus,
+  startManagedDevEnvironment,
+  stopManagedDevEnvironment,
+} from '../services/launcherService.js'
 import { atomicWriteFile } from '../shared/atomicFile.js'
 import { buildUnifiedDiff } from '../shared/unifiedDiff.js'
-import { resolveDirectoryWithinRoot, resolveExistingPathWithinRoot, resolveWritablePathWithinRoot } from '../shared/filesystemBoundary.js'
+import {
+  resolveDirectoryWithinRoot,
+  resolveExistingPathWithinRoot,
+  resolveWritablePathWithinRoot,
+} from '../shared/filesystemBoundary.js'
 import { acquireOperation, operationLimitPayload } from '../shared/operationLimiter.js'
 
-async function handleReadRoutes(req: BridgeRequest, res: BridgeResponse, baseDir: string, pathname: string, securityContext?: BridgeSecurityContext) {
+async function handleReadRoutes(
+  req: BridgeRequest,
+  res: BridgeResponse,
+  baseDir: string,
+  pathname: string,
+  securityContext?: BridgeSecurityContext,
+) {
   if (pathname === '/api/local/fs/list' && req.method === 'POST') {
     requireBridgePermission(securityContext, 'fileRead')
     const body = await readJsonBody(req)
@@ -51,9 +65,16 @@ async function handleReadRoutes(req: BridgeRequest, res: BridgeResponse, baseDir
       depth: Number.isFinite(Number(body.depth)) ? Number(body.depth) : DEFAULT_FIND_DEPTH,
       maxResults: Number.isFinite(Number(body.maxResults)) ? Number(body.maxResults) : DEFAULT_FIND_RESULTS,
       fuzzy: body.fuzzy !== false,
-      fuzzyThreshold: Number.isFinite(Number(body.fuzzyThreshold)) ? Number(body.fuzzyThreshold) : DEFAULT_FIND_FUZZY_THRESHOLD,
+      fuzzyThreshold: Number.isFinite(Number(body.fuzzyThreshold))
+        ? Number(body.fuzzyThreshold)
+        : DEFAULT_FIND_FUZZY_THRESHOLD,
     })
-    sendJson(res, 200, { ...result, requestedPath: resolved.requestedPath, pathResolution: resolved.resolvedBy, attemptedPaths: resolved.attemptedPaths })
+    sendJson(res, 200, {
+      ...result,
+      requestedPath: resolved.requestedPath,
+      pathResolution: resolved.resolvedBy,
+      attemptedPaths: resolved.attemptedPaths,
+    })
     return true
   }
 
@@ -68,7 +89,14 @@ async function handleReadRoutes(req: BridgeRequest, res: BridgeResponse, baseDir
     }
     const buffer = await fs.readFile(targetPath)
     if (isBinary(buffer)) {
-      sendJson(res, 200, { path: targetPath, isBinary: true, content: '', totalLines: 0, truncated: false, hasMore: false })
+      sendJson(res, 200, {
+        path: targetPath,
+        isBinary: true,
+        content: '',
+        totalLines: 0,
+        truncated: false,
+        hasMore: false,
+      })
       return true
     }
     const text = buffer.toString('utf8').replace(/\r\n?/g, '\n')
@@ -90,27 +118,45 @@ async function handleReadRoutes(req: BridgeRequest, res: BridgeResponse, baseDir
           matcher = (line) => (ignoreCase ? line.toLowerCase() : line).includes(needle)
         }
       } catch (error) {
-        sendJson(res, 400, { error: `Invalid search expression: ${error instanceof Error ? error.message : String(error)}` })
+        sendJson(res, 400, {
+          error: `Invalid search expression: ${error instanceof Error ? error.message : String(error)}`,
+        })
         return true
       }
       const hits: Array<{ line: number; content: string; context: string[] }> = []
       for (let index = 0; index < lines.length && hits.length < limit; index += 1) {
         if (!matcher(lines[index])) continue
-        hits.push({ line: index + 1, content: lines[index], context: lines.slice(Math.max(0, index - context), Math.min(lines.length, index + context + 1)) })
+        hits.push({
+          line: index + 1,
+          content: lines[index],
+          context: lines.slice(Math.max(0, index - context), Math.min(lines.length, index + context + 1)),
+        })
       }
-      sendJson(res, 200, { path: targetPath, isBinary: false, mode: 'pattern', pattern: patternInput, matches: hits, matchCount: hits.length, totalLines })
+      sendJson(res, 200, {
+        path: targetPath,
+        isBinary: false,
+        mode: 'pattern',
+        pattern: patternInput,
+        matches: hits,
+        matchCount: hits.length,
+        totalLines,
+      })
       return true
     }
 
     const tail = Number.isFinite(Number(body.tail)) ? Math.max(0, Math.round(Number(body.tail))) : 0
-    const startLine = tail > 0
-      ? Math.max(1, totalLines - Math.min(MAX_READ_LINE_COUNT, tail) + 1)
-      : parseNumber(body.startLine, 1, 1, Math.max(1, totalLines || 1))
-    const lineCount = tail > 0
-      ? Math.min(MAX_READ_LINE_COUNT, tail)
-      : parseNumber(body.lineCount, DEFAULT_READ_LINE_COUNT, 1, MAX_READ_LINE_COUNT)
+    const startLine =
+      tail > 0
+        ? Math.max(1, totalLines - Math.min(MAX_READ_LINE_COUNT, tail) + 1)
+        : parseNumber(body.startLine, 1, 1, Math.max(1, totalLines || 1))
+    const lineCount =
+      tail > 0
+        ? Math.min(MAX_READ_LINE_COUNT, tail)
+        : parseNumber(body.lineCount, DEFAULT_READ_LINE_COUNT, 1, MAX_READ_LINE_COUNT)
     const selected = lines.slice(startLine - 1, Math.min(totalLines, startLine - 1 + lineCount))
-    const maxChars = Number.isFinite(Number(body.maxChars)) ? parseNumber(body.maxChars, MAX_READ_CHARS, 200, MAX_READ_CHARS) : MAX_READ_CHARS
+    const maxChars = Number.isFinite(Number(body.maxChars))
+      ? parseNumber(body.maxChars, MAX_READ_CHARS, 200, MAX_READ_CHARS)
+      : MAX_READ_CHARS
     const raw = selected.join('\n')
     const content = raw.slice(0, maxChars)
     const endLine = startLine + Math.max(0, selected.length - 1)
@@ -131,7 +177,13 @@ async function handleReadRoutes(req: BridgeRequest, res: BridgeResponse, baseDir
   return false
 }
 
-async function handleWriteRoutes(req: BridgeRequest, res: BridgeResponse, baseDir: string, pathname: string, securityContext?: BridgeSecurityContext) {
+async function handleWriteRoutes(
+  req: BridgeRequest,
+  res: BridgeResponse,
+  baseDir: string,
+  pathname: string,
+  securityContext?: BridgeSecurityContext,
+) {
   if (pathname === '/api/local/fs/write' && req.method === 'POST') {
     requireBridgePermission(securityContext, 'fileWrite')
     const body = await readJsonBody(req)
@@ -151,7 +203,10 @@ async function handleWriteRoutes(req: BridgeRequest, res: BridgeResponse, baseDi
     const oldText = String(body.oldText ?? body.oldString ?? '')
     const newText = String(body.newText ?? body.newString ?? '')
     if (!oldText || oldText === newText) {
-      sendJson(res, 400, { applied: false, error: !oldText ? 'oldText is required' : 'oldText and newText are identical' })
+      sendJson(res, 400, {
+        applied: false,
+        error: !oldText ? 'oldText is required' : 'oldText and newText are identical',
+      })
       return true
     }
     let original: string
@@ -163,24 +218,49 @@ async function handleWriteRoutes(req: BridgeRequest, res: BridgeResponse, baseDi
     }
     const occurrences = original.split(oldText).length - 1
     if (!occurrences) {
-      sendJson(res, 200, { applied: false, path: targetPath, error: 'oldText was not found; re-read the file before editing' })
+      sendJson(res, 200, {
+        applied: false,
+        path: targetPath,
+        error: 'oldText was not found; re-read the file before editing',
+      })
       return true
     }
     if (occurrences > 1 && body.replaceAll !== true) {
-      sendJson(res, 200, { applied: false, path: targetPath, occurrences, error: 'oldText is ambiguous; include more context or set replaceAll' })
+      sendJson(res, 200, {
+        applied: false,
+        path: targetPath,
+        occurrences,
+        error: 'oldText is ambiguous; include more context or set replaceAll',
+      })
       return true
     }
-    const updated = body.replaceAll === true ? original.split(oldText).join(newText) : original.replace(oldText, newText)
+    const updated =
+      body.replaceAll === true ? original.split(oldText).join(newText) : original.replace(oldText, newText)
     await atomicWriteFile(targetPath, updated, { encoding: 'utf8' })
     const diff = buildUnifiedDiff(original, updated, { contextLines: 3, fromLabel: targetPath, toLabel: targetPath })
     const stats = await fs.stat(targetPath)
-    sendJson(res, 200, { path: targetPath, applied: true, saved: true, replacements: body.replaceAll === true ? occurrences : 1, diff: diff.diff, added: diff.added, removed: diff.removed, modifiedAt: stats.mtimeMs })
+    sendJson(res, 200, {
+      path: targetPath,
+      applied: true,
+      saved: true,
+      replacements: body.replaceAll === true ? occurrences : 1,
+      diff: diff.diff,
+      added: diff.added,
+      removed: diff.removed,
+      modifiedAt: stats.mtimeMs,
+    })
     return true
   }
   return false
 }
 
-async function handleTerminal(req: BridgeRequest, res: BridgeResponse, baseDir: string, pathname: string, securityContext?: BridgeSecurityContext) {
+async function handleTerminal(
+  req: BridgeRequest,
+  res: BridgeResponse,
+  baseDir: string,
+  pathname: string,
+  securityContext?: BridgeSecurityContext,
+) {
   if (pathname !== '/api/local/terminal/execute' || req.method !== 'POST') return false
   requireBridgePermission(securityContext, 'terminal')
   const body = await readJsonBody(req)
@@ -203,7 +283,13 @@ async function handleTerminal(req: BridgeRequest, res: BridgeResponse, baseDir: 
   return true
 }
 
-async function handleDevEnvironment(req: BridgeRequest, res: BridgeResponse, baseDir: string, pathname: string, securityContext?: BridgeSecurityContext) {
+async function handleDevEnvironment(
+  req: BridgeRequest,
+  res: BridgeResponse,
+  baseDir: string,
+  pathname: string,
+  securityContext?: BridgeSecurityContext,
+) {
   if (!pathname.startsWith('/api/local/launcher/dev/')) return false
   const body = await readJsonBody(req).catch(() => ({}))
   if (pathname === '/api/local/launcher/dev/status' && req.method === 'POST') {

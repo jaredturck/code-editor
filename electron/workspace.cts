@@ -494,11 +494,7 @@ export async function paste_workspace_entry(
     }
 
     if (conflict_mode === 'keep_both') {
-      destination_path = await get_keep_both_path(
-        safe_target_directory.path,
-        safe_source_path,
-        source_is_directory,
-      )
+      destination_path = await get_keep_both_path(safe_target_directory.path, safe_source_path, source_is_directory)
     } else {
       await shell.trashItem(destination_path)
     }

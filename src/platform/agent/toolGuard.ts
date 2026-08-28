@@ -72,7 +72,9 @@ function isRasterImageTextMutation(toolName: string, args: unknown) {
 }
 
 function terminalLooksLikeVerification(command: unknown) {
-  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(String(command || ''))
+  return /\b(?:test|vitest|jest|pytest|playwright|cypress|lint|eslint|ruff|typecheck|tsc|build|compile|check)\b|npm\s+run\s+(?:test|lint|build|typecheck|check)|pnpm\s+(?:test|lint|build|typecheck|check)/i.test(
+    String(command || ''),
+  )
 }
 
 function isObservation(toolName: string, args: unknown) {
@@ -81,7 +83,8 @@ function isObservation(toolName: string, args: unknown) {
 }
 
 function observationFamily(toolName: string, args: unknown) {
-  if (toolName === 'terminal.exec') return terminalLooksLikeVerification(normalizedArgs(args).command) ? 'verification' : 'terminal'
+  if (toolName === 'terminal.exec')
+    return terminalLooksLikeVerification(normalizedArgs(args).command) ? 'verification' : 'terminal'
   if (toolName.startsWith('search.') || toolName === 'files.find' || toolName === 'rag.retrieve') return 'search'
   if (toolName === 'files.read' || toolName === 'files.list' || toolName === 'files.stat') return 'repository'
   if (toolName === 'browser.inspect' || toolName === 'diagnostics.check') return 'verification'
@@ -128,7 +131,10 @@ export function createToolGuard({ maxRepeat = 4, maxObservationStreak = 32 }: To
 
       const count = counts.get(sig) || 0
       if (sig === lastSignature || count >= repeatCap) {
-        return block(sig, `Repeated \`${name}\` action blocked. Reuse existing evidence or choose a materially different action.`)
+        return block(
+          sig,
+          `Repeated \`${name}\` action blocked. Reuse existing evidence or choose a materially different action.`,
+        )
       }
 
       if (isObservation(name, args) && observationStreak >= observationCap) {

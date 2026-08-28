@@ -38,14 +38,7 @@ function format_run_status(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
 }
 
-function ProjectRunCard({
-  state,
-  elapsed_seconds,
-  generating,
-  onPause,
-  onResume,
-  onCancel,
-}: ProjectRunCardProps) {
+function ProjectRunCard({ state, elapsed_seconds, generating, onPause, onResume, onCancel }: ProjectRunCardProps) {
   const progress = project_run_progress(state.todos)
   const resumable = state.status === 'paused' || state.status === 'interrupted'
   const active = ['starting', 'planning', 'running', 'waiting_for_approval', 'waiting_for_user', 'finalizing'].includes(
@@ -311,8 +304,8 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             <div className="mb-2 text-2xl opacity-50">✦</div>
             <p>Ask your configured agent about the current project.</p>
             <p className="mt-1 text-[10px]">
-              The agent can edit the workspace, run development tools, coordinate specialists, inspect application state, and
-              verify the result.
+              The agent can edit the workspace, run development tools, coordinate specialists, inspect application
+              state, and verify the result.
             </p>
             <p className="mt-1 text-[10px]">Attach the active file to include unsaved changes.</p>
           </div>
@@ -407,7 +400,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             ))}
           </div>
         )}
-
 
         <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-2 focus-within:border-sky-500">
           <div className="mb-2 flex items-center justify-between gap-2 text-[9px] text-[var(--muted)]">

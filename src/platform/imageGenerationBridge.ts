@@ -47,7 +47,12 @@ export function installImageGenerationModels() {
   return imageRequest<ImageGenerationStatus>('/image/install', 'POST')
 }
 
-export function generateProjectImage(prompt: string, path: string, format: ImageGenerationFormat, workspaceRoot: string) {
+export function generateProjectImage(
+  prompt: string,
+  path: string,
+  format: ImageGenerationFormat,
+  workspaceRoot: string,
+) {
   return imageRequest('/image/generate', 'POST', { prompt, path, format, workspaceRoot })
 }
 

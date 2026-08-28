@@ -128,7 +128,8 @@ async function fileExists(filePath: string) {
 async function executableExists(executable: string) {
   if (path.isAbsolute(executable)) return fileExists(executable)
   const searchPath = String(process.env.PATH || '')
-  const names = process.platform === 'win32' && !/\.exe$/i.test(executable) ? [executable, `${executable}.exe`] : [executable]
+  const names =
+    process.platform === 'win32' && !/\.exe$/i.test(executable) ? [executable, `${executable}.exe`] : [executable]
   for (const directory of searchPath.split(path.delimiter).filter(Boolean)) {
     for (const name of names) {
       if (await fileExists(path.join(directory, name))) return true
@@ -265,12 +266,18 @@ function serverArgs(port: number) {
   const textEncoder = modelPath(MODEL_FILES[1])
   const vae = modelPath(MODEL_FILES[2])
   return [
-    '--listen-ip', SERVER_HOST,
-    '--listen-port', String(port),
-    '--diffusion-model', diffusion,
-    '--llm', textEncoder,
-    '--vae', vae,
-    '--backend', 'cuda0',
+    '--listen-ip',
+    SERVER_HOST,
+    '--listen-port',
+    String(port),
+    '--diffusion-model',
+    diffusion,
+    '--llm',
+    textEncoder,
+    '--vae',
+    vae,
+    '--backend',
+    'cuda0',
     '--diffusion-fa',
   ]
 }
@@ -286,7 +293,9 @@ async function startImageGenerationServer() {
 
   const enginePath = await resolveEnginePath()
   if (!(await executableExists(enginePath))) {
-    throw new Error('stable-diffusion.cpp sd-server is not installed. Install the packaged runtime or make sd-server available on PATH.')
+    throw new Error(
+      'stable-diffusion.cpp sd-server is not installed. Install the packaged runtime or make sd-server available on PATH.',
+    )
   }
 
   await stopImageGenerationServer()
@@ -303,7 +312,9 @@ async function startImageGenerationServer() {
   serverProcess = child
   child.stdout.on('data', () => undefined)
   child.stderr.on('data', (chunk: Buffer) => {
-    serverError = String(chunk || '').trim().slice(-4000)
+    serverError = String(chunk || '')
+      .trim()
+      .slice(-4000)
   })
   child.once('exit', () => {
     if (serverProcess === child) {
@@ -328,7 +339,7 @@ async function waitForJob(jobId: string) {
   while (Date.now() < deadline) {
     const response = await fetch(`${serverBaseUrl()}/sdcpp/v1/jobs/${encodeURIComponent(jobId)}`)
     if (!response.ok) throw new Error(`Image generation job status failed (${response.status}).`)
-    const job = await response.json() as Record<string, any>
+    const job = (await response.json()) as Record<string, any>
     const status = String(job.status || '')
     if (status === 'completed') return job
     if (status === 'failed' || status === 'cancelled') {
@@ -336,7 +347,9 @@ async function waitForJob(jobId: string) {
     }
     await sleep(POLL_INTERVAL_MS)
   }
-  await fetch(`${serverBaseUrl()}/sdcpp/v1/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }).catch(() => undefined)
+  await fetch(`${serverBaseUrl()}/sdcpp/v1/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }).catch(
+    () => undefined,
+  )
   throw new Error('Image generation timed out.')
 }
 
@@ -359,7 +372,7 @@ export async function getImageGenerationStatus(): Promise<RuntimeStatus> {
   const configured = Boolean(runtimeConfig)
   const enginePath = configured ? await resolveEnginePath() : ''
   const missingFiles = configured ? await missingModelFiles() : MODEL_FILES.map((file) => file.filename)
-  const engineAvailable = configured && Boolean(enginePath) && await executableExists(enginePath)
+  const engineAvailable = configured && Boolean(enginePath) && (await executableExists(enginePath))
   return {
     configured,
     installed: configured && missingFiles.length === 0,
@@ -369,7 +382,9 @@ export async function getImageGenerationStatus(): Promise<RuntimeStatus> {
     installing: Boolean(installPromise),
     installCompletedBytes,
     installTotalBytes: MODEL_TOTAL_BYTES,
-    installPercent: MODEL_TOTAL_BYTES ? Math.min(100, Math.round((installCompletedBytes / MODEL_TOTAL_BYTES) * 1000) / 10) : 0,
+    installPercent: MODEL_TOTAL_BYTES
+      ? Math.min(100, Math.round((installCompletedBytes / MODEL_TOTAL_BYTES) * 1000) / 10)
+      : 0,
     modelDir: configured ? modelDir() : '',
     enginePath,
     gpuIndex: DEFAULT_GPU_INDEX,
@@ -437,9 +452,11 @@ export async function generateProjectImage(request: ImageGenerationRequest) {
     })
     if (response.status !== 202) {
       const detail = await response.text().catch(() => '')
-      throw new Error(`Image generation request failed (${response.status})${detail ? `: ${detail.slice(0, 500)}` : ''}`)
+      throw new Error(
+        `Image generation request failed (${response.status})${detail ? `: ${detail.slice(0, 500)}` : ''}`,
+      )
     }
-    const submitted = await response.json() as Record<string, any>
+    const submitted = (await response.json()) as Record<string, any>
     const jobId = String(submitted.id || '')
     if (!jobId) throw new Error('Image generation server did not return a job id.')
     const completed = await waitForJob(jobId)

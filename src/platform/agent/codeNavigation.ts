@@ -23,9 +23,10 @@ function shellQuote(value: string) {
 }
 
 function parseRipgrep(output: unknown, kind: CodeNavigationMatch['kind'], symbol = ''): CodeNavigationMatch[] {
-  const raw = typeof output === 'string'
-    ? output
-    : String((output as any)?.stdout || (output as any)?.output || (output as any)?.text || '')
+  const raw =
+    typeof output === 'string'
+      ? output
+      : String((output as any)?.stdout || (output as any)?.output || (output as any)?.text || '')
   return raw
     .split(/\r?\n/)
     .map((line) => {
@@ -136,7 +137,10 @@ function likelySymbols(value: string) {
  * Cheap structural pre-context for project workers. It only runs when the work item mentions
  * identifier-like symbols; ordinary prose tasks do not pay for extra repository scans.
  */
-export async function deriveCodeNavigationEvidence(workspaceRoot: string, workDescription: string): Promise<CodeNavigationEvidence> {
+export async function deriveCodeNavigationEvidence(
+  workspaceRoot: string,
+  workDescription: string,
+): Promise<CodeNavigationEvidence> {
   const symbols = likelySymbols(String(workDescription || ''))
   if (!workspaceRoot || !symbols.length) return { symbols: [], definitions: [], references: [] }
 

@@ -55,11 +55,7 @@ export async function runCommand(command: string, cwd: string, root_dir = cwd) {
   const cd_target = parse_cd_command(command)
   if (cd_target !== null) {
     try {
-      const requested = cd_target
-        ? path.isAbsolute(cd_target)
-          ? cd_target
-          : path.join(cwd, cd_target)
-        : root_dir
+      const requested = cd_target ? (path.isAbsolute(cd_target) ? cd_target : path.join(cwd, cd_target)) : root_dir
       const next_cwd = await resolveDirectoryWithinRoot(requested, root_dir)
       const stats = await fs.stat(next_cwd)
       if (!stats.isDirectory()) {

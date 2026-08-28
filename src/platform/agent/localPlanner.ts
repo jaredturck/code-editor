@@ -39,7 +39,8 @@ const MUTATION_VERB_PATTERN =
   /\b(build|create|implement|add|change|update|fix|repair|refactor|remove|delete|rename|rewrite|migrate|wire|integrate|debug|optimi[sz]e|improve|redesign|replace|convert|edit|write|make|style|move)\b/i
 const READ_ONLY_DEVELOPMENT_PATTERN =
   /\b(review|audit|analy[sz]e|explain|inspect|investigate|trace|understand|find|locate|summari[sz]e|check)\b/i
-const FILE_MUTATION_PATTERN = /\b(create|write|edit|update|change|rename|move|delete|remove|replace)\b[\s\S]{0,80}\b(file|folder|directory|document)\b/i
+const FILE_MUTATION_PATTERN =
+  /\b(create|write|edit|update|change|rename|move|delete|remove|replace)\b[\s\S]{0,80}\b(file|folder|directory|document)\b/i
 const WEB_RESEARCH_PATTERN =
   /\b(research|look up|search the web|browse|latest|current|today|recent|sources?|citations?|online)\b/i
 

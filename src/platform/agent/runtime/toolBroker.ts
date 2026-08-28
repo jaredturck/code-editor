@@ -161,7 +161,8 @@ async function attachAgentRuntimeContext(
     workspace_mutated: workspaceMutated,
   })
 
-  const shouldRefreshDiagnostics = (workspaceMutated && toolName !== 'image.generate') || toolName === 'diagnostics.check'
+  const shouldRefreshDiagnostics =
+    (workspaceMutated && toolName !== 'image.generate') || toolName === 'diagnostics.check'
   let snapshot = null
   let diagnosticsError = ''
   if (shouldRefreshDiagnostics) {
@@ -367,13 +368,12 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         })
         const prompt = String(args.prompt || '').trim()
         const format = ['square', 'landscape', 'portrait'].includes(String(args.format || ''))
-          ? String(args.format) as 'square' | 'landscape' | 'portrait'
+          ? (String(args.format) as 'square' | 'landscape' | 'portrait')
           : 'landscape'
         const result = await generateProjectImage(prompt, path, format, workspaceRoot)
         updateMutationEpoch(state, toolName, args, result)
-        const record = result && typeof result === 'object' && !Array.isArray(result)
-          ? result as Record<string, unknown>
-          : {}
+        const record =
+          result && typeof result === 'object' && !Array.isArray(result) ? (result as Record<string, unknown>) : {}
         const normalizedResult = {
           ...record,
           path: String(record.relativePath || record.path || path),

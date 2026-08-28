@@ -51,7 +51,9 @@ describe('workspace diagnostics state', () => {
 
     agent_read_file.mockImplementation(async (_root_path: string, file_path: string) => ({
       path: file_path,
-      content: file_path.endsWith('.css') ? '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' : 'export default {}\n',
+      content: file_path.endsWith('.css')
+        ? '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n'
+        : 'export default {}\n',
       revision: `revision:${file_path}`,
     }))
 

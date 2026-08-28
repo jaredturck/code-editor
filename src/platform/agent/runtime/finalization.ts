@@ -29,7 +29,8 @@ const TASK_TOOLSETS = {
   research: new Set(['search.web', 'web.fetch', 'sources.lookup', 'user.ask']),
 } as const
 
-const BROWSER_TASK_PATTERN = /\b(browser|website|webpage|web app|frontend|front-end|ui|visual|render|css|html|dom|responsive)\b/i
+const BROWSER_TASK_PATTERN =
+  /\b(browser|website|webpage|web app|frontend|front-end|ui|visual|render|css|html|dom|responsive)\b/i
 const CODE_SEARCH_PATTERN = /\b(find|locate|search|where|references?|usages?|across (the )?(repo|project|codebase))\b/i
 const WEB_RESEARCH_PATTERN = /\b(latest|current|online|internet|web research|look up|search the web)\b/i
 
@@ -91,11 +92,16 @@ export async function synthesizeFinalReply({
   if (successful.length) {
     const recent = successful.slice(-6).map((step) => {
       const tool = String(step.tool || 'action')
-      const summary = String(step.summary || '').replace(/\s+/g, ' ').trim().slice(0, 280)
+      const summary = String(step.summary || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 280)
       return summary ? `- ${tool}: ${summary}` : `- ${tool}`
     })
     const failed = stepHistory.filter((step) => step.ok === false).slice(-3)
-    const failureLines = failed.map((step) => `- ${String(step.tool || 'action')}: ${String(step.error || 'failed').slice(0, 220)}`)
+    const failureLines = failed.map(
+      (step) => `- ${String(step.tool || 'action')}: ${String(step.error || 'failed').slice(0, 220)}`,
+    )
     return [
       `Completed ${successful.length} successful action${successful.length === 1 ? '' : 's'}.`,
       recent.join('\n'),
@@ -236,7 +242,8 @@ export function buildRunSummary({
   const capabilityBlocks = stepHistory.filter((step) => !step.ok && isCapabilityOrPermissionError(step.error)).length
   const toolRetries = stepHistory.filter((step) => step.retried).length
   const invalidArgErrors = stepHistory.filter(
-    (step) => !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
+    (step) =>
+      !step.ok && /invalid|argument|required|missing|schema|expected|must be|parse/i.test(String(step.error || '')),
   ).length
   let redundantToolCalls = 0
   for (let i = 1; i < stepHistory.length; i += 1) {

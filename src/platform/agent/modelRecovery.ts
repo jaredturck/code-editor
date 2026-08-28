@@ -29,19 +29,26 @@ function identity(provider: unknown, model: unknown, keyId: unknown): string {
 }
 
 function listAvailableCandidates(settings: RecoverySettings): AutoSetupCandidate[] {
-  const discovered = settings.discovered_models && typeof settings.discovered_models === 'object'
-    ? settings.discovered_models as Record<string, unknown>
-    : {}
-  const selected = settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
-    ? settings.provider_selected_models as Record<string, unknown>
-    : {}
+  const discovered =
+    settings.discovered_models && typeof settings.discovered_models === 'object'
+      ? (settings.discovered_models as Record<string, unknown>)
+      : {}
+  const selected =
+    settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
+      ? (settings.provider_selected_models as Record<string, unknown>)
+      : {}
   const agentModels = Array.isArray(settings.agent_models) ? settings.agent_models : []
   const models = normalizeModelList([
     ...normalizeModelList(discovered.local),
     ...normalizeModelList(selected.local),
     String(settings.ai_model || ''),
     ...agentModels
-      .filter((entry) => entry && typeof entry === 'object' && String((entry as Record<string, unknown>).provider || '').toLowerCase() === 'local')
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry === 'object' &&
+          String((entry as Record<string, unknown>).provider || '').toLowerCase() === 'local',
+      )
       .map((entry) => String((entry as Record<string, unknown>).model || '')),
   ])
   return models.map((model) => ({ provider: 'local', model, keyId: '1' }))

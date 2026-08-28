@@ -550,7 +550,8 @@ export async function answerWebResearchFollowUp(
     messages: [
       {
         role: 'system',
-        content: 'Answer the follow-up from the retained evidence only. Cite source links and state uncertainty when needed.',
+        content:
+          'Answer the follow-up from the retained evidence only. Cite source links and state uncertainty when needed.',
       },
       {
         role: 'user',

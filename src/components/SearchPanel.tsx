@@ -259,9 +259,7 @@ function SearchPanel({ rootPath, onOpenFile }: { rootPath: string | null; onOpen
                   {result.line ? `:${result.line}` : ''}
                 </div>
                 {result.content && (
-                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">
-                    {result.content}
-                  </div>
+                  <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--muted)]">{result.content}</div>
                 )}
               </button>
             ))}

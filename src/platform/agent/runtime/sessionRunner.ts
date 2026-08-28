@@ -19,7 +19,8 @@ const CODE_NAVIGATION_TOOL_DEFINITIONS = [
   {
     name: 'code.definition',
     module: 'Search',
-    description: 'Find likely definitions of a code symbol in the current project. Prefer this over broad text search when you know the symbol name.',
+    description:
+      'Find likely definitions of a code symbol in the current project. Prefer this over broad text search when you know the symbol name.',
     args: { symbol: 'string', maxResults: 'number (optional)' },
   },
   {
@@ -31,15 +32,40 @@ const CODE_NAVIGATION_TOOL_DEFINITIONS = [
 ]
 
 const CODING_TOOL_SURFACE = new Set([
-  'files.list', 'files.find', 'files.read', 'files.write', 'files.edit', 'files.patch', 'files.stat', 'files.diff',
+  'files.list',
+  'files.find',
+  'files.read',
+  'files.write',
+  'files.edit',
+  'files.patch',
+  'files.stat',
+  'files.diff',
   'image.generate',
-  'terminal.exec', 'code.definition', 'code.references', 'search.web', 'web.fetch', 'browser.inspect',
-  'diagnostics.check', 'agent.delegate', 'agent.consult', 'agent.review', 'user.ask', 'approval.request',
+  'terminal.exec',
+  'code.definition',
+  'code.references',
+  'search.web',
+  'web.fetch',
+  'browser.inspect',
+  'diagnostics.check',
+  'agent.delegate',
+  'agent.consult',
+  'agent.review',
+  'user.ask',
+  'approval.request',
 ])
 
 const SERIAL_TOOLS = new Set([
-  'files.write', 'files.edit', 'files.patch', 'image.generate', 'terminal.exec', 'agent.delegate', 'agent.consult',
-  'agent.review', 'user.ask', 'approval.request',
+  'files.write',
+  'files.edit',
+  'files.patch',
+  'image.generate',
+  'terminal.exec',
+  'agent.delegate',
+  'agent.consult',
+  'agent.review',
+  'user.ask',
+  'approval.request',
 ])
 
 function asConversationMessage(message) {
@@ -98,12 +124,14 @@ function contextBudget(settings) {
 
   const configuredMinutes = Number(settings?.agent_session_minutes)
   const configuredActions = Number(settings?.agent_context_action_limit)
-  const minutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
-    ? Math.max(1, Math.min(120, configuredMinutes))
-    : DEFAULT_CONTEXT_MINUTES
-  const maxActions = Number.isFinite(configuredActions) && configuredActions > 0
-    ? Math.max(16, Math.min(400, Math.round(configuredActions)))
-    : DEFAULT_CONTEXT_ACTIONS
+  const minutes =
+    Number.isFinite(configuredMinutes) && configuredMinutes > 0
+      ? Math.max(1, Math.min(120, configuredMinutes))
+      : DEFAULT_CONTEXT_MINUTES
+  const maxActions =
+    Number.isFinite(configuredActions) && configuredActions > 0
+      ? Math.max(16, Math.min(400, Math.round(configuredActions)))
+      : DEFAULT_CONTEXT_ACTIONS
   return { maxMs: minutes * 60_000, maxActions, minutes, unbounded: false }
 }
 
@@ -200,7 +228,9 @@ async function executeNativeCodeTool(toolName, args, settings) {
 function extractQuestionAnswer(response) {
   if (typeof response === 'string') return response.trim()
   if (!response || typeof response !== 'object') return ''
-  return String(response.answer ?? response.value ?? response.choice ?? response.selection ?? response.decision ?? '').trim()
+  return String(
+    response.answer ?? response.value ?? response.choice ?? response.selection ?? response.decision ?? '',
+  ).trim()
 }
 
 async function executeUserQuestion(args, onApprovalRequest, state) {
@@ -211,14 +241,16 @@ async function executeUserQuestion(args, onApprovalRequest, state) {
     return {
       answered: false,
       limitReached: true,
-      instruction: 'Question limit reached for this model context. Choose the safest reasonable option from the existing product requirements and project evidence, or hand off the blocker through the project ledger.',
+      instruction:
+        'Question limit reached for this model context. Choose the safest reasonable option from the existing product requirements and project evidence, or hand off the blocker through the project ledger.',
     }
   }
   if (typeof onApprovalRequest !== 'function') {
     return {
       answered: false,
       unavailable: true,
-      instruction: 'No interactive user channel is available. Choose the safest reasonable implementation consistent with existing requirements.',
+      instruction:
+        'No interactive user channel is available. Choose the safest reasonable implementation consistent with existing requirements.',
     }
   }
 
@@ -233,7 +265,12 @@ async function executeUserQuestion(args, onApprovalRequest, state) {
   const answer = extractQuestionAnswer(response)
   return answer
     ? { answered: true, answer, questionNumber: state.count }
-    : { answered: false, answer: '', instruction: 'No user answer was supplied. Continue only if a safe requirement-consistent default is available.' }
+    : {
+        answered: false,
+        answer: '',
+        instruction:
+          'No user answer was supplied. Continue only if a safe requirement-consistent default is available.',
+      }
 }
 
 export async function runAgentSession({
@@ -263,10 +300,20 @@ export async function runAgentSession({
   const definitions = toolDefinitions(settings, safetyConfig, approvalState)
   const tools = buildJsonSchemaTools(definitions)
   const webSearchState = { maxCalls: Number.MAX_SAFE_INTEGER, callsUsed: 0, queryHistory: [], cache: new Map() }
-  const requestAI = async (messages) => String((await callAIWithMeta(messages, settings, { signal: abortSignal })).text || '')
+  const requestAI = async (messages) =>
+    String((await callAIWithMeta(messages, settings, { signal: abortSignal })).text || '')
   const broker = createModuleBroker({
-    settings, todoTool, traceTool, safetyConfig, approvalState, webSearchState, userInput, requestAI,
-    onApprovalRequest, stepHistory, onArtifact: (artifact) => artifact && artifacts.push(artifact),
+    settings,
+    todoTool,
+    traceTool,
+    safetyConfig,
+    approvalState,
+    webSearchState,
+    userInput,
+    requestAI,
+    onApprovalRequest,
+    stepHistory,
+    onArtifact: (artifact) => artifact && artifacts.push(artifact),
   })
 
   const system = [
@@ -353,7 +400,11 @@ export async function runAgentSession({
       let ok = true
       if (guardResult.blocked) {
         ok = false
-        result = { error: guardResult.reason || 'Repeated action blocked.', blocked: true, escalate: guardResult.escalate === true }
+        result = {
+          error: guardResult.reason || 'Repeated action blocked.',
+          blocked: true,
+          escalate: guardResult.escalate === true,
+        }
       } else {
         try {
           if (toolName === 'user.ask') result = await executeUserQuestion(args, onApprovalRequest, questionState)
@@ -366,8 +417,13 @@ export async function runAgentSession({
         }
       }
       const history = {
-        step, tool: toolName, args, ok, status: ok ? 'succeeded' : 'failed',
-        summary: resultSummary(toolName, args, result), at: Date.now(),
+        step,
+        tool: toolName,
+        args,
+        ok,
+        status: ok ? 'succeeded' : 'failed',
+        summary: resultSummary(toolName, args, result),
+        at: Date.now(),
       }
       stepHistory.push(history)
       emit(onEvent, timeline, {
@@ -377,13 +433,21 @@ export async function runAgentSession({
         summary: history.summary,
         step,
       })
-      return { id: String(call?.id || `${step}-${toolName}`), name: toolName, content: toToolResultContent(result, { toolName }) }
+      return {
+        id: String(call?.id || `${step}-${toolName}`),
+        name: toolName,
+        content: toToolResultContent(result, { toolName }),
+      }
     }
 
-    const canParallelize = toolCalls.length > 1 && toolCalls.every((call) => !SERIAL_TOOLS.has(String(call?.name || '')))
+    const canParallelize =
+      toolCalls.length > 1 && toolCalls.every((call) => !SERIAL_TOOLS.has(String(call?.name || '')))
     const toolResults = canParallelize
       ? await Promise.all(toolCalls.map(executeOne))
-      : await toolCalls.reduce(async (pending, call) => [...(await pending), await executeOne(call)], Promise.resolve([]))
+      : await toolCalls.reduce(
+          async (pending, call) => [...(await pending), await executeOne(call)],
+          Promise.resolve([]),
+        )
 
     thread.push({ role: 'tool', toolResults })
   }

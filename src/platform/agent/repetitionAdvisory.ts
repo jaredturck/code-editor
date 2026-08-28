@@ -30,9 +30,7 @@ function normalized_text(value: unknown) {
 }
 
 function normalize_local_ports(value: string) {
-  return value
-    .replace(/(https?:\/\/localhost:)\d+/g, '$1<port>')
-    .replace(/(https?:\/\/127\.0\.0\.1:)\d+/g, '$1<port>')
+  return value.replace(/(https?:\/\/localhost:)\d+/g, '$1<port>').replace(/(https?:\/\/127\.0\.0\.1:)\d+/g, '$1<port>')
 }
 
 function normalize_terminal_command(value: unknown) {
@@ -45,16 +43,32 @@ function normalize_terminal_command(value: unknown) {
 }
 
 function terminal_evidence_category(command: string) {
-  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:build|compile)\b|\b(?:vite|webpack|rollup|tsc)\b.*(?:--build|-b)\b/.test(command)) {
+  if (
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:build|compile)\b|\b(?:vite|webpack|rollup|tsc)\b.*(?:--build|-b)\b/.test(
+      command,
+    )
+  ) {
     return 'build verification'
   }
-  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|test:.*|vitest|jest)\b|\b(?:vitest|jest|pytest|cargo\s+test|go\s+test)\b/.test(command)) {
+  if (
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|test:.*|vitest|jest)\b|\b(?:vitest|jest|pytest|cargo\s+test|go\s+test)\b/.test(
+      command,
+    )
+  ) {
     return 'test verification'
   }
-  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|lint:.*)\b|\b(?:eslint|stylelint|ruff)\b(?!.*(?:--fix|\s+format\b))/.test(command)) {
+  if (
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:lint|lint:.*)\b|\b(?:eslint|stylelint|ruff)\b(?!.*(?:--fix|\s+format\b))/.test(
+      command,
+    )
+  ) {
     return 'lint diagnostics'
   }
-  if (/\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:typecheck|type-check|check:types)\b|\btsc\b(?!.*(?:--build|-b))/.test(command)) {
+  if (
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:typecheck|type-check|check:types)\b|\btsc\b(?!.*(?:--build|-b))/.test(
+      command,
+    )
+  ) {
     return 'typecheck verification'
   }
   if (/\b(?:curl|wget)\b.*https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\b/.test(command)) {
@@ -146,7 +160,8 @@ export function repeatedAgentEvidenceBlock({ scope_id, tool_name, args = {} }: R
 
   if (exact_count < 2 && category_count < 4) return ''
 
-  const repetition = exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
+  const repetition =
+    exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
   return `REPETITION BLOCK: ${repetition} already completed without a source/configuration change. Use existing evidence, mutate the relevant state, or choose a materially different check.`
 }
 
@@ -190,7 +205,8 @@ export function recordAgentEvidence({
   }
 
   if (exact_count < 2 && category_count < 3) return ''
-  const repetition = exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
+  const repetition =
+    exact_count >= 2 ? `${exact_count} equivalent ${category} checks` : `${category_count} ${category} checks`
   return `REPETITION ADVISORY: ${repetition} gathered without a source/configuration change. Prefer using the evidence or changing the relevant state before checking again.`
 }
 

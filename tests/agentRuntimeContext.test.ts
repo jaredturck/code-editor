@@ -142,7 +142,8 @@ describe('autonomous project working context', () => {
     })
 
     const resumed = input_fixture()
-    resumed.userInput = 'Continue the original development request:\nFix the parser regression\n\nUse the existing evidence.'
+    resumed.userInput =
+      'Continue the original development request:\nFix the parser regression\n\nUse the existing evidence.'
     expect(persistedTaskMatchesInput(resumed)).toBe(true)
 
     const new_task = input_fixture()
@@ -155,9 +156,13 @@ describe('autonomous project working context', () => {
 
     expect(runtime_state.planning).toHaveBeenCalledTimes(1)
     expect(runtime_state.run).toHaveBeenCalledTimes(1)
-    expect(runtime_state.planning.mock.invocationCallOrder[0]).toBeLessThan(runtime_state.run.mock.invocationCallOrder[0])
+    expect(runtime_state.planning.mock.invocationCallOrder[0]).toBeLessThan(
+      runtime_state.run.mock.invocationCallOrder[0],
+    )
     const runtime_input = runtime_state.run.mock.calls[0][0] as AgentSessionInput
-    expect(runtime_input.conversation?.some((message) => String(message.content || '').includes('[PROJECT PLANNING]'))).toBe(true)
+    expect(
+      runtime_input.conversation?.some((message) => String(message.content || '').includes('[PROJECT PLANNING]')),
+    ).toBe(true)
     expect(runtime_state.save_state).toHaveBeenCalledWith('chat-1', { projectPlanning: null })
     expect(runtime_state.save_state.mock.calls.some((call) => Boolean(call[1]?.projectPlanning))).toBe(true)
   })
@@ -182,7 +187,9 @@ describe('autonomous project working context', () => {
     expect(runtime_state.planning).not.toHaveBeenCalled()
     expect(runtime_state.run).toHaveBeenCalledTimes(1)
     const runtime_input = runtime_state.run.mock.calls[0][0] as AgentSessionInput
-    expect(runtime_input.conversation?.some((message) => String(message.content || '').includes(saved.context))).toBe(true)
+    expect(runtime_input.conversation?.some((message) => String(message.content || '').includes(saved.context))).toBe(
+      true,
+    )
   })
 
   it('injects the last project checkpoint before a resumed workspace agent segment and refreshes it afterward', async () => {
