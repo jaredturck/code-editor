@@ -90,7 +90,7 @@ export function build_core_agent_settings(
     agent_require_explicit_approval: false,
     agent_web_site_guard: false,
     search_web_require_paid_fallback_confirmation: false,
-    agent_search_web_budget: Math.max(2, Number(base.agent_search_web_budget) || 2),
+    agent_search_web_budget: 2,
 
     agent_session_minutes: LONG_RUNNING_PROJECT_SESSION_MINUTES,
     agent_bounded_automatic: false,
