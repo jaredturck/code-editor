@@ -253,33 +253,6 @@ function withApprovalExecutionContext(options: LegacyBrokerOptions, context: App
   }
 }
 
-async function requestWorkspaceEscapeApproval(options: LegacyBrokerOptions, toolName: string, description: string) {
-  if (typeof options?.onApprovalRequest !== 'function') return false
-  const response = await options.onApprovalRequest({
-    requestType: 'approval',
-    reason: `${toolName} is attempting to access outside the open project workspace.`,
-    requestedAction: description,
-    requestedTool: toolName,
-    tool: toolName,
-    recommendedDecision: 'deny',
-    options: [
-      {
-        id: 'approve',
-        label: 'Approve',
-        description: 'Allow this one workspace-boundary exception.',
-        recommended: false,
-      },
-      {
-        id: 'deny',
-        label: 'Deny',
-        description: 'Keep the agent inside the current project.',
-        recommended: true,
-      },
-    ],
-  })
-  return approvalGranted(response)
-}
-
 export function createModuleBroker(options: LegacyBrokerOptions) {
   const workspaceRoot = String(options?.settings?.agent_working_dir || '').trim()
   const approvalState = options?.approvalState || {}
@@ -357,17 +330,12 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
         if (workspaceRoot && workspaceFileTools.has(toolName)) {
           const targetPath = String(args.path || '.')
           if (!isWorkspacePath(targetPath, workspaceRoot)) {
-            const approved = await requestWorkspaceEscapeApproval(contextualOptions, toolName, `${toolName} ${targetPath}`)
-            if (!approved) {
-              return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
-                error: 'Workspace boundary access was denied. Continue using files inside the open project.',
-                denied: true,
-              })
-            }
-            if (automaticMode) broker = workspaceAutonomousLegacy
-          } else if (automaticMode) {
-            broker = workspaceAutonomousLegacy
+            return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
+              error: 'Workspace boundary access is blocked. Continue using files inside the open project.',
+              denied: true,
+            })
           }
+          if (automaticMode) broker = workspaceAutonomousLegacy
         }
 
         if (toolName === 'terminal.exec') {
@@ -376,21 +344,12 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
           }
 
           if (workspaceRoot && terminalCommandEscapesWorkspace(args.command, workspaceRoot, args.cwd)) {
-            const approved = await requestWorkspaceEscapeApproval(
-              contextualOptions,
-              toolName,
-              String(args.command || 'terminal command'),
-            )
-            if (!approved) {
-              return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
-                error: 'Workspace boundary command was denied. Continue with a project-scoped alternative.',
-                denied: true,
-              })
-            }
-            if (automaticMode) broker = workspaceAutonomousLegacy
-          } else if (automaticMode && workspaceRoot) {
-            broker = workspaceAutonomousLegacy
+            return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, {
+              error: 'Workspace boundary command is blocked. Continue with a project-scoped alternative.',
+              denied: true,
+            })
           }
+          if (automaticMode && workspaceRoot) broker = workspaceAutonomousLegacy
         }
 
         const result = await broker.execute(toolName, args)
