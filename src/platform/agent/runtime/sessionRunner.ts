@@ -86,6 +86,16 @@ function buildApprovalState(settings) {
 }
 
 function contextBudget(settings) {
+  const unbounded = automaticMode(settings) && settings?.agent_bounded_automatic !== true
+  if (unbounded) {
+    return {
+      maxMs: Number.POSITIVE_INFINITY,
+      maxActions: Number.POSITIVE_INFINITY,
+      minutes: null,
+      unbounded: true,
+    }
+  }
+
   const configuredMinutes = Number(settings?.agent_session_minutes)
   const configuredActions = Number(settings?.agent_context_action_limit)
   const minutes = Number.isFinite(configuredMinutes) && configuredMinutes > 0
@@ -94,7 +104,7 @@ function contextBudget(settings) {
   const maxActions = Number.isFinite(configuredActions) && configuredActions > 0
     ? Math.max(16, Math.min(400, Math.round(configuredActions)))
     : DEFAULT_CONTEXT_ACTIONS
-  return { maxMs: minutes * 60_000, maxActions, minutes }
+  return { maxMs: minutes * 60_000, maxActions, minutes, unbounded: false }
 }
 
 function toolDefinitions(settings, safetyConfig, approvalState) {
@@ -278,7 +288,9 @@ export async function runAgentSession({
   emit(onEvent, timeline, {
     type: 'phase',
     name: 'agent',
-    summary: `Native Qwen coding loop started with ${tools.length} tools; context budget ${budget.minutes}m/${budget.maxActions} actions.`,
+    summary: budget.unbounded
+      ? `Native Qwen coding loop started with ${tools.length} tools; no runtime time/action limit.`
+      : `Native Qwen coding loop started with ${tools.length} tools; context budget ${budget.minutes}m/${budget.maxActions} actions.`,
   })
 
   let reply = ''
@@ -289,8 +301,8 @@ export async function runAgentSession({
     if (abortSignal?.aborted) break
 
     const elapsedMs = Date.now() - startedAt
-    const actionLimitReached = stepHistory.length >= budget.maxActions
-    const timeLimitReached = elapsedMs >= budget.maxMs
+    const actionLimitReached = !budget.unbounded && stepHistory.length >= budget.maxActions
+    const timeLimitReached = !budget.unbounded && elapsedMs >= budget.maxMs
     if (actionLimitReached || timeLimitReached) {
       handoff = true
       handoffReason = actionLimitReached
@@ -330,6 +342,12 @@ export async function runAgentSession({
     const executeOne = async (call) => {
       const toolName = String(call?.name || '')
       const args = call?.args && typeof call.args === 'object' ? call.args : {}
+      emit(onEvent, timeline, {
+        type: 'tool_call',
+        tool: toolName,
+        argsPreview: limitedString(JSON.stringify(args), 16000),
+        step,
+      })
       const guardResult = guard.check(toolName, args)
       let result
       let ok = true
@@ -352,7 +370,13 @@ export async function runAgentSession({
         summary: resultSummary(toolName, args, result), at: Date.now(),
       }
       stepHistory.push(history)
-      emit(onEvent, timeline, { type: 'tool', ...history })
+      emit(onEvent, timeline, {
+        type: 'tool_result',
+        tool: toolName,
+        status: ok ? 'ok' : 'failed',
+        summary: history.summary,
+        step,
+      })
       return { id: String(call?.id || `${step}-${toolName}`), name: toolName, content: toToolResultContent(result, { toolName }) }
     }
 
@@ -389,8 +413,9 @@ export async function runAgentSession({
       userQuestions: questionState.count,
       contextHandoff: handoff,
       contextHandoffReason: handoffReason,
-      contextBudgetMinutes: budget.minutes,
-      contextBudgetActions: budget.maxActions,
+      contextUnbounded: budget.unbounded,
+      contextBudgetMinutes: budget.unbounded ? null : budget.minutes,
+      contextBudgetActions: budget.unbounded ? null : budget.maxActions,
       durationMs: Date.now() - startedAt,
     },
   }
