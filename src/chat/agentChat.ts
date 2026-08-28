@@ -57,6 +57,12 @@ function autonomous_tool_allowlist(value: unknown, screen_enabled: boolean) {
   })
 }
 
+function image_generation_tool_allowlist(value: unknown, enabled: boolean) {
+  if (!Array.isArray(value) || !enabled) return value
+  if (value.some((tool) => String(tool || '') === 'image.generate')) return value
+  return [...value, 'image.generate']
+}
+
 export function build_core_agent_settings(
   settings: OrbSettings,
   workspace_root: string | null,
@@ -71,6 +77,7 @@ export function build_core_agent_settings(
     return {
       ...base,
       image_generation_enabled,
+      agent_tool_allowlist: image_generation_tool_allowlist(base.agent_tool_allowlist, image_generation_enabled),
       agent_planning_mode: true,
       agent_require_explicit_approval: true,
     }
@@ -79,6 +86,7 @@ export function build_core_agent_settings(
   const project_scoped = Boolean(workspace_root)
   const screen_enabled = base.permissions_screen_capture === true
   const configured_repeat_cap = Math.max(2, Number(base.agent_tool_repeat_cap) || 4)
+  const automatic_tools = autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled)
 
   return {
     ...base,
@@ -109,7 +117,7 @@ export function build_core_agent_settings(
     skills_enabled: base.skills_enabled !== false,
     agent_finish_open_todos: false,
     context_budget_warn_ratio: 0.05,
-    agent_tool_allowlist: autonomous_tool_allowlist(base.agent_tool_allowlist, screen_enabled),
+    agent_tool_allowlist: image_generation_tool_allowlist(automatic_tools, image_generation_enabled),
   }
 }
 
