@@ -5,6 +5,7 @@ import {
   isWorkspaceAutonomousCommand,
   terminalCommandEscapesWorkspace,
 } from '@/platform/agent/runtime/readOnlyTerminalPolicy'
+import { assertSafePath } from '@/platform/agent/runtime/safetyPolicy'
 
 const workspace = '/workspace/project'
 
@@ -41,5 +42,21 @@ describe('automatic terminal workspace policy', () => {
     expect(isHardBlockedTerminalCommand('rm -rf .')).toBe(true)
     expect(isHardBlockedTerminalCommand('rm -rf ./')).toBe(true)
     expect(isHardBlockedTerminalCommand('rm -rf /')).toBe(true)
+  })
+
+  it('keeps lower-level path resolution inside the configured project root', () => {
+    const linux_settings = { agent_working_dir: workspace }
+    expect(assertSafePath('src/index.ts', { settings: linux_settings })).toBe('/workspace/project/src/index.ts')
+    expect(() => assertSafePath('/workspace/other/index.ts', { settings: linux_settings })).toThrow(
+      'Path is outside the open project workspace.',
+    )
+
+    const windows_settings = { agent_working_dir: 'C:/Workspace/Project' }
+    expect(assertSafePath('C:/Workspace/Project/src/index.ts', { settings: windows_settings })).toBe(
+      'C:/Workspace/Project/src/index.ts',
+    )
+    expect(() => assertSafePath('C:/Workspace/Other/index.ts', { settings: windows_settings })).toThrow(
+      'Path is outside the open project workspace.',
+    )
   })
 })
