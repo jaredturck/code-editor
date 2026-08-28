@@ -6,6 +6,7 @@
 
 import { timingSafeEqual } from 'node:crypto'
 import http, { type IncomingMessage, type ServerResponse } from 'node:http'
+import path from 'node:path'
 import { handleBridgeRequest } from './desktopBridge/routes/router.js'
 import {
   closeEncryptedDatabase,
@@ -26,6 +27,7 @@ import {
   type BridgeSecurityContext,
 } from './desktopBridge/shared/bridgeAuthorization.js'
 import { hostnameFromHeader, isLoopbackHost } from './desktopBridge/services/bridgeServiceRuntime.js'
+import { closeImageGenerationRuntime, configureImageGenerationRuntime } from './desktopBridge/services/imageGenerationService.js'
 
 const TOKEN_HEADER = 'x-iris-bridge-token'
 const TOKEN_QUERY = '__token' // EventSource cannot attach custom request headers.
@@ -144,6 +146,8 @@ export async function startLocalBridgeServer({
     throw new Error('Encrypted storage configuration is required before bridge startup.')
   }
 
+  configureImageGenerationRuntime({ dataDir: path.dirname(databasePath) })
+
   try {
     await initializeEncryptedDatabase({ databasePath, masterKey })
     await removeLegacyPlaintextStorage(databasePath)
@@ -245,6 +249,7 @@ export async function startLocalBridgeServer({
           releaseDuckDuckGoBrowserProvider()
           void closeManagedDevEnvironment()
             .catch(() => undefined)
+            .then(() => closeImageGenerationRuntime())
             .then(() => closeEncryptedDatabase())
             .finally(resolve)
         })
