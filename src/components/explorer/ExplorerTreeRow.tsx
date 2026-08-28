@@ -56,9 +56,14 @@ function ExplorerTreeRow({
         className={`group flex h-6 min-w-0 items-center pr-1 text-xs ${row_class} ${drop_target ? 'ring-1 ring-inset ring-sky-500' : ''}`}
         data-workspace-path={node.path}
         draggable={node.path !== node.parent_path}
-        onClick={(event) => onSelect(event, node)}
+        onClick={(event) => {
+          onSelect(event, node)
+          if (node.kind === 'file' && !event.ctrlKey && !event.metaKey && !event.shiftKey) onOpen(node)
+        }}
         onContextMenu={(event) => onContextMenu(event, node)}
-        onDoubleClick={() => onOpen(node)}
+        onDoubleClick={() => {
+          if (node.kind === 'directory') onOpen(node)
+        }}
         onDragEnter={(event) => {
           event.preventDefault()
           set_drop_target(true)
