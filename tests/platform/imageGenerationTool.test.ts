@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { build_core_agent_settings, build_project_run_input } from '@/chat/agentChat'
 import { createToolGuard } from '@/platform/agent/toolGuard'
-import { getToolCatalogEntry, getToolPermissionKey, getToolTimeoutMs, isToolRisky } from '@/platform/agent/toolCatalog'
+import {
+  getToolCatalogEntry,
+  getToolPermissionKey,
+  getToolTimeoutMs,
+  isToolRisky,
+  resolveCatalogToolRequest,
+} from '@/platform/agent/toolCatalog'
+import { workspaceMutationForResult } from '@/platform/agent/runtime/toolBroker'
 import { DEFAULT_ORB_SETTINGS } from '@/platform/settingsStorage'
 
 describe('image generation tool', () => {
@@ -16,8 +23,33 @@ describe('image generation tool', () => {
       format: 'square | landscape | portrait',
     })
     expect(getToolPermissionKey('image.generate')).toBe('file_write')
-    expect(getToolTimeoutMs('image.generate')).toBe(4 * 60_000)
+    expect(getToolTimeoutMs('image.generate')).toBe(60_000)
     expect(isToolRisky('image.generate')).toBe(true)
+  })
+
+  it('normalizes common local-model image tool name variants', () => {
+    expect(resolveCatalogToolRequest('image_generate')).toMatchObject({
+      resolved: 'image.generate',
+      matchedBy: 'alias',
+    })
+    expect(resolveCatalogToolRequest('image generate')).toMatchObject({
+      resolved: 'image.generate',
+      matchedBy: 'alias',
+    })
+    expect(resolveCatalogToolRequest('generate_image')).toMatchObject({
+      resolved: 'image.generate',
+      matchedBy: 'alias',
+    })
+  })
+
+  it('counts a queued image as a mutation before the completion barrier settles it', () => {
+    expect(
+      workspaceMutationForResult(
+        'image.generate',
+        { path: 'public/cat.webp' },
+        { queued: true, saved: false, path: 'public/cat.webp' },
+      ),
+    ).toBe(true)
   })
 
   it('rejects fake raster assets written through text file tools', () => {
