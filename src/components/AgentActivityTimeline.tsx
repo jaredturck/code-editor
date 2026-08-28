@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AgentActivityItem } from '../types/editor'
+import AgentReasoningPanel from './AgentReasoningPanel'
 
 interface AgentActivityTimelineProps {
   activity: AgentActivityItem[]
@@ -284,47 +285,52 @@ function row_title(row: ActivityRow) {
 
 function AgentActivityTimeline({ activity }: AgentActivityTimelineProps) {
   const [expanded, set_expanded] = useState(false)
-  const rows = pair_activity(activity)
+  const rows = pair_activity(activity.filter((item) => item.type !== 'planning'))
 
   return (
-    <details
-      className="mb-2 rounded-lg border border-[var(--border)] bg-black/[0.05] px-2 py-1.5"
-      onToggle={(event) => set_expanded(event.currentTarget.open)}
-    >
-      <summary className="cursor-pointer select-none text-[9px] font-medium text-[var(--muted)]">
-        Agent activity · {rows.length} action{rows.length === 1 ? '' : 's'}
-      </summary>
-      {expanded && (
-        <div className="mt-2 space-y-1">
-          {rows.map((row) => {
-            const state = activity_state(row)
-            const label = state_label(state)
-            const detail = row.result?.detail || row.call?.detail || row.item.detail
-            const detail_tool = row.result?.tool || row.call?.tool || row.item.tool
+    <>
+      <AgentReasoningPanel activity={activity} />
+      {rows.length > 0 && (
+        <details
+          className="mb-2 rounded-lg border border-[var(--border)] bg-black/[0.05] px-2 py-1.5"
+          onToggle={(event) => set_expanded(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer select-none text-[9px] font-medium text-[var(--muted)]">
+            Agent activity · {rows.length} action{rows.length === 1 ? '' : 's'}
+          </summary>
+          {expanded && (
+            <div className="mt-2 space-y-1">
+              {rows.map((row) => {
+                const state = activity_state(row)
+                const label = state_label(state)
+                const detail = row.result?.detail || row.call?.detail || row.item.detail
+                const detail_tool = row.result?.tool || row.call?.tool || row.item.tool
 
-            return (
-              <div
-                className="group flex min-w-0 gap-2 rounded-md px-1 py-1 hover:bg-white/[0.025]"
-                key={`${row.item.id}-${row.result?.id || ''}`}
-              >
-                <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${state_dot_class(state)}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-baseline gap-1.5 text-[9px]">
-                    <span className="truncate font-medium text-[var(--text)]">{row_title(row)}</span>
-                    {label && (
-                      <span className={state === 'failed' ? 'shrink-0 text-red-300' : 'shrink-0 text-amber-300'}>
-                        ({label})
-                      </span>
-                    )}
+                return (
+                  <div
+                    className="group flex min-w-0 gap-2 rounded-md px-1 py-1 hover:bg-white/[0.025]"
+                    key={`${row.item.id}-${row.result?.id || ''}`}
+                  >
+                    <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${state_dot_class(state)}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-baseline gap-1.5 text-[9px]">
+                        <span className="truncate font-medium text-[var(--text)]">{row_title(row)}</span>
+                        {label && (
+                          <span className={state === 'failed' ? 'shrink-0 text-red-300' : 'shrink-0 text-amber-300'}>
+                            ({label})
+                          </span>
+                        )}
+                      </div>
+                      {detail && <ActivityDetail detail={detail} tool={detail_tool} />}
+                    </div>
                   </div>
-                  {detail && <ActivityDetail detail={detail} tool={detail_tool} />}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          )}
+        </details>
       )}
-    </details>
+    </>
   )
 }
 
