@@ -50,7 +50,9 @@ describe('image generation tool', () => {
     )
 
     expect(legacy.image_generation_enabled).toBe(true)
+    expect(legacy.agent_tool_allowlist).toContain('image.generate')
     expect(explicitly_disabled.image_generation_enabled).toBe(false)
+    expect(explicitly_disabled.agent_tool_allowlist).not.toContain('image.generate')
   })
 
   it('tells the coding model to generate real raster assets and use declared tools', () => {
