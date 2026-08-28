@@ -53,6 +53,7 @@ export interface ChatSessionState {
   primaryOrchestratorId: string
   executionPolicy: 'hybrid' | 'local_only' | 'primary_only'
   projectRun: Record<string, unknown> | null
+  projectPlanning: Record<string, unknown> | null
   // Autonomous project database is independent from the UI run-controller record so routine
   // ProjectRunState normalization/checkpointing cannot accidentally erase long-horizon state.
   projectLedger: Record<string, unknown> | null
@@ -79,6 +80,10 @@ export function getChatSessionState(id: string): ChatSessionState | null {
       : 'hybrid',
     projectRun:
       raw.projectRun && typeof raw.projectRun === 'object' ? (raw.projectRun as Record<string, unknown>) : null,
+    projectPlanning:
+      raw.projectPlanning && typeof raw.projectPlanning === 'object'
+        ? (raw.projectPlanning as Record<string, unknown>)
+        : null,
     projectLedger:
       raw.projectLedger && typeof raw.projectLedger === 'object'
         ? (raw.projectLedger as Record<string, unknown>)
@@ -94,6 +99,7 @@ export function saveChatSessionState(
     primaryOrchestratorId?: unknown
     executionPolicy?: unknown
     projectRun?: unknown
+    projectPlanning?: unknown
     projectLedger?: unknown
   },
 ): void {
@@ -111,6 +117,11 @@ export function saveChatSessionState(
       ? (state.projectRun as Record<string, unknown>)
       : null
     : current?.projectRun || null
+  const projectPlanning = Object.prototype.hasOwnProperty.call(state || {}, 'projectPlanning')
+    ? state?.projectPlanning && typeof state.projectPlanning === 'object'
+      ? (state.projectPlanning as Record<string, unknown>)
+      : null
+    : current?.projectPlanning || null
   const projectLedger = Object.prototype.hasOwnProperty.call(state || {}, 'projectLedger')
     ? state?.projectLedger && typeof state.projectLedger === 'object'
       ? (state.projectLedger as Record<string, unknown>)
@@ -121,6 +132,7 @@ export function saveChatSessionState(
     primaryOrchestratorId: String(state?.primaryOrchestratorId ?? current?.primaryOrchestratorId ?? ''),
     executionPolicy,
     projectRun,
+    projectPlanning,
     projectLedger,
     updatedAt: Date.now(),
   })
