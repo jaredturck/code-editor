@@ -8,6 +8,7 @@ import {
   getImageGenerationStatus,
   installImageGenerationModels,
   stopImageGenerationServer,
+  waitForProjectImages,
 } from '../services/imageGenerationService.js'
 
 export async function handleImageRoutes(
@@ -42,6 +43,14 @@ export async function handleImageRoutes(
       format,
     })
     sendJson(res, 200, result)
+    return true
+  }
+
+  if (pathname === '/api/local/image/wait' && req.method === 'POST') {
+    requireBridgePermission(securityContext, 'fileWrite')
+    const body = await readJsonBody(req)
+    const workspaceRoot = await resolveDirectoryWithinRoot(String(body.workspaceRoot || ''), baseDir)
+    sendJson(res, 200, await waitForProjectImages(workspaceRoot))
     return true
   }
 
