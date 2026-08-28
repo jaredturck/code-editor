@@ -44,6 +44,8 @@ const OBSERVATION_TOOLS = new Set([
   'system.processes',
   'agent.status',
 ])
+const TEXT_MUTATION_TOOLS = new Set(['files.write', 'files.edit', 'files.patch'])
+const RASTER_IMAGE_PATH = /\.(?:avif|bmp|gif|ico|jpe?g|png|webp)$/i
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null'
@@ -60,8 +62,13 @@ function normalizedArgs(args: unknown): ToolArguments {
 }
 
 function isMutation(toolName: string, args: unknown) {
-  if (['files.write', 'files.edit', 'files.patch'].includes(toolName)) return true
+  if (TEXT_MUTATION_TOOLS.has(toolName)) return true
   return toolName === 'terminal.exec' && terminalCommandLikelyMutatesSource(normalizedArgs(args).command)
+}
+
+function isRasterImageTextMutation(toolName: string, args: unknown) {
+  if (!TEXT_MUTATION_TOOLS.has(toolName)) return false
+  return RASTER_IMAGE_PATH.test(String(normalizedArgs(args).path || '').trim())
 }
 
 function terminalLooksLikeVerification(command: unknown) {
@@ -111,6 +118,14 @@ export function createToolGuard({ maxRepeat = 4, maxObservationStreak = 32 }: To
       const name = String(toolName || '')
       if (EXEMPT_TOOL_NAMES.has(name)) return { blocked: false }
       const sig = signature(name, args)
+
+      if (isRasterImageTextMutation(name, args)) {
+        return block(
+          sig,
+          'Raster image files cannot be created with text file tools. Use `image.generate` for PNG, JPEG, WebP, GIF, AVIF, BMP, or ICO assets; use `files.write` only for real text formats such as SVG.',
+        )
+      }
+
       const count = counts.get(sig) || 0
       if (sig === lastSignature || count >= repeatCap) {
         return block(sig, `Repeated \`${name}\` action blocked. Reuse existing evidence or choose a materially different action.`)
