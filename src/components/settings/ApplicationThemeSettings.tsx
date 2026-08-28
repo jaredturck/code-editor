@@ -18,7 +18,7 @@ function ApplicationThemeSettings({ settings, onChange }: ApplicationThemeSettin
         </h3>
         <div className="rounded-2xl border border-[var(--border)] bg-black/[0.04] p-3">
           <p className="mb-3 text-[10px] leading-4 text-[var(--muted)]">
-            Choose the palette used by windows, panels, menus and editor chrome.
+            Choose the colours used by windows, panels, menus, and the editor.
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
             {application_theme_options.map((option) => {
@@ -55,7 +55,7 @@ function ApplicationThemeSettings({ settings, onChange }: ApplicationThemeSettin
         </h3>
         <div className="rounded-2xl border border-[var(--border)] bg-black/[0.04] p-3">
           <p className="mb-3 text-[10px] leading-4 text-[var(--muted)]">
-            Auto uses the coordinated accent for the selected theme. Choose a colour to override it.
+            Auto matches the selected theme. Choose a colour here to override it.
           </p>
           <div className="flex flex-wrap gap-2.5">
             <button
