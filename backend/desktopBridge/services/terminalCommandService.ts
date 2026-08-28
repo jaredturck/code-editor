@@ -8,9 +8,24 @@ const exec_async = promisify(exec)
 const MAX_COMMAND_OUTPUT_SIZE = 50 * 1024
 export const TERMINAL_COMMAND_TIMEOUT_MS = 90_000
 
+const PROCESS_TERMINATION_PATTERNS = [
+  /(?:^|[;&|]\s*)(?:(?:sudo|doas|command|env)\s+)*(?:\S*\/)?(?:kill|pkill|killall|killall5|taskkill|kill-port)(?:\s|$)/i,
+  /(?:^|[;&|]\s*)(?:(?:sudo|doas|command|env)\s+)*(?:\S*\/)?fuser\b[^\n;&|]*(?:\s|^)(?:-k|--kill)(?:\s|$)/i,
+  /\bxargs\b[^\n;&|]*(?:\s|^)(?:\S*\/)?(?:kill|pkill|killall)(?:\s|$)/i,
+  /\b(?:npx|bunx|pnpm\s+dlx|yarn\s+dlx|npm\s+exec(?:\s+--)?)\s+kill-port(?:\s|$)/i,
+  /\bStop-Process\b/i,
+  /\bprocess\.kill\s*\(/i,
+  /\bos\.kill\s*\(/i,
+]
+
 function trim_output(value: unknown) {
   const text = String(value || '')
   return text.length > MAX_COMMAND_OUTPUT_SIZE ? text.slice(0, MAX_COMMAND_OUTPUT_SIZE) : text
+}
+
+export function isProcessTerminationCommand(command: string) {
+  const text = String(command || '').trim()
+  return PROCESS_TERMINATION_PATTERNS.some((pattern) => pattern.test(text))
 }
 
 function parse_cd_command(command: string) {
@@ -27,6 +42,16 @@ function parse_cd_command(command: string) {
 }
 
 export async function runCommand(command: string, cwd: string, root_dir = cwd) {
+  if (isProcessTerminationCommand(command)) {
+    return {
+      stdout: '',
+      stderr:
+        'Process termination is blocked for agent terminal commands. Do not kill processes or reclaim ports; use an alternate dev-server port or an IRIS-managed process lifecycle instead.',
+      exitCode: 1,
+      cwd,
+    }
+  }
+
   const cd_target = parse_cd_command(command)
   if (cd_target !== null) {
     try {
