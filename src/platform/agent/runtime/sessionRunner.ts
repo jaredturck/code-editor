@@ -122,10 +122,52 @@ function emit(onEvent, timeline, event) {
   onEvent?.(value)
 }
 
-function resultSummary(result) {
-  if (result == null) return ''
-  if (typeof result === 'string') return result.slice(0, 1000)
-  try { return JSON.stringify(result).slice(0, 1000) } catch { return String(result).slice(0, 1000) }
+function limitedString(value, maxCharacters = 6000) {
+  if (typeof value !== 'string') return ''
+  return value.length <= maxCharacters ? value : `${value.slice(0, maxCharacters)}…`
+}
+
+function recordValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function resultSummary(toolName, args, result) {
+  const input = recordValue(args)
+  const output = recordValue(result)
+  const detail = {}
+  const path = output.path || output.file_path || output.filePath || input.path || input.file_path || input.filePath
+  const diff = output.diff || output.patch || (toolName === 'files.patch' ? input.patch : '')
+  const oldText = output.oldText || output.old_text || input.oldText || input.old_text
+  let newText = output.newText || output.new_text || input.newText || input.new_text
+  if (!newText && toolName === 'files.write') newText = input.content
+
+  if (path) detail.path = String(path)
+  if (diff) detail.diff = limitedString(String(diff))
+  if (oldText) detail.oldText = limitedString(String(oldText))
+  if (newText) detail.newText = limitedString(String(newText))
+
+  const command = output.command || input.command
+  const stdout = output.stdout
+  const stderr = output.stderr
+  const error = output.error
+  const message = output.message || output.summary
+  const url = output.url || input.url
+  const query = output.query || input.query
+
+  if (command) detail.command = limitedString(String(command), 1200)
+  if (stdout) detail.stdout = limitedString(String(stdout), 6000)
+  if (stderr) detail.stderr = limitedString(String(stderr), 4000)
+  if (error) detail.error = limitedString(String(error), 2000)
+  if (message) detail.message = limitedString(String(message), 2000)
+  if (url) detail.url = limitedString(String(url), 1200)
+  if (query) detail.query = limitedString(String(query), 1200)
+
+  if (!Object.keys(detail).length) {
+    if (typeof result === 'string') detail.message = limitedString(result, 2000)
+    else if (Array.isArray(result)) detail.message = `${result.length} result${result.length === 1 ? '' : 's'}`
+  }
+
+  return JSON.stringify(detail)
 }
 
 function isAbort(error, signal) {
@@ -305,7 +347,7 @@ export async function runAgentSession({
       }
       const history = {
         step, tool: toolName, args, ok, status: ok ? 'succeeded' : 'failed',
-        summary: resultSummary(result), at: Date.now(),
+        summary: resultSummary(toolName, args, result), at: Date.now(),
       }
       stepHistory.push(history)
       emit(onEvent, timeline, { type: 'tool', ...history })
