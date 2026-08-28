@@ -11,6 +11,14 @@ function open_activity(activity: AgentActivityItem[]) {
   fireEvent(details, new Event('toggle'))
 }
 
+function open_reasoning(activity: AgentActivityItem[]) {
+  render(<AgentActivityTimeline activity={activity} />)
+  const summary = screen.getByText(/Reasoning/)
+  const details = summary.closest('details') as HTMLDetailsElement
+  details.open = true
+  fireEvent(details, new Event('toggle'))
+}
+
 describe('AgentActivityTimeline', () => {
   it('shows a readable file edit instead of raw JSON', () => {
     open_activity([
@@ -71,5 +79,23 @@ describe('AgentActivityTimeline', () => {
 
     expect(screen.getByText('Generated cat.webp')).toBeInTheDocument()
     expect(screen.queryByText(/^tool$/i)).not.toBeInTheDocument()
+  })
+
+  it('shows forced planning output under reasoning instead of agent activity', () => {
+    open_reasoning([
+      {
+        id: 'planning-ideas',
+        type: 'planning',
+        label: 'Exploring ideas',
+        detail: 'Several possible approaches were explored.',
+        status: '',
+        tool: '',
+        at: Date.now(),
+      },
+    ])
+
+    expect(screen.getByText('Exploring ideas')).toBeInTheDocument()
+    expect(screen.getByText('Several possible approaches were explored.')).toBeInTheDocument()
+    expect(screen.queryByText(/Agent activity/)).not.toBeInTheDocument()
   })
 })
