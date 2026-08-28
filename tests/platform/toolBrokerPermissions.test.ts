@@ -121,11 +121,8 @@ describe('tool broker permission grants', () => {
     expect(approvalState.granted).toBe(true)
   })
 
-  it('includes the exact terminal command and working directory in boundary approvals', async () => {
-    const onApprovalRequest = vi.fn().mockResolvedValue({
-      approved: false,
-      decision: 'deny',
-    })
+  it('hard-blocks terminal workspace escapes without asking for approval', async () => {
+    const onApprovalRequest = vi.fn()
     const broker = createModuleBroker({
       settings: {
         ...DEFAULT_ORB_SETTINGS,
@@ -161,15 +158,48 @@ describe('tool broker permission grants', () => {
         cwd: '/workspace/project',
       }),
     ).resolves.toMatchObject({ denied: true })
-
-    expect(onApprovalRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        requestType: 'approval',
-        requestedTool: 'terminal.exec',
-        tool: 'terminal.exec',
-        command: 'cat /tmp/outside.txt',
-        cwd: '/workspace/project',
+    await expect(
+      broker.execute('terminal.exec', {
+        command: 'ls',
+        cwd: '/workspace',
       }),
-    )
+    ).resolves.toMatchObject({ denied: true })
+
+    expect(onApprovalRequest).not.toHaveBeenCalled()
+  })
+
+  it('hard-blocks file access outside the open workspace without asking for approval', async () => {
+    const onApprovalRequest = vi.fn()
+    const broker = createModuleBroker({
+      settings: {
+        ...DEFAULT_ORB_SETTINGS,
+        agent_project_run_mode: 'automatic',
+        agent_working_dir: '/workspace/project',
+      },
+      todoTool: {
+        list: () => [],
+        applyUpdates: () => [],
+      },
+      traceTool: {
+        thinking: vi.fn(),
+      },
+      safetyConfig: {
+        profile: 'strict',
+        requireExplicitApproval: false,
+        maxSteps: 12,
+      },
+      approvalState: {
+        granted: false,
+        sessionPermissionOverrides: {},
+      },
+      webSearchState: {},
+      userInput: 'read an outside file',
+      requestAI: vi.fn(),
+      onApprovalRequest,
+      stepHistory: [],
+    })
+
+    await expect(broker.execute('files.read', { path: '/tmp/outside.txt' })).resolves.toMatchObject({ denied: true })
+    expect(onApprovalRequest).not.toHaveBeenCalled()
   })
 })
