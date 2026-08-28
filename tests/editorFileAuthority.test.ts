@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 describe('editor-aware agent filesystem', () => {
-  it('edits the live dirty buffer and rejects a later human collision', async () => {
+  it('edits the latest live dirty buffer without a stale human-collision gate', async () => {
     let editor_content = 'const value = 2\n'
     const apply_content = vi.fn((_path: string, content: string) => {
       editor_content = content
@@ -54,13 +54,14 @@ describe('editor-aware agent filesystem', () => {
     expect(agent_write_file).not.toHaveBeenCalled()
 
     editor_content = 'const value = 4\n'
-    await expect(
-      authority.execute('files.edit', {
-        path: 'src/value.ts',
-        oldText: 'value = 3',
-        newText: 'value = 5',
-      }),
-    ).rejects.toThrow(/changed after the agent last read/i)
+    await authority.execute('files.edit', {
+      path: 'src/value.ts',
+      oldText: 'value = 4',
+      newText: 'value = 5',
+    })
+
+    expect(editor_content).toContain('value = 5')
+    expect(agent_write_file).not.toHaveBeenCalled()
   })
 
   it('uses optional workspace reads when probing a new file', async () => {
@@ -98,7 +99,7 @@ describe('editor-aware agent filesystem', () => {
 
     expect(agent_read_file).toHaveBeenCalledWith('/workspace', 'new.ts', true)
     expect(agent_read_file.mock.calls.every((call) => call[2] === true)).toBe(true)
-    expect(agent_write_file).toHaveBeenCalled()
+    expect(agent_write_file).toHaveBeenCalledWith('/workspace', 'new.ts', 'export const value = 1\n', null)
   })
 
   it('creates missing parent directories for a new nested agent file', async () => {
