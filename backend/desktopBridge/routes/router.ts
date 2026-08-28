@@ -7,6 +7,7 @@ import { handlePersistenceRoutes } from './persistenceRoutes.js'
 import { handleWebSkillRoutes } from './webSkillRoutes.js'
 import { handleAgentRoutes } from './agentRoutes.js'
 import { handlePowerRoutes } from './powerRoutes.js'
+import { handleImageRoutes } from './imageRoutes.js'
 
 export type { BridgeRequest, BridgeResponse } from '../types.js'
 
@@ -16,6 +17,7 @@ const ROUTE_HANDLERS: readonly BridgeRouteHandler[] = [
   handlePersistenceRoutes,
   handleWebSkillRoutes,
   handleAgentRoutes,
+  handleImageRoutes,
   handlePowerRoutes,
 ]
 
