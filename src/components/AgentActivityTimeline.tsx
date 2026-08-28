@@ -64,11 +64,17 @@ function parse_detail(detail: string) {
   const clean = detail.trim()
   if (!clean) return null
 
-  try {
-    return JSON.parse(clean) as unknown
-  } catch {
-    return clean
+  let parsed: unknown = clean
+  for (let pass = 0; pass < 2 && typeof parsed === 'string'; pass += 1) {
+    const value = parsed.trim()
+    if (!value || (!value.startsWith('{') && !value.startsWith('[') && !value.startsWith('"'))) break
+    try {
+      parsed = JSON.parse(value) as unknown
+    } catch {
+      break
+    }
   }
+  return parsed
 }
 
 function string_value(value: unknown) {
@@ -240,23 +246,40 @@ function row_file_name(row: ActivityRow) {
   )
 }
 
+function fallback_tool_title(tool: string, label: string) {
+  const clean_label = label.replace(/\s+(complete|failed)$/i, '').trim()
+  if (clean_label && !/^tool(?: call)?$/i.test(clean_label)) return clean_label
+  if (!tool) return 'Agent action'
+  return tool
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
 function row_title(row: ActivityRow) {
   const tool = row.call?.tool || row.item.tool
   const name = row_file_name(row)
+  const running = Boolean(row.call && !row.result)
 
   if (tool === 'files.read') return name ? `Read ${name}` : 'Read file'
   if (/^files\.(write|edit|patch|diff)$/.test(tool)) return name ? `Edited ${name}` : 'Edited file'
   if (tool === 'files.find') return 'Searched files'
   if (tool === 'files.list') return name ? `Listed ${name}` : 'Listed files'
   if (tool === 'files.stat') return name ? `Inspected ${name}` : 'Inspected files'
-  if (tool.includes('terminal')) return 'Ran command'
-  if (tool.includes('diagnostics')) return 'Checked diagnostics'
-  if (tool === 'search.web') return 'Searched web'
-  if (tool === 'web.fetch') return 'Fetched page'
-  if (tool === 'browser.inspect') return 'Inspected browser'
+  if (tool === 'image.generate') return running ? 'Generating image' : name ? `Generated ${name}` : 'Generated image'
+  if (tool.includes('terminal')) return running ? 'Running command' : 'Ran command'
+  if (tool.includes('diagnostics')) return running ? 'Checking diagnostics' : 'Checked diagnostics'
+  if (tool === 'code.definition') return running ? 'Finding definition' : 'Found definition'
+  if (tool === 'code.references') return running ? 'Finding references' : 'Found references'
+  if (tool === 'search.web') return running ? 'Searching web' : 'Searched web'
+  if (tool === 'web.fetch') return running ? 'Fetching page' : 'Fetched page'
+  if (tool === 'browser.inspect') return running ? 'Inspecting browser' : 'Inspected browser'
+  if (tool === 'agent.delegate') return running ? 'Delegating task' : 'Delegated task'
+  if (tool === 'agent.consult') return running ? 'Consulting specialist' : 'Consulted specialist'
+  if (tool === 'agent.review') return running ? 'Reviewing changes' : 'Reviewed changes'
+  if (tool === 'user.ask') return 'Asked user'
+  if (tool === 'approval.request') return 'Requested approval'
 
-  const call_label = row.call?.label || row.item.label
-  return call_label.replace(/\s+(complete|failed)$/i, '')
+  return fallback_tool_title(tool, row.call?.label || row.item.label)
 }
 
 function AgentActivityTimeline({ activity }: AgentActivityTimelineProps) {
