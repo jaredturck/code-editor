@@ -132,6 +132,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     args: { path: 'string', patch: 'string', dryRun: 'boolean (optional)' },
   },
   {
+    name: 'image.generate',
+    module: 'Files',
+    description: 'Generate a quick synthetic image asset for the current project. Use for website photography, hero imagery, backgrounds, product-style imagery, or other visual assets when generated imagery is useful.',
+    args: {
+      prompt: 'string',
+      path: 'string',
+      format: 'square | landscape | portrait',
+    },
+  },
+  {
     name: 'terminal.exec',
     module: 'Terminal',
     description: 'Run a shell command inside the authorized project workspace for builds, tests, package commands, scripts, or targeted inspection.',
@@ -237,6 +247,7 @@ const TOOL_ALIAS_MAP: Record<string, string> = {
 
 const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
   'terminal.exec': 5 * 60_000,
+  'image.generate': 4 * 60_000,
   'search.web': 90_000,
   'web.fetch': 60_000,
   'browser.inspect': 60_000,
@@ -247,7 +258,7 @@ const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
   'approval.request': 12 * 60 * 60_000,
 }
 
-const RISKY_TOOL_NAMES = new Set(['files.write', 'files.edit', 'files.patch', 'terminal.exec'])
+const RISKY_TOOL_NAMES = new Set(['files.write', 'files.edit', 'files.patch', 'image.generate', 'terminal.exec'])
 
 const TOOL_PERMISSION_KEYS: Record<string, string> = {
   'files.list': 'file_read',
@@ -258,6 +269,7 @@ const TOOL_PERMISSION_KEYS: Record<string, string> = {
   'files.write': 'file_write',
   'files.edit': 'file_write',
   'files.patch': 'file_write',
+  'image.generate': 'file_write',
   'terminal.exec': 'terminal_exec',
 }
 
@@ -276,6 +288,7 @@ const SUB_AGENT_MIN_TIER: Record<string, number> = {
   'files.write': PERMISSION_TIER.STANDARD,
   'files.edit': PERMISSION_TIER.STANDARD,
   'files.patch': PERMISSION_TIER.STANDARD,
+  'image.generate': PERMISSION_TIER.STANDARD,
   'terminal.exec': PERMISSION_TIER.STANDARD,
 }
 
