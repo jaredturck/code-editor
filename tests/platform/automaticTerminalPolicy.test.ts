@@ -24,6 +24,16 @@ describe('automatic terminal workspace policy', () => {
     expect(terminalCommandEscapesWorkspace('npm install', workspace, '/tmp')).toBe(true)
   })
 
+  it('allows harmless /dev/null redirects during project inspection and cleanup', () => {
+    expect(
+      terminalCommandEscapesWorkspace(
+        'cat public/static/cat-placeholder.svg 2>/dev/null || echo "No static file found"',
+        workspace,
+      ),
+    ).toBe(false)
+    expect(terminalCommandEscapesWorkspace('rm -f cat1.jpg cat2.jpg 2>/dev/null; ls -la', workspace)).toBe(false)
+  })
+
   it('treats semantic global installs as outside-project mutations', () => {
     expect(terminalCommandEscapesWorkspace('npm install -g typescript', workspace)).toBe(true)
     expect(terminalCommandEscapesWorkspace('pnpm add --global eslint', workspace)).toBe(true)
