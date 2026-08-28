@@ -243,24 +243,10 @@ export function create_editor_file_authority(
     return state
   }
 
-  const ensure_unchanged = async (file_path: string) => {
-    const current = await read_optional_state(file_path, false)
-    const key = normalize_path(current?.path || file_path)
-    const expected = observed_revisions.get(key)
-
-    if (current && !expected) {
-      throw new Error(`Read ${file_path} before editing it so human changes cannot be overwritten.`)
-    }
-
-    if (current && expected !== current.revision) {
-      throw new Error(`Refusing to edit ${file_path}: it changed after the agent last read it.`)
-    }
-
-    return current
-  }
+  const read_current_state = async (file_path: string) => read_optional_state(file_path, true)
 
   const write_content = async (file_path: string, content: string, append = false) => {
-    const current = await ensure_unchanged(file_path)
+    const current = await read_current_state(file_path)
     const next_content = append && current ? current.content + content : content
     const resolved_path = current?.path || file_path
     const snapshot = current ? host.get_snapshot(resolved_path) : null
@@ -279,12 +265,7 @@ export function create_editor_file_authority(
       }
     }
 
-    const disk_result = await window.editor_api.workspace.agent_write_file(
-      workspace_root,
-      resolved_path,
-      next_content,
-      current ? (observed_disk_revisions.get(key) ?? current.disk_revision) : null,
-    )
+    const disk_result = await window.editor_api.workspace.agent_write_file(workspace_root, resolved_path, next_content, null)
     host.apply_content(disk_result.path, next_content, true)
     const revision = `disk:${disk_result.revision}`
     observed_revisions.set(normalize_path(disk_result.path), revision)
@@ -401,13 +382,13 @@ export function create_editor_file_authority(
       }
 
       if (tool_name === 'files.edit') {
-        const current = await ensure_unchanged(file_path)
+        const current = await read_current_state(file_path)
         if (!current) throw new Error(`${file_path} does not exist.`)
         const old_text = String(args.oldText ?? args.oldString ?? '')
         const new_text = String(args.newText ?? args.newString ?? '')
         if (!old_text) throw new Error('oldText is required for files.edit.')
         const matches = current.content.split(old_text).length - 1
-        if (matches === 0) throw new Error('oldText was not found. Read the file again before editing.')
+        if (matches === 0) throw new Error('oldText was not found in the current file.')
         if (matches > 1 && args.replaceAll !== true)
           throw new Error('oldText matches more than once. Include more context or set replaceAll.')
         const next_content =
@@ -424,7 +405,7 @@ export function create_editor_file_authority(
       }
 
       if (tool_name === 'files.patch') {
-        const current = await ensure_unchanged(file_path)
+        const current = await read_current_state(file_path)
         if (!current) throw new Error(`${file_path} does not exist.`)
         const patch = String(args.patch || '')
         if (!patch) throw new Error('patch is required for files.patch')
