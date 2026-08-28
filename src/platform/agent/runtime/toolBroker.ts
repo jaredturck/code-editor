@@ -147,7 +147,7 @@ async function attachAgentRuntimeContext(
   if (!workspaceRoot || !result || typeof result !== 'object' || Array.isArray(result)) return result
 
   const workspaceMutated = workspaceMutationForResult(toolName, args, result)
-  if (workspaceMutated) {
+  if (workspaceMutated && toolName !== 'image.generate') {
     const mutationPath = workspaceMutationFileTools.has(toolName)
       ? String((result as Record<string, unknown>).path || '')
       : ''
