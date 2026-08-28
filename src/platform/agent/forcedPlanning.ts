@@ -41,7 +41,7 @@ export interface ForcedPlanningResult {
 interface ForcedPlanningInput {
   request: string
   conversation?: AIMessage[]
-  settings: AISettings
+  settings: Record<string, unknown>
   signal?: AbortSignal | null
   onEvent?: (event: Record<string, unknown>) => void
 }
@@ -76,7 +76,7 @@ export async function runForcedPlanning(input: ForcedPlanningInput): Promise<For
 
   for (const stage of FORCED_PLANNING_STAGES) {
     thread.push({ role: 'user', content: stage.prompt })
-    const response = await callAIWithMeta(thread, input.settings, { signal: input.signal || undefined })
+    const response = await callAIWithMeta(thread, input.settings as AISettings, { signal: input.signal || undefined })
     const content = String(response?.text || '').trim().slice(0, PLANNING_OUTPUT_MAX_CHARS)
     if (!content) throw new Error(`Planning stage "${stage.label}" returned an empty response.`)
 
