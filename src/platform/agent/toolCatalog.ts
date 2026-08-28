@@ -210,7 +210,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
 ]
 
-const TOOL_BY_NAME = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name, tool])) as Record<string, ToolDefinition>
+export const TOOL_BY_NAME = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name, tool])) as Record<string, ToolDefinition>
 const TOOL_BY_NAME_LOWER = Object.fromEntries(TOOL_DEFINITIONS.map((tool) => [tool.name.toLowerCase(), tool.name])) as Record<string, string>
 
 const TOOL_ALIAS_MAP: Record<string, string> = {
