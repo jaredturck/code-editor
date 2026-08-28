@@ -5,7 +5,7 @@ import {
   isWorkspaceAutonomousCommand,
   terminalCommandEscapesWorkspace,
 } from '@/platform/agent/runtime/readOnlyTerminalPolicy'
-import { assertSafePath } from '@/platform/agent/runtime/safetyPolicy'
+import { assertSafeCommand, assertSafePath } from '@/platform/agent/runtime/safetyPolicy'
 
 const workspace = '/workspace/project'
 
@@ -42,6 +42,25 @@ describe('automatic terminal workspace policy', () => {
     expect(isHardBlockedTerminalCommand('rm -rf .')).toBe(true)
     expect(isHardBlockedTerminalCommand('rm -rf ./')).toBe(true)
     expect(isHardBlockedTerminalCommand('rm -rf /')).toBe(true)
+  })
+
+  it('blocks process termination even when terminal authority is otherwise granted', () => {
+    const settings = { agent_working_dir: workspace }
+    const blocked_commands = [
+      'kill 1234',
+      'pkill -f vite',
+      'killall node',
+      'kill $(lsof -t -i:5173)',
+      'lsof -ti:5173 | xargs kill -9',
+      'fuser -k 5173/tcp',
+      'npx kill-port 5173',
+      'node -e "process.kill(1234)"',
+    ]
+
+    for (const command of blocked_commands) {
+      expect(() => assertSafeCommand(command, settings)).toThrow('Process termination is blocked')
+    }
+    expect(assertSafeCommand('npm run dev', settings)).toBe('npm run dev')
   })
 
   it('keeps lower-level path resolution inside the configured project root', () => {
