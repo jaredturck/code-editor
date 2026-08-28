@@ -40,12 +40,19 @@ function normalize_preview_path(file_path: string) {
   return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
+function wait_for_render_frame() {
+  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+}
+
 function App() {
   const editor = useEditorState()
   const [preview_document_id, set_preview_document_id] = useState<number | null>(null)
   const preview_document_id_ref = useRef<number | null>(null)
-  const pending_preview_path_ref = useRef<string | null>(null)
+  const preview_open_request_ref = useRef(0)
+  const preview_open_path_ref = useRef<string | null>(null)
+  const editor_documents_ref = useRef(editor.documents)
   preview_document_id_ref.current = preview_document_id
+  editor_documents_ref.current = editor.documents
 
   const clear_preview_document = () => {
     preview_document_id_ref.current = null
@@ -127,21 +134,7 @@ function App() {
     if (preview_id !== null && !editor.documents.some((document) => document.id === preview_id)) {
       clear_preview_document()
     }
-
-    const pending_path = pending_preview_path_ref.current
-    const active_document = editor.active_document
-    if (
-      pending_path &&
-      active_document &&
-      (active_document.kind === 'text' || active_document.kind === 'media') &&
-      active_document.file_path &&
-      normalize_preview_path(active_document.file_path) === pending_path
-    ) {
-      preview_document_id_ref.current = active_document.id
-      set_preview_document_id(active_document.id)
-      pending_preview_path_ref.current = null
-    }
-  }, [editor.active_document, editor.documents])
+  }, [editor.documents])
 
   useEffect(() => {
     const pin_preview_on_save = (event: KeyboardEvent) => {
@@ -218,21 +211,29 @@ function App() {
     }
 
     const normalized_file_path = normalize_preview_path(file_path)
-    const existing_document = editor.documents.find(
+    const existing_document = editor_documents_ref.current.find(
       (document) =>
         (document.kind === 'text' || document.kind === 'media') &&
         document.file_path &&
         normalize_preview_path(document.file_path) === normalized_file_path,
     )
     if (existing_document) {
-      pending_preview_path_ref.current = null
+      preview_open_request_ref.current += 1
+      preview_open_path_ref.current = null
       await editor.open_file_path(file_path)
       return
     }
 
+    const same_pending_path = preview_open_path_ref.current === normalized_file_path
+    const request_id = same_pending_path ? preview_open_request_ref.current : preview_open_request_ref.current + 1
+    if (!same_pending_path) {
+      preview_open_request_ref.current = request_id
+      preview_open_path_ref.current = normalized_file_path
+    }
+
     const preview_id = preview_document_id_ref.current
     if (preview_id !== null) {
-      const preview_document = editor.documents.find((document) => document.id === preview_id)
+      const preview_document = editor_documents_ref.current.find((document) => document.id === preview_id)
       if (preview_document?.kind === 'text' && preview_document.dirty) {
         pin_document(preview_id)
       } else {
@@ -241,8 +242,31 @@ function App() {
       }
     }
 
-    pending_preview_path_ref.current = normalized_file_path
     await editor.open_file_path(file_path)
+    await wait_for_render_frame()
+
+    const opened_document = editor_documents_ref.current.find(
+      (document) =>
+        (document.kind === 'text' || document.kind === 'media') &&
+        document.file_path &&
+        normalize_preview_path(document.file_path) === normalized_file_path,
+    )
+    if (!opened_document) return
+
+    if (request_id !== preview_open_request_ref.current) {
+      if (
+        preview_document_id_ref.current !== opened_document.id &&
+        !(opened_document.kind === 'text' && opened_document.dirty)
+      ) {
+        editor.close_document(opened_document.id)
+      }
+      return
+    }
+
+    if (preview_open_path_ref.current === normalized_file_path) preview_open_path_ref.current = null
+    if (opened_document.kind === 'text' && opened_document.dirty) return
+    preview_document_id_ref.current = opened_document.id
+    set_preview_document_id(opened_document.id)
   }
 
   return (
