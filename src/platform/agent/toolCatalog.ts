@@ -145,7 +145,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'terminal.exec',
     module: 'Terminal',
     description: 'Run a shell command inside the authorized project workspace for builds, tests, package commands, scripts, or targeted inspection.',
-    args: { command: 'string', cwd: 'string (optional)' },
+    args: { command: 'string', cwd: 'project-relative string (optional)' },
   },
   {
     name: 'search.web',
