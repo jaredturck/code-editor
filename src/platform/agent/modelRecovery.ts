@@ -1,19 +1,7 @@
-/**
- * Exhausted-role recovery recommendations.
- *
- * Prefer a healthy model the user can use immediately. If none meets the role and hardware floor,
- * recommend a hardware-sized Ollama download. Selection is deterministic and reuses Auto Setup's
- * model scoring rather than making another AI request.
- */
+/** Local-only exhausted-role recovery recommendations. */
 import type { AutoSetupCandidate, ModelEvaluation } from '@/platform/autoSetup/modelSelectionRules'
 import { compareForRole, evaluateModel } from '@/platform/autoSetup/modelSelectionRules'
 import { systemStats } from '@/platform/desktopBridge'
-import {
-  getValidProviderKeyIds,
-  getDiscoveredModelsForKey,
-  normalizeModelList,
-  type ProviderConfigurationSettings,
-} from '@/platform/providers/providerConfiguration'
 import { chooseAutomaticLocalModel, RECOMMENDED_LOCAL_MODELS } from '@/platform/providers/localModelCatalog'
 import { isModelCredentialReady, isModelHealthy } from '@/platform/agent/modelHealth'
 
@@ -29,51 +17,34 @@ export interface RecoveryRecommendation {
   downloadSize?: string
 }
 
-type RecoverySettings = ProviderConfigurationSettings & Record<string, unknown>
+type RecoverySettings = Record<string, unknown>
 
-const KNOWN_CLOUD_PROVIDERS = [
-  'anthropic',
-  'openai',
-  'deepseek',
-  'openrouter',
-  'google',
-  'gemini',
-  'mistral',
-  'groq',
-  'xai',
-]
+function normalizeModelList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map((model) => String(model || '').trim()).filter(Boolean)))
+}
 
 function identity(provider: unknown, model: unknown, keyId: unknown): string {
   return `${String(provider || '').toLowerCase()}:${String(model || '').toLowerCase()}:${String(keyId || '1')}`
 }
 
 function listAvailableCandidates(settings: RecoverySettings): AutoSetupCandidate[] {
-  const out: AutoSetupCandidate[] = []
-  const seen = new Set<string>()
-  const add = (provider: string, model: string, keyId: string): void => {
-    const id = identity(provider, model, keyId)
-    if (!model || seen.has(id)) return
-    seen.add(id)
-    out.push({ provider, model, keyId })
-  }
-
-  for (const model of normalizeModelList((settings.discovered_models || {})['local'])) {
-    add('local', model, '1')
-  }
-
-  const providerIds = new Set<string>([
-    ...Object.keys(settings.provider_selected_models || {}),
-    ...KNOWN_CLOUD_PROVIDERS,
+  const discovered = settings.discovered_models && typeof settings.discovered_models === 'object'
+    ? settings.discovered_models as Record<string, unknown>
+    : {}
+  const selected = settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
+    ? settings.provider_selected_models as Record<string, unknown>
+    : {}
+  const agentModels = Array.isArray(settings.agent_models) ? settings.agent_models : []
+  const models = normalizeModelList([
+    ...normalizeModelList(discovered.local),
+    ...normalizeModelList(selected.local),
+    String(settings.ai_model || ''),
+    ...agentModels
+      .filter((entry) => entry && typeof entry === 'object' && String((entry as Record<string, unknown>).provider || '').toLowerCase() === 'local')
+      .map((entry) => String((entry as Record<string, unknown>).model || '')),
   ])
-  for (const provider of providerIds) {
-    if (String(provider).toLowerCase() === 'local') continue
-    for (const keyId of getValidProviderKeyIds(settings, provider)) {
-      for (const model of getDiscoveredModelsForKey(settings, provider, keyId)) {
-        add(provider, model, keyId)
-      }
-    }
-  }
-  return out
+  return models.map((model) => ({ provider: 'local', model, keyId: '1' }))
 }
 
 function parameterBillions(model: string): number | null {
@@ -91,7 +62,6 @@ function fitsLocalHardware(
   hardware: Awaited<ReturnType<typeof systemStats>>,
   role: string,
 ): boolean {
-  if (!evaluation.local) return true
   const parameters = parameterBillions(evaluation.model)
   if (parameters != null) {
     const floor = role === 'scout' ? 3 : 4
@@ -130,14 +100,12 @@ export async function recommendRecoveryModel(
   const best = candidates[0]
   if (best) {
     return {
-      provider: best.provider,
+      provider: 'local',
       model: best.model,
-      keyId: best.keyId || '1',
+      keyId: '1',
       role,
-      label: `${best.local ? 'Local' : best.provider} · ${best.model}`,
-      reason: best.local
-        ? 'Already installed, healthy, and suitable for this role on the detected hardware.'
-        : 'Already available through a saved provider key and suitable for this role.',
+      label: `Local · ${best.model}`,
+      reason: 'Already installed, healthy, and suitable for this role on the detected hardware.',
       requiresDownload: false,
     }
   }
@@ -146,7 +114,7 @@ export async function recommendRecoveryModel(
   const baseUrl = String(settings.ai_local_url || '').trim()
   if (!baseUrl) return null
   const model = chooseAutomaticLocalModel(hardware)
-  if (excludeSet.has(identity('local', model, '1'))) return null
+  if (!model || excludeSet.has(identity('local', model, '1'))) return null
   const catalog = RECOMMENDED_LOCAL_MODELS.find((entry) => entry.id === model)
   return {
     provider: 'local',
@@ -154,7 +122,7 @@ export async function recommendRecoveryModel(
     keyId: '1',
     role,
     label: `Local · ${catalog?.label || model}`,
-    reason: `No installed or configured model met the recovery threshold. This model is sized for the detected hardware and supports general agent work.`,
+    reason: 'No installed model met the recovery threshold. This model is sized for the detected hardware.',
     requiresDownload: true,
     downloadBaseUrl: baseUrl,
     downloadSize: catalog?.size || 'size varies',
