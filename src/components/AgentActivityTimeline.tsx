@@ -298,8 +298,9 @@ function AgentActivityTimeline({ activity }: AgentActivityTimelineProps) {
         <div className="mt-2 space-y-1">
           {rows.map((row) => {
             const state = activity_state(row)
-            const result_detail = row.result && row.result !== row.item ? row.result.detail : ''
             const label = state_label(state)
+            const detail = row.result?.detail || row.call?.detail || row.item.detail
+            const detail_tool = row.result?.tool || row.call?.tool || row.item.tool
 
             return (
               <div
@@ -316,13 +317,7 @@ function AgentActivityTimeline({ activity }: AgentActivityTimelineProps) {
                       </span>
                     )}
                   </div>
-                  {row.call?.detail && <ActivityDetail detail={row.call.detail} tool={row.call.tool} />}
-                  {!row.call && row.item.detail && <ActivityDetail detail={row.item.detail} tool={row.item.tool} />}
-                  {result_detail && result_detail !== row.call?.detail && (
-                    <div className="mt-1 border-l border-[var(--border)] pl-2">
-                      <ActivityDetail detail={result_detail} tool={row.result?.tool || row.item.tool} />
-                    </div>
-                  )}
+                  {detail && <ActivityDetail detail={detail} tool={detail_tool} />}
                 </div>
               </div>
             )
