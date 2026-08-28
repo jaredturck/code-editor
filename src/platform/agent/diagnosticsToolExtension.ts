@@ -1,9 +1,9 @@
 /** Registers the live-buffer diagnostics tool on the shared mutable agent catalog. */
 import {
   PERMISSION_TIER,
-  TOOL_BY_NAME,
   TOOL_CATALOG,
   TOOL_DEFINITIONS,
+  getToolCatalogEntry,
   type ToolCatalogEntry,
   type ToolDefinition,
 } from '@/platform/agent/toolCatalog'
@@ -21,10 +21,9 @@ const diagnosticsCheckDefinition: ToolDefinition = {
 }
 
 export function registerDiagnosticsTool() {
-  if (TOOL_BY_NAME[diagnosticsCheckDefinition.name]) return
+  if (getToolCatalogEntry(diagnosticsCheckDefinition.name)) return
 
   TOOL_DEFINITIONS.push(diagnosticsCheckDefinition)
-  TOOL_BY_NAME[diagnosticsCheckDefinition.name] = diagnosticsCheckDefinition
   TOOL_CATALOG[diagnosticsCheckDefinition.name] = {
     ...diagnosticsCheckDefinition,
     aliases: [],
