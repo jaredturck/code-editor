@@ -155,6 +155,18 @@ function App() {
     window.setTimeout(() => editor_ref.current?.reveal_diagnostic(diagnostic), 40)
   }
 
+  const open_workspace_file = async (file_path: string) => {
+    mark_manual_editor_focus()
+    const path_status = await window.editor_api.file.check_paths([file_path])
+    if (!path_status[file_path]) {
+      await workspace.refresh()
+      const file_name = file_path.split(/[\\/]/).filter(Boolean).pop() || file_path
+      editor.show_notice(`${file_name} no longer exists.`)
+      return
+    }
+    await editor.open_file_path(file_path)
+  }
+
   return (
     <div
       className={`theme-${editor.resolved_theme} accent-${editor.settings.accent_color} ${window_shape_class} relative flex min-h-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--text)] shadow-2xl`}
@@ -232,10 +244,7 @@ function App() {
           onDropEntry={(source_path, target_path, operation) =>
             void workspace.drop_entry(source_path, target_path, operation)
           }
-          onOpenFile={(file_path) => {
-            mark_manual_editor_focus()
-            void editor.open_file_path(file_path)
-          }}
+          onOpenFile={(file_path) => void open_workspace_file(file_path)}
           onOpenFolder={() => {
             editor.select_activity('explorer')
             void workspace.open_folder_dialog()
