@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
+  planning: vi.fn(),
   get_state: vi.fn(),
   load_context: vi.fn(),
   save_compacted: vi.fn(),
@@ -10,6 +11,10 @@ const runtime_state = vi.hoisted(() => ({
 vi.mock('@/platform/agent/toolCatalog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/platform/agent/toolCatalog')>()),
   getToolDefinitions: () => [],
+}))
+
+vi.mock('@/platform/agent/forcedPlanning', () => ({
+  runForcedPlanning: runtime_state.planning,
 }))
 
 vi.mock('@/platform/agent/runtime/sessionRunner', () => ({
@@ -53,6 +58,26 @@ function result_fixture(): AgentSessionResult {
   }
 }
 
+function planning_fixture() {
+  return {
+    artifacts: [
+      { id: 'ideas', label: 'Exploring ideas', content: 'Explore several directions.' },
+      { id: 'plan', label: 'Planning implementation', content: 'Implement the selected direction.' },
+    ],
+    context: '[PROJECT PLANNING]\n\nImplement the selected direction.\n\n[END PROJECT PLANNING]',
+    timeline: [
+      {
+        type: 'planning',
+        stage: 'plan',
+        name: 'Planning implementation',
+        label: 'Planning implementation',
+        summary: 'Implement the selected direction.',
+        at: 1,
+      },
+    ],
+  }
+}
+
 function input_fixture(): AgentSessionInput {
   return {
     userInput: 'Fix the parser regression',
@@ -67,11 +92,13 @@ function input_fixture(): AgentSessionInput {
 describe('autonomous project working context', () => {
   beforeEach(() => {
     runtime_state.run.mockReset()
+    runtime_state.planning.mockReset()
     runtime_state.get_state.mockReset()
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
     runtime_state.get_state.mockReturnValue(null)
     runtime_state.run.mockResolvedValue(result_fixture())
+    runtime_state.planning.mockResolvedValue(planning_fixture())
     runtime_state.save_compacted.mockResolvedValue(undefined)
   })
 
@@ -116,6 +143,16 @@ describe('autonomous project working context', () => {
     const new_task = input_fixture()
     new_task.userInput = 'Add a settings search box'
     expect(persistedTaskMatchesInput(new_task)).toBe(false)
+  })
+
+  it('forces project planning before the native coding session starts', async () => {
+    await runAgentSession(input_fixture())
+
+    expect(runtime_state.planning).toHaveBeenCalledTimes(1)
+    expect(runtime_state.run).toHaveBeenCalledTimes(1)
+    expect(runtime_state.planning.mock.invocationCallOrder[0]).toBeLessThan(runtime_state.run.mock.invocationCallOrder[0])
+    const runtime_input = runtime_state.run.mock.calls[0][0] as AgentSessionInput
+    expect(runtime_input.conversation?.some((message) => String(message.content || '').includes('[PROJECT PLANNING]'))).toBe(true)
   })
 
   it('injects the last project checkpoint before a resumed workspace agent segment and refreshes it afterward', async () => {
@@ -182,6 +219,7 @@ describe('autonomous project working context', () => {
 
     await runAgentSession(input)
 
+    expect(runtime_state.planning).not.toHaveBeenCalled()
     expect(runtime_state.load_context).not.toHaveBeenCalled()
     expect(runtime_state.save_compacted).not.toHaveBeenCalled()
     expect(runtime_state.run.mock.calls[0][0].conversation).toEqual(input.conversation)
