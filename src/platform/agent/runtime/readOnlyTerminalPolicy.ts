@@ -106,6 +106,10 @@ function stripRedirectionPrefix(value: string) {
   return value.replace(/^\d*(?:>>?|<<?)/, '')
 }
 
+function isDiscardSink(value: string) {
+  return value.replace(/[;&|]+$/, '') === '/dev/null'
+}
+
 function hasOutsideShellExpansion(value: string) {
   if (/`|\$\(/.test(value)) return true
   return /\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?!$-]|\{[^}]+\})/.test(value)
@@ -115,7 +119,7 @@ function argumentEscapesKnownWorkspace(value: string, workspaceRoot: string): bo
   if (!value) return false
   let candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
   candidate = stripRedirectionPrefix(candidate)
-  if (!candidate || candidate === '--') return false
+  if (!candidate || candidate === '--' || isDiscardSink(candidate)) return false
   if (/^https?:\/\//i.test(candidate)) return false
   if (hasOutsideShellExpansion(candidate)) return true
 
@@ -135,7 +139,7 @@ function argumentObviouslyEscapesWorkspace(value: string) {
   if (!value) return false
   let candidate = value.startsWith('-') && value.includes('=') ? value.slice(value.indexOf('=') + 1) : value
   candidate = stripRedirectionPrefix(candidate)
-  if (!candidate || candidate === '--') return false
+  if (!candidate || candidate === '--' || isDiscardSink(candidate)) return false
   if (/^https?:\/\//i.test(candidate)) return false
   if (hasOutsideShellExpansion(candidate)) return true
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) return true
