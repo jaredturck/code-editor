@@ -1,7 +1,15 @@
 import { readAgentModels, type AgentModelEntry, type AgentRoleId } from '@/platform/agent/agentIdentity'
 import type { OrbSettings } from '@/platform/settingsStorage'
 
-export type AISettingsSection = 'providers' | 'agents' | 'autonomy' | 'skills'
+export type AISettingsSection =
+  | 'providers'
+  | 'agents'
+  | 'autonomy'
+  | 'skills'
+  | 'models'
+  | 'routing'
+  | 'limits'
+  | 'semantic'
 
 export const ai_settings_sections: Array<{ id: AISettingsSection; label: string }> = [
   { id: 'providers', label: 'Local model' },
