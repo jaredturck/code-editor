@@ -1,22 +1,21 @@
 /**
  * Registers editor-native verification tools without reopening the large inherited catalog.
  *
- * The canonical catalog exports mutable definition/index objects. Registering the extension
- * once keeps every existing catalog consumer (capability policy, schemas, safety and UI)
- * on the same tool identity while new native editor tools live in small focused modules.
+ * The canonical catalog already owns browser.inspect. This compatibility extension only fills
+ * the entry if an older catalog is loaded.
  */
 import {
   PERMISSION_TIER,
-  TOOL_BY_NAME,
   TOOL_CATALOG,
   TOOL_DEFINITIONS,
+  getToolCatalogEntry,
   type ToolCatalogEntry,
   type ToolDefinition,
 } from '@/platform/agent/toolCatalog'
 
 const browserInspectDefinition: ToolDefinition = {
   name: 'browser.inspect',
-  module: 'Screen',
+  module: 'System',
   description:
     'Execute a local browser application in a sandboxed Chromium runtime and return load failures, JavaScript console errors, failed/blocked resources, and a bounded rendered DOM snapshot. Restricted to localhost/loopback URLs.',
   args: {
@@ -28,10 +27,9 @@ const browserInspectDefinition: ToolDefinition = {
 }
 
 export function registerBrowserInspectionTool() {
-  if (TOOL_BY_NAME[browserInspectDefinition.name]) return
+  if (getToolCatalogEntry(browserInspectDefinition.name)) return
 
   TOOL_DEFINITIONS.push(browserInspectDefinition)
-  TOOL_BY_NAME[browserInspectDefinition.name] = browserInspectDefinition
   TOOL_CATALOG[browserInspectDefinition.name] = {
     ...browserInspectDefinition,
     aliases: [],
