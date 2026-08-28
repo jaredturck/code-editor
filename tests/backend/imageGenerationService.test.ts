@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { IMAGE_GENERATION_FORMATS } from '../../backend/desktopBridge/services/imageGenerationService'
+import {
+  IMAGE_GENERATION_FORMATS,
+  waitForProjectImages,
+} from '../../backend/desktopBridge/services/imageGenerationService'
 
 describe('image generation formats', () => {
   it('uses fixed diffusion-safe dimensions for every model-facing format', () => {
@@ -13,5 +16,13 @@ describe('image generation formats', () => {
       expect(size.width % 16).toBe(0)
       expect(size.height % 16).toBe(0)
     }
+  })
+
+  it('returns immediately when a project has no queued image jobs', async () => {
+    await expect(waitForProjectImages('/workspace/no-image-jobs')).resolves.toEqual({
+      waited: 0,
+      completed: [],
+      failed: [],
+    })
   })
 })
