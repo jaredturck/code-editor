@@ -42,6 +42,7 @@ function render_editor(overrides: Partial<ComponentProps<typeof EditorPanel>> = 
     diagnostics: [],
     documents,
     editorRef: { current: null },
+    previewDocumentId: null,
     settings: default_editor_settings,
     theme: 'dark' as const,
     onCloseDocument: vi.fn(),
@@ -51,6 +52,7 @@ function render_editor(overrides: Partial<ComponentProps<typeof EditorPanel>> = 
     onOpenFilePath: vi.fn(),
     onOpenContainingFolder: vi.fn(),
     onParserDiagnostics: vi.fn(),
+    onPinDocument: vi.fn(),
     onSelectDocument: vi.fn(),
     onRevealInExplorer: vi.fn(),
     onToggleMarkdownView: vi.fn(),
@@ -73,6 +75,17 @@ describe('EditorPanel tabs', () => {
 
     expect(on_select_document).toHaveBeenCalledWith(2)
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'utils.ts' }))
+  })
+
+  it('shows a preview tab in italics and pins it on double-click', () => {
+    const on_pin_document = vi.fn()
+    render_editor({ previewDocumentId: 2, onPinDocument: on_pin_document })
+
+    const preview_tab = screen.getByRole('tab', { name: 'utils.ts' })
+    expect(screen.getByText('utils.ts')).toHaveClass('italic')
+
+    fireEvent.doubleClick(preview_tab)
+    expect(on_pin_document).toHaveBeenCalledWith(2)
   })
 
   it('scrolls overflowing tabs horizontally with the mouse wheel without a visible scrollbar class', () => {
