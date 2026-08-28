@@ -1,4 +1,4 @@
-import { runForcedPlanning, type ForcedPlanningResult } from '@/platform/agent/forcedPlanning'
+import { runForcedPlanning, type ForcedPlanningArtifact, type ForcedPlanningResult } from '@/platform/agent/forcedPlanning'
 import { buildLocalPreflightPlan, type LocalPreflightPlan } from '@/platform/agent/localPlanner'
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
 import { runAgentSession as runCoreAgentSession } from '@/platform/agent/runtime/sessionRunner'
@@ -20,7 +20,7 @@ import {
   type AgentSessionInput,
   type AgentSessionResult,
 } from '@/platform/agentRuntimeLegacy'
-import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/chatSessionStore'
+import { getChatSessionState, loadChatContext, saveChatSessionState, saveCompacted } from '@/platform/chatSessionStore'
 
 const runNativeAgentSession = runCoreAgentSession as unknown as (input: AgentSessionInput) => Promise<AgentSessionResult>
 
@@ -30,6 +30,8 @@ const MUTATION_GATE_TODO_ID = 'mutation-gate'
 const STREAM_EVENT_INTERVAL_MS = 80
 const PROJECT_CONTEXT_MAX_CHARS = 4200
 const PROJECT_CONTEXT_ACTIONS = 8
+const PROJECT_TIMELINE_LIMIT = 240
+const PROJECT_PLANNING_LIMIT = 8
 
 type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
 
@@ -113,6 +115,12 @@ function persistedProjectSummary(input: AgentSessionInput) {
 
 function projectGoal(input: AgentSessionInput) {
   return String(persistedProjectRun(input)?.goal || input.userInput || '').trim()
+}
+
+function isResumeProjectRun(input: AgentSessionInput) {
+  return /^Resume this project goal from the current files and persisted project ledger\./.test(
+    String(input.userInput || '').trim(),
+  )
 }
 
 export function persistedTaskMatchesInput(input: AgentSessionInput) {
@@ -215,6 +223,14 @@ function hasSuccessfulMutation(result: AgentSessionResult) {
   return (result.stepHistory || []).some((step) => stepMutatedWorkspace(step))
 }
 
+function preservePlanningTimeline(value: Array<Record<string, unknown>>, limit = PROJECT_TIMELINE_LIMIT) {
+  const planning = value.filter((event) => String(event.type || '') === 'planning').slice(-PROJECT_PLANNING_LIMIT)
+  const activity = value
+    .filter((event) => String(event.type || '') !== 'planning')
+    .slice(-Math.max(0, limit - planning.length))
+  return [...planning, ...activity]
+}
+
 function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): AgentSessionResult {
   const artifacts = new Map<string, Record<string, unknown>>()
   for (const artifact of [...(previous.artifacts || []), ...(next.artifacts || [])]) {
@@ -223,12 +239,59 @@ function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): A
   }
   return {
     ...next,
-    timeline: [...(previous.timeline || []), ...(next.timeline || [])].slice(-240),
+    timeline: preservePlanningTimeline([...(previous.timeline || []), ...(next.timeline || [])]),
     stepHistory: [...(previous.stepHistory || []), ...(next.stepHistory || [])].slice(-240),
     artifacts: [...artifacts.values()],
     steps: Number(previous.steps || 0) + Number(next.steps || 0),
     todos: Array.isArray(next.todos) ? next.todos : previous.todos,
   }
+}
+
+function normalizeStoredPlanningArtifact(value: unknown): ForcedPlanningArtifact | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const source = value as Record<string, unknown>
+  const id = String(source.id || '').trim()
+  const label = String(source.label || '').trim()
+  const content = String(source.content || '').trim()
+  return id && label && content ? { id, label, content } : null
+}
+
+function persistedForcedPlanning(input: AgentSessionInput): ForcedPlanningResult | null {
+  const stored = getChatSessionState(projectChatId(input))?.projectPlanning
+  if (!stored || String(stored.goal || '').trim() !== projectGoal(input)) return null
+  const artifacts = (Array.isArray(stored.artifacts) ? stored.artifacts : [])
+    .map(normalizeStoredPlanningArtifact)
+    .filter((artifact): artifact is ForcedPlanningArtifact => Boolean(artifact))
+  const context = String(stored.context || '').trim()
+  if (artifacts.length < 4 || !context) return null
+  const at = Number(stored.completedAt) || Date.now()
+  return {
+    artifacts,
+    context,
+    timeline: artifacts.map((artifact) => ({
+      type: 'planning',
+      stage: artifact.id,
+      name: artifact.label,
+      label: artifact.label,
+      summary: artifact.content,
+      at,
+    })),
+  }
+}
+
+function persistForcedPlanning(input: AgentSessionInput, planning: ForcedPlanningResult) {
+  saveChatSessionState(projectChatId(input), {
+    projectPlanning: {
+      goal: projectGoal(input),
+      artifacts: planning.artifacts.map((artifact) => ({ ...artifact })),
+      context: planning.context,
+      completedAt: Date.now(),
+    },
+  })
+}
+
+function emitForcedPlanning(input: AgentSessionInput, planning: ForcedPlanningResult) {
+  for (const event of planning.timeline) input.onEvent?.({ ...event, at: Date.now() })
 }
 
 function withForcedPlanningContext(input: AgentSessionInput, planning: ForcedPlanningResult): AgentSessionInput {
@@ -244,7 +307,7 @@ function withForcedPlanningContext(input: AgentSessionInput, planning: ForcedPla
 function withForcedPlanningResult(result: AgentSessionResult, planning: ForcedPlanningResult): AgentSessionResult {
   return {
     ...result,
-    timeline: [...planning.timeline, ...(result.timeline || [])].slice(-240),
+    timeline: preservePlanningTimeline([...planning.timeline, ...(result.timeline || [])]),
     summary: {
       ...(result.summary || {}),
       planning: {
@@ -424,16 +487,24 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     // Persisted continuity is optional; live project state remains authoritative.
   }
 
-  const planning = await runForcedPlanning({
-    request: projectGoal(executionInput),
-    conversation: (executionInput.conversation || []).map((message) => ({
-      role: String(message.role || ''),
-      content: message.content,
-    })),
-    settings: executionInput.settings,
-    signal: executionInput.abortSignal,
-    onEvent: executionInput.onEvent as ((event: Record<string, unknown>) => void) | undefined,
-  })
+  const resume = isResumeProjectRun(executionInput)
+  let planning = resume ? persistedForcedPlanning(executionInput) : null
+  if (!planning) {
+    if (!resume) saveChatSessionState(projectChatId(executionInput), { projectPlanning: null })
+    planning = await runForcedPlanning({
+      request: projectGoal(executionInput),
+      conversation: (executionInput.conversation || []).map((message) => ({
+        role: String(message.role || ''),
+        content: message.content,
+      })),
+      settings: executionInput.settings,
+      signal: executionInput.abortSignal,
+      onEvent: executionInput.onEvent as ((event: Record<string, unknown>) => void) | undefined,
+    })
+    persistForcedPlanning(executionInput, planning)
+  } else {
+    emitForcedPlanning(executionInput, planning)
+  }
   executionInput = withForcedPlanningContext(executionInput, planning)
 
   let combined = withForcedPlanningResult(await runCore(executionInput, throttled.flush), planning)
