@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
   planning: vi.fn(),
+  image_wait: vi.fn(),
   get_state: vi.fn(),
   save_state: vi.fn(),
   load_context: vi.fn(),
@@ -20,6 +21,10 @@ vi.mock('@/platform/agent/forcedPlanning', () => ({
 
 vi.mock('@/platform/agent/runtime/sessionRunner', () => ({
   runAgentSession: runtime_state.run,
+}))
+
+vi.mock('@/platform/imageGenerationBridge', () => ({
+  waitForProjectImages: runtime_state.image_wait,
 }))
 
 vi.mock('@/platform/chatSessionStore', () => ({
@@ -97,6 +102,7 @@ describe('autonomous project working context', () => {
   beforeEach(() => {
     runtime_state.run.mockReset()
     runtime_state.planning.mockReset()
+    runtime_state.image_wait.mockReset()
     runtime_state.get_state.mockReset()
     runtime_state.save_state.mockReset()
     runtime_state.load_context.mockReset()
@@ -104,6 +110,7 @@ describe('autonomous project working context', () => {
     runtime_state.get_state.mockReturnValue(null)
     runtime_state.run.mockResolvedValue(result_fixture())
     runtime_state.planning.mockResolvedValue(planning_fixture())
+    runtime_state.image_wait.mockResolvedValue({ waited: 0, completed: [], failed: [] })
     runtime_state.save_compacted.mockResolvedValue(undefined)
   })
 
@@ -165,6 +172,23 @@ describe('autonomous project working context', () => {
     ).toBe(true)
     expect(runtime_state.save_state).toHaveBeenCalledWith('chat-1', { projectPlanning: null })
     expect(runtime_state.save_state.mock.calls.some((call) => Boolean(call[1]?.projectPlanning))).toBe(true)
+  })
+
+  it('waits for queued project images before accepting completion', async () => {
+    runtime_state.image_wait.mockResolvedValue({
+      waited: 2,
+      completed: [
+        { jobId: 'image-1', saved: true, relativePath: 'public/cat-1.webp' },
+        { jobId: 'image-2', saved: true, relativePath: 'public/cat-2.webp' },
+      ],
+      failed: [],
+    })
+
+    const result = await runAgentSession(input_fixture())
+
+    expect(runtime_state.image_wait).toHaveBeenCalledWith('/workspace')
+    expect(result.summary?.imageGeneration).toMatchObject({ waited: 2, failed: [] })
+    expect((result.summary?.imageGeneration as Record<string, unknown>)?.completed).toHaveLength(2)
   })
 
   it('reuses the saved direction when an interrupted project resumes', async () => {
@@ -257,6 +281,7 @@ describe('autonomous project working context', () => {
     await runAgentSession(input)
 
     expect(runtime_state.planning).not.toHaveBeenCalled()
+    expect(runtime_state.image_wait).not.toHaveBeenCalled()
     expect(runtime_state.load_context).not.toHaveBeenCalled()
     expect(runtime_state.save_compacted).not.toHaveBeenCalled()
     expect(runtime_state.run.mock.calls[0][0].conversation).toEqual(input.conversation)
