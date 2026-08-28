@@ -29,7 +29,6 @@ const MUTATION_GATE_TODO_ID = 'mutation-gate'
 const STREAM_EVENT_INTERVAL_MS = 80
 const PROJECT_CONTEXT_MAX_CHARS = 4200
 const PROJECT_CONTEXT_ACTIONS = 8
-const REMEDIATION_SESSION_MINUTES = 4
 
 type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
 
@@ -378,7 +377,7 @@ async function runCore(input: AgentSessionInput, flush: () => void): Promise<Age
   }
 }
 
-/** One core session plus at most one short objective repair session. */
+/** One core session plus at most one objective repair session. */
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   if (!isWorkspaceProjectRun(input)) return runLegacyAgentSession(input)
 
@@ -417,10 +416,6 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
       todos: withoutGateTodos(combined.todos),
       settings: {
         ...executionInput.settings,
-        agent_session_minutes: Math.min(
-          REMEDIATION_SESSION_MINUTES,
-          Math.max(1, Number(executionInput.settings?.agent_session_minutes) || REMEDIATION_SESSION_MINUTES),
-        ),
         agent_tool_repeat_cap: 2,
       },
     }
