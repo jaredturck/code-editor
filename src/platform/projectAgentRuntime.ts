@@ -25,6 +25,7 @@ import {
   type AgentSessionResult,
 } from '@/platform/agentRuntimeLegacy'
 import { getChatSessionState, loadChatContext, saveChatSessionState, saveCompacted } from '@/platform/chatSessionStore'
+import { waitForProjectImages } from '@/platform/imageGenerationBridge'
 
 const runNativeAgentSession = runCoreAgentSession as unknown as (
   input: AgentSessionInput,
@@ -33,6 +34,7 @@ const runNativeAgentSession = runCoreAgentSession as unknown as (
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const DIAGNOSTICS_GATE_TODO_ID = 'diagnostics-gate'
 const MUTATION_GATE_TODO_ID = 'mutation-gate'
+const IMAGE_GATE_TODO_ID = 'image-generation-gate'
 const STREAM_EVENT_INTERVAL_MS = 80
 const PROJECT_CONTEXT_MAX_CHARS = 4200
 const PROJECT_CONTEXT_ACTIONS = 8
@@ -40,6 +42,13 @@ const PROJECT_TIMELINE_LIMIT = 240
 const PROJECT_PLANNING_LIMIT = 8
 
 type AgentRuntimeEvent = Parameters<NonNullable<AgentSessionInput['onEvent']>>[0]
+
+interface ProjectImageBarrier {
+  waited: number
+  completed: Array<Record<string, unknown>>
+  failed: Array<Record<string, unknown>>
+  error?: string
+}
 
 class StreamEventCoalescer {
   private pending: AgentRuntimeEvent | null = null
@@ -210,14 +219,19 @@ function activeVerificationState(input: AgentSessionInput): VerificationState | 
 function withoutGateTodos(todos: Array<Record<string, unknown>> | undefined) {
   return (Array.isArray(todos) ? todos : []).filter((todo) => {
     const id = String(todo.id || '')
-    return ![VERIFICATION_GATE_TODO_ID, DIAGNOSTICS_GATE_TODO_ID, MUTATION_GATE_TODO_ID].includes(id)
+    return ![
+      VERIFICATION_GATE_TODO_ID,
+      DIAGNOSTICS_GATE_TODO_ID,
+      MUTATION_GATE_TODO_ID,
+      IMAGE_GATE_TODO_ID,
+    ].includes(id)
   })
 }
 
 function stepMutatedWorkspace(step: Record<string, unknown>) {
   if (step.ok === false || ['error', 'failed'].includes(String(step.status || '').toLowerCase())) return false
   const tool = String(step.tool || step.requestedTool || '')
-  if (['files.write', 'files.edit', 'files.patch'].includes(tool)) return true
+  if (['files.write', 'files.edit', 'files.patch', 'image.generate'].includes(tool)) return true
   if (tool !== 'terminal.exec') return false
   const args =
     step.args && typeof step.args === 'object' && !Array.isArray(step.args)
@@ -340,11 +354,89 @@ function diagnosticsErrors(snapshot: WorkspaceDiagnosticsSnapshot | null) {
   return Math.max(0, Number(snapshot?.counts.errors || 0))
 }
 
+function imageJobKey(job: Record<string, unknown>) {
+  return String(job.relativePath || job.path || job.jobId || '').trim()
+}
+
+function mergeImageBarriers(previous: ProjectImageBarrier, next: ProjectImageBarrier): ProjectImageBarrier {
+  const completed = new Map<string, Record<string, unknown>>()
+  const failed = new Map<string, Record<string, unknown>>()
+
+  for (const job of previous.completed) completed.set(imageJobKey(job), job)
+  for (const job of previous.failed) failed.set(imageJobKey(job), job)
+  for (const job of next.completed) {
+    const key = imageJobKey(job)
+    completed.set(key, job)
+    failed.delete(key)
+  }
+  for (const job of next.failed) {
+    const key = imageJobKey(job)
+    failed.set(key, job)
+    completed.delete(key)
+  }
+
+  return {
+    waited: previous.waited + next.waited,
+    completed: [...completed.values()],
+    failed: [...failed.values()],
+    ...(next.error || previous.error ? { error: next.error || previous.error } : {}),
+  }
+}
+
+async function settleProjectImages(input: AgentSessionInput): Promise<ProjectImageBarrier> {
+  const workspaceRoot = String(input.settings?.agent_working_dir || '').trim()
+  if (!workspaceRoot) return { waited: 0, completed: [], failed: [] }
+  try {
+    const result = await waitForProjectImages(workspaceRoot)
+    const barrier = {
+      waited: Math.max(0, Number(result.waited) || 0),
+      completed: Array.isArray(result.completed)
+        ? result.completed.map((job) => ({ ...(job as unknown as Record<string, unknown>) }))
+        : [],
+      failed: Array.isArray(result.failed)
+        ? result.failed.map((job) => ({ ...(job as unknown as Record<string, unknown>) }))
+        : [],
+    }
+    if (barrier.waited > 0) {
+      input.onEvent?.({
+        type: 'notice',
+        level: barrier.failed.length ? 'warning' : 'info',
+        summary: barrier.failed.length
+          ? `Queued image generation finished with ${barrier.failed.length} failed asset${barrier.failed.length === 1 ? '' : 's'}.`
+          : `Queued image generation finished: ${barrier.completed.length} asset${barrier.completed.length === 1 ? '' : 's'} saved.`,
+        at: Date.now(),
+      })
+    }
+    return barrier
+  } catch (error) {
+    const message = cleanLine(error instanceof Error ? error.message : error, 300)
+    input.onEvent?.({
+      type: 'notice',
+      level: 'warning',
+      summary: `Queued image generation could not be finalized (${message}).`,
+      at: Date.now(),
+    })
+    return { waited: 0, completed: [], failed: [], error: message }
+  }
+}
+
+function imageBarrierBlockers(barrier: ProjectImageBarrier) {
+  const blockers: string[] = []
+  if (barrier.error) blockers.push(`Queued image generation could not be finalized: ${barrier.error}`)
+  for (const job of barrier.failed) {
+    const target = cleanLine(job.relativePath || job.path || 'queued image asset', 160)
+    const error = cleanLine(job.error || 'generation failed', 240)
+    blockers.push(`Image generation failed for ${target}: ${error}`)
+  }
+  return blockers
+}
+
 function acceptanceBlockers(
   input: AgentSessionInput,
   result: AgentSessionResult,
   gate: VerificationGateResult | null,
   diagnostics: WorkspaceDiagnosticsSnapshot | null,
+  imageBarrier: ProjectImageBarrier,
 ) {
   const blockers: string[] = []
   const plan = taskPreflightPlan(input)
@@ -352,6 +444,7 @@ function acceptanceBlockers(
     blockers.push('The required workspace change did not complete.')
   }
   if (gate?.required === true && !gate.passed) blockers.push(...gate.blockers)
+  blockers.push(...imageBarrierBlockers(imageBarrier))
   const errors = diagnosticsErrors(diagnostics)
   if (errors > 0) blockers.push(`Workspace diagnostics report ${errors} error${errors === 1 ? '' : 's'}.`)
   return [...new Set(blockers)]
@@ -363,8 +456,9 @@ function remediationPrompt(
   result: AgentSessionResult,
   gate: VerificationGateResult | null,
   diagnostics: WorkspaceDiagnosticsSnapshot | null,
+  imageBarrier: ProjectImageBarrier,
 ) {
-  const blockers = acceptanceBlockers(input, result, gate, diagnostics)
+  const blockers = acceptanceBlockers(input, result, gate, diagnostics, imageBarrier)
   const parts = [originalRequest, `Fix these blockers:\n${blockers.map((blocker) => `- ${blocker}`).join('\n')}`]
   if (diagnosticsErrors(diagnostics) > 0 && diagnostics) parts.push(formatWorkspaceDiagnostics(diagnostics))
   parts.push('Make the necessary change and verify the affected result.')
@@ -380,16 +474,23 @@ function annotateAcceptance(
   result: AgentSessionResult,
   gate: VerificationGateResult | null,
   diagnostics: WorkspaceDiagnosticsSnapshot | null,
+  imageBarrier: ProjectImageBarrier,
   remediationPasses: number,
   state: VerificationState | null,
 ) {
-  const blockers = acceptanceBlockers(input, result, gate, diagnostics)
+  const blockers = acceptanceBlockers(input, result, gate, diagnostics, imageBarrier)
   const plan = taskPreflightPlan(input)
   const summary = {
     ...(result.summary || {}),
     projectRuntime: 'direct-v3',
     taskPreflightPlan: plan,
     verificationState: state ? snapshotVerificationState(state) : null,
+    imageGeneration: {
+      waited: imageBarrier.waited,
+      completed: imageBarrier.completed,
+      failed: imageBarrier.failed,
+      ...(imageBarrier.error ? { error: imageBarrier.error } : {}),
+    },
     ...(gate ? { verification: { ...gate, remediationPasses } } : {}),
     workspaceDiagnostics: diagnostics
       ? {
@@ -416,6 +517,13 @@ function annotateAcceptance(
     todos.push({
       id: VERIFICATION_GATE_TODO_ID,
       text: `Verification gate: ${gate.blockers.join(' ')}`.slice(0, 1000),
+      status: 'in_progress',
+    })
+  }
+  if (imageBarrier.failed.length || imageBarrier.error) {
+    todos.push({
+      id: IMAGE_GATE_TODO_ID,
+      text: `Image generation gate: ${imageBarrierBlockers(imageBarrier).join(' ')}`.slice(0, 1000),
       status: 'in_progress',
     })
   }
@@ -520,9 +628,10 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
   executionInput = withForcedPlanningContext(executionInput, planning)
 
   let combined = withForcedPlanningResult(await runCore(executionInput, throttled.flush), planning)
+  let imageBarrier = await settleProjectImages(executionInput)
   let gate = state ? evaluateVerificationGate(state) : null
   let diagnostics = await currentDiagnostics(executionInput)
-  let blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics)
+  let blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics, imageBarrier)
   let remediationPasses = 0
 
   if (blockers.length && !executionInput.abortSignal?.aborted && !runHitBudget(combined)) {
@@ -536,7 +645,7 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
 
     const remediationInput: AgentSessionInput = {
       ...executionInput,
-      userInput: remediationPrompt(input.userInput, executionInput, combined, gate, diagnostics),
+      userInput: remediationPrompt(input.userInput, executionInput, combined, gate, diagnostics, imageBarrier),
       conversation: [...(executionInput.conversation || []), { role: 'assistant', content: combined.reply }].slice(-40),
       todos: withoutGateTodos(combined.todos),
       settings: {
@@ -547,12 +656,21 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
 
     const repaired = await runCore(remediationInput, throttled.flush)
     combined = mergeResults(combined, repaired)
+    imageBarrier = mergeImageBarriers(imageBarrier, await settleProjectImages(executionInput))
     gate = state ? evaluateVerificationGate(state) : null
     diagnostics = await currentDiagnostics(executionInput)
-    blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics)
+    blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics, imageBarrier)
   }
 
-  const finalResult = annotateAcceptance(executionInput, combined, gate, diagnostics, remediationPasses, state)
+  const finalResult = annotateAcceptance(
+    executionInput,
+    combined,
+    gate,
+    diagnostics,
+    imageBarrier,
+    remediationPasses,
+    state,
+  )
   try {
     await saveCompacted(projectChatId(executionInput), buildProjectContext(executionInput, finalResult))
   } catch (error) {
