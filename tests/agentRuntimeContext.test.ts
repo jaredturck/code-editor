@@ -4,6 +4,7 @@ const runtime_state = vi.hoisted(() => ({
   run: vi.fn(),
   planning: vi.fn(),
   get_state: vi.fn(),
+  save_state: vi.fn(),
   load_context: vi.fn(),
   save_compacted: vi.fn(),
 }))
@@ -23,6 +24,7 @@ vi.mock('@/platform/agent/runtime/sessionRunner', () => ({
 
 vi.mock('@/platform/chatSessionStore', () => ({
   getChatSessionState: runtime_state.get_state,
+  saveChatSessionState: runtime_state.save_state,
   loadChatContext: runtime_state.load_context,
   saveCompacted: runtime_state.save_compacted,
 }))
@@ -62,6 +64,8 @@ function planning_fixture() {
   return {
     artifacts: [
       { id: 'ideas', label: 'Exploring ideas', content: 'Explore several directions.' },
+      { id: 'expand', label: 'Developing ideas', content: 'Develop the strongest possibilities.' },
+      { id: 'direction', label: 'Choosing direction', content: 'Choose one coherent direction.' },
       { id: 'plan', label: 'Planning implementation', content: 'Implement the selected direction.' },
     ],
     context: '[PROJECT PLANNING]\n\nImplement the selected direction.\n\n[END PROJECT PLANNING]',
@@ -94,6 +98,7 @@ describe('autonomous project working context', () => {
     runtime_state.run.mockReset()
     runtime_state.planning.mockReset()
     runtime_state.get_state.mockReset()
+    runtime_state.save_state.mockReset()
     runtime_state.load_context.mockReset()
     runtime_state.save_compacted.mockReset()
     runtime_state.get_state.mockReturnValue(null)
@@ -153,6 +158,31 @@ describe('autonomous project working context', () => {
     expect(runtime_state.planning.mock.invocationCallOrder[0]).toBeLessThan(runtime_state.run.mock.invocationCallOrder[0])
     const runtime_input = runtime_state.run.mock.calls[0][0] as AgentSessionInput
     expect(runtime_input.conversation?.some((message) => String(message.content || '').includes('[PROJECT PLANNING]'))).toBe(true)
+    expect(runtime_state.save_state).toHaveBeenCalledWith('chat-1', { projectPlanning: null })
+    expect(runtime_state.save_state.mock.calls.some((call) => Boolean(call[1]?.projectPlanning))).toBe(true)
+  })
+
+  it('reuses the saved direction when an interrupted project resumes', async () => {
+    const saved = planning_fixture()
+    runtime_state.get_state.mockReturnValue({
+      projectRun: { goal: 'Fix the parser regression' },
+      projectPlanning: {
+        goal: 'Fix the parser regression',
+        artifacts: saved.artifacts,
+        context: saved.context,
+        completedAt: 100,
+      },
+    })
+    const input = input_fixture()
+    input.userInput =
+      'Resume this project goal from the current files and persisted project ledger. Continue unfinished requirements without redoing completed work.\n\nFix the parser regression'
+
+    await runAgentSession(input)
+
+    expect(runtime_state.planning).not.toHaveBeenCalled()
+    expect(runtime_state.run).toHaveBeenCalledTimes(1)
+    const runtime_input = runtime_state.run.mock.calls[0][0] as AgentSessionInput
+    expect(runtime_input.conversation?.some((message) => String(message.content || '').includes(saved.context))).toBe(true)
   })
 
   it('injects the last project checkpoint before a resumed workspace agent segment and refreshes it afterward', async () => {
