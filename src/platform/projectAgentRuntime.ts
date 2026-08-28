@@ -21,6 +21,8 @@ import {
 } from '@/platform/agentRuntimeLegacy'
 import { getChatSessionState, loadChatContext, saveCompacted } from '@/platform/chatSessionStore'
 
+const runNativeAgentSession = runCoreAgentSession as unknown as (input: AgentSessionInput) => Promise<AgentSessionResult>
+
 const VERIFICATION_GATE_TODO_ID = 'verification-gate'
 const DIAGNOSTICS_GATE_TODO_ID = 'diagnostics-gate'
 const MUTATION_GATE_TODO_ID = 'mutation-gate'
@@ -368,9 +370,9 @@ function injectPriorContext(input: AgentSessionInput, compacted: string): AgentS
   }
 }
 
-async function runCore(input: AgentSessionInput, flush: () => void) {
+async function runCore(input: AgentSessionInput, flush: () => void): Promise<AgentSessionResult> {
   try {
-    return await runCoreAgentSession(input)
+    return await runNativeAgentSession(input)
   } finally {
     flush()
   }
