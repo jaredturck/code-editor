@@ -1,4 +1,4 @@
-import { TOOL_BY_NAME } from '@/platform/agent/toolCatalog'
+import { getToolCatalogEntry } from '@/platform/agent/toolCatalog'
 
 interface CapabilitySnapshot {
   advertisedTools?: unknown
@@ -22,7 +22,7 @@ function availableToolSet(snapshot: CapabilitySnapshot) {
   return new Set(
     (Array.isArray(advertised) ? advertised : [])
       .map(String)
-      .filter((name) => Boolean(TOOL_BY_NAME[name])),
+      .filter((name) => Boolean(getToolCatalogEntry(name))),
   )
 }
 
