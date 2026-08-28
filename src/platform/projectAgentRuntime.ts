@@ -1,3 +1,4 @@
+import { runForcedPlanning, type ForcedPlanningResult } from '@/platform/agent/forcedPlanning'
 import { buildLocalPreflightPlan, type LocalPreflightPlan } from '@/platform/agent/localPlanner'
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
 import { runAgentSession as runCoreAgentSession } from '@/platform/agent/runtime/sessionRunner'
@@ -108,6 +109,10 @@ function persistedProjectSummary(input: AgentSessionInput) {
   return summary && typeof summary === 'object' && !Array.isArray(summary)
     ? (summary as Record<string, unknown>)
     : null
+}
+
+function projectGoal(input: AgentSessionInput) {
+  return String(persistedProjectRun(input)?.goal || input.userInput || '').trim()
 }
 
 export function persistedTaskMatchesInput(input: AgentSessionInput) {
@@ -223,6 +228,31 @@ function mergeResults(previous: AgentSessionResult, next: AgentSessionResult): A
     artifacts: [...artifacts.values()],
     steps: Number(previous.steps || 0) + Number(next.steps || 0),
     todos: Array.isArray(next.todos) ? next.todos : previous.todos,
+  }
+}
+
+function withForcedPlanningContext(input: AgentSessionInput, planning: ForcedPlanningResult): AgentSessionInput {
+  return {
+    ...input,
+    conversation: [
+      ...(input.conversation || []),
+      { role: 'user', content: planning.context, _injected: true },
+    ].slice(-50),
+  }
+}
+
+function withForcedPlanningResult(result: AgentSessionResult, planning: ForcedPlanningResult): AgentSessionResult {
+  return {
+    ...result,
+    timeline: [...planning.timeline, ...(result.timeline || [])].slice(-240),
+    summary: {
+      ...(result.summary || {}),
+      planning: {
+        forced: true,
+        completed: true,
+        stages: planning.artifacts.map((artifact) => ({ ...artifact })),
+      },
+    },
   }
 }
 
@@ -394,7 +424,19 @@ export async function runAgentSession(input: AgentSessionInput): Promise<AgentSe
     // Persisted continuity is optional; live project state remains authoritative.
   }
 
-  let combined = await runCore(executionInput, throttled.flush)
+  const planning = await runForcedPlanning({
+    request: projectGoal(executionInput),
+    conversation: (executionInput.conversation || []).map((message) => ({
+      role: String(message.role || ''),
+      content: message.content,
+    })),
+    settings: executionInput.settings,
+    signal: executionInput.abortSignal,
+    onEvent: executionInput.onEvent as ((event: Record<string, unknown>) => void) | undefined,
+  })
+  executionInput = withForcedPlanningContext(executionInput, planning)
+
+  let combined = withForcedPlanningResult(await runCore(executionInput, throttled.flush), planning)
   let gate = state ? evaluateVerificationGate(state) : null
   let diagnostics = await currentDiagnostics(executionInput)
   let blockers = acceptanceBlockers(executionInput, combined, gate, diagnostics)
