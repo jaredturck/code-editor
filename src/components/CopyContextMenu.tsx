@@ -1,8 +1,5 @@
 import { Terminal } from '@xterm/xterm'
 
-const copy_menu_installed_key = '__codeEditorCopyMenuInstalled'
-const terminal_copy_menu_installed_key = '__codeEditorTerminalCopyMenuInstalled'
-
 interface CopyMenuWindow extends Window {
   __codeEditorCopyMenuInstalled?: boolean
   __codeEditorTerminalCopyMenuInstalled?: boolean
@@ -89,7 +86,7 @@ function show_copy_menu(value: string, x: number, y: number) {
 }
 
 function install_terminal_copy_menu(runtime_window: CopyMenuWindow) {
-  if (runtime_window[terminal_copy_menu_installed_key as keyof CopyMenuWindow]) return
+  if (runtime_window.__codeEditorTerminalCopyMenuInstalled) return
   runtime_window.__codeEditorTerminalCopyMenuInstalled = true
 
   const open = Terminal.prototype.open
@@ -109,7 +106,7 @@ function install_terminal_copy_menu(runtime_window: CopyMenuWindow) {
 export function install_copy_context_menu() {
   const runtime_window = window as CopyMenuWindow
   install_terminal_copy_menu(runtime_window)
-  if (runtime_window[copy_menu_installed_key as keyof CopyMenuWindow]) return
+  if (runtime_window.__codeEditorCopyMenuInstalled) return
   runtime_window.__codeEditorCopyMenuInstalled = true
 
   document.addEventListener('contextmenu', (event) => {
