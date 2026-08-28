@@ -54,7 +54,7 @@ export function applyAgentRoot(rawPath: unknown, settings: SafetySettings | null
   const input = normalizePath(rawPath)
   if (!input) return input
   if (input === '.' || input === './') return resolveAgentRootBase(settings)
-  if (input.startsWith('/') || input.startsWith('~')) return input
+  if (input.startsWith('/') || input.startsWith('~') || /^[A-Za-z]:\//.test(input)) return input
   const root = resolveAgentRootBase(settings).replace(/\/$/, '')
   return `${root}/${input.replace(/^\.\//, '')}`
 }
@@ -62,7 +62,10 @@ export function applyAgentRoot(rawPath: unknown, settings: SafetySettings | null
 function pathIsWithinAgentRoot(resolvedPath: string, settings: SafetySettings | null | undefined) {
   const root = resolveAgentRootBase(settings).replace(/\/$/, '')
   if (!root || root === '~') return true
-  return resolvedPath === root || resolvedPath.startsWith(`${root}/`)
+  const windows_path = /^[A-Za-z]:\//.test(root)
+  const normalized_root = windows_path ? root.toLowerCase() : root
+  const normalized_path = windows_path ? resolvedPath.toLowerCase() : resolvedPath
+  return normalized_path === normalized_root || normalized_path.startsWith(`${normalized_root}/`)
 }
 
 export function assertSafePath(pathInput: unknown, { operation = 'read', settings }: SafePathOptions = {}): string {
