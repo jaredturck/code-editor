@@ -6,7 +6,7 @@
 
 import path = require('node:path')
 import { randomUUID } from 'node:crypto'
-import { desktopCapturer, utilityProcess, type App } from 'electron'
+import { utilityProcess, type App } from 'electron'
 import '../navigationBootstrap.cjs'
 import type { StorageKeyContext } from './storageKeyStore.cjs'
 import {
@@ -36,17 +36,6 @@ export interface LocalBridgeHandle {
   getPermissions?: () => BridgePermissionState
   updatePermissions?: (permissions: Partial<BridgePermissionState>) => BridgePermissionState
   close?: () => void | Promise<void>
-}
-
-interface ScreenCaptureRequest {
-  sourceId?: string
-  maxWidth?: number
-  maxHeight?: number
-}
-
-interface ScreenCaptureResult {
-  dataUrl: string
-  source: { id: string; name: string; width: number; height: number }
 }
 
 interface BridgeReadyMessage {
@@ -81,11 +70,6 @@ let bridge_closing = false
 let duckDuckGoSearchWindow: DuckDuckGoSearchWindowService | null = null
 const duckDuckGoAbortControllers = new Map<string, AbortController>()
 
-function boundedDimension(value: unknown, fallback: number, minimum: number, maximum: number): number {
-  const parsed = Math.round(Number(value))
-  return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback
-}
-
 function errorMessage(value: unknown): string {
   return value instanceof Error ? value.message : String(value || 'Unknown local bridge error')
 }
@@ -108,43 +92,6 @@ function normalizePermissions(
 function postBridgeMessage(message: unknown): void {
   if (!bridge_process) return
   bridge_process.postMessage(message)
-}
-
-async function captureDesktopFrame(request: ScreenCaptureRequest = {}): Promise<ScreenCaptureResult> {
-  const width = boundedDimension(request.maxWidth, 1600, 320, 1920)
-  const height = boundedDimension(request.maxHeight, 1000, 180, 1200)
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width, height },
-    fetchWindowIcons: false,
-  })
-  const requested = String(request.sourceId || '').trim()
-  const source =
-    (requested ? sources.find((candidate) => candidate.id === requested) : null) ||
-    sources.find((candidate) => candidate.id.startsWith('screen:')) ||
-    sources[0]
-  if (!source || source.thumbnail.isEmpty()) throw new Error('No capturable desktop source is available.')
-
-  let jpeg = source.thumbnail.toJPEG(82)
-  if (jpeg.byteLength > 4 * 1024 * 1024) jpeg = source.thumbnail.toJPEG(65)
-  if (jpeg.byteLength > 5 * 1024 * 1024) jpeg = source.thumbnail.toJPEG(45)
-  if (jpeg.byteLength > 6 * 1024 * 1024) throw new Error('Captured desktop frame exceeds the safe size limit.')
-  const size = source.thumbnail.getSize()
-  return {
-    dataUrl: `data:image/jpeg;base64,${jpeg.toString('base64')}`,
-    source: { id: source.id, name: source.name, width: size.width, height: size.height },
-  }
-}
-
-async function handleScreenRequest(message: Record<string, unknown>): Promise<void> {
-  const id = String(message.id || '')
-  if (!id) return
-  try {
-    const result = await captureDesktopFrame((message.request || {}) as ScreenCaptureRequest)
-    postBridgeMessage({ type: 'screen-result', id, result })
-  } catch (error) {
-    postBridgeMessage({ type: 'screen-result', id, error: errorMessage(error) })
-  }
 }
 
 function browserSearchRequest(value: unknown): DuckDuckGoBrowserSearchRequest {
@@ -258,10 +205,6 @@ function handleBridgeMessage(value: unknown): void {
   }
   if (type === 'permissions-state') {
     bridge_permissions = normalizePermissions(message.permissions as Partial<BridgePermissionState>)
-    return
-  }
-  if (type === 'screen-request') {
-    void handleScreenRequest(message)
     return
   }
   if (type === 'ddg-request') {
