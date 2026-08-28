@@ -213,6 +213,13 @@ export const DEFAULT_IRIS_SETTINGS = {
 /** @deprecated Internal compatibility alias; new code should use DEFAULT_IRIS_SETTINGS. */
 export const DEFAULT_ORB_SETTINGS = DEFAULT_IRIS_SETTINGS
 
+export interface ProviderKeyValidationRecord {
+  status: 'untested' | 'valid' | 'invalid' | 'unavailable'
+  testedAt: number
+  message: string
+  models: string[]
+}
+
 export type OrbSettings = Omit<
   typeof DEFAULT_IRIS_SETTINGS,
   'discovered_models' | 'agent_models' | 'agent_team_roles' | 'provider_key_validation' | 'provider_selected_models'
@@ -220,10 +227,7 @@ export type OrbSettings = Omit<
   agent_team_roles: AgentRoleId[] | null
   discovered_models: Record<string, string[]>
   agent_models: AgentModelEntry[] | null
-  provider_key_validation: Record<
-    string,
-    import('@/platform/providers/providerConfiguration').ProviderKeyValidationRecord
-  >
+  provider_key_validation: Record<string, ProviderKeyValidationRecord>
   provider_selected_models: Record<string, string[]>
   _stateful_cutover_v1?: boolean
   _permission_consent_v1?: boolean
