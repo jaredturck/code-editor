@@ -1,13 +1,6 @@
-/** Builds IRIS's agent configuration from validated live model inventories. */
+/** Builds the local agent configuration from discovered model inventory. */
 
 import { type AgentModelEntry, type AgentRoleId } from '@/platform/agent/agentIdentity'
-import {
-  getDiscoveredModelsForKey,
-  getValidProviderKeyIds,
-  normalizeModelList,
-  type ProviderConfigurationSettings,
-} from '@/platform/providers/providerConfiguration'
-import { AI_PROVIDER_DEFINITIONS } from '@/platform/providers/providerRegistry'
 import {
   compareForRole,
   evaluateModel,
@@ -33,27 +26,41 @@ export interface AutomaticSetupPlan {
   summary: string[]
 }
 
-function collectCandidates(settings: ProviderConfigurationSettings): ModelEvaluation[] {
-  const candidates: AutoSetupCandidate[] = []
+function normalizeModelList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map((model) => String(model || '').trim()).filter(Boolean)))
+}
 
-  for (const provider of AI_PROVIDER_DEFINITIONS) {
-    const validKeyIds = getValidProviderKeyIds(settings, provider.id)
-    for (const keyId of validKeyIds) {
-      const models = getDiscoveredModelsForKey(settings, provider.id, keyId)
-      for (const model of models) candidates.push({ provider: provider.id, model, keyId })
-    }
-  }
+function localModels(settings: Record<string, unknown>) {
+  const discovered = settings.discovered_models && typeof settings.discovered_models === 'object'
+    ? settings.discovered_models as Record<string, unknown>
+    : {}
+  const selected = settings.provider_selected_models && typeof settings.provider_selected_models === 'object'
+    ? settings.provider_selected_models as Record<string, unknown>
+    : {}
+  return normalizeModelList([
+    ...normalizeModelList(discovered.local),
+    ...normalizeModelList(selected.local),
+    String(settings.ai_model || ''),
+  ])
+}
 
+function collectCandidates(settings: Record<string, unknown>): ModelEvaluation[] {
+  const candidates: AutoSetupCandidate[] = localModels(settings).map((model) => ({
+    provider: 'local',
+    model,
+    keyId: '1',
+  }))
   return candidates.map(evaluateModel).filter((candidate) => !candidate.excluded)
 }
 
 function makeEntry(role: AgentRoleId, candidate: ModelEvaluation, primary = true): AgentModelEntry {
   return {
-    id: `${role}:${candidate.provider}:${candidate.model}:${candidate.keyId}`.toLowerCase(),
+    id: `${role}:local:${candidate.model}:1`.toLowerCase(),
     role,
-    provider: candidate.provider,
+    provider: 'local',
     model: candidate.model,
-    keyId: candidate.keyId,
+    keyId: '1',
     primary,
     tags: [],
     disabledTags: [],
@@ -64,99 +71,46 @@ function pickBest(role: AgentRoleId, candidates: ModelEvaluation[]): ModelEvalua
   return [...candidates].sort((left, right) => compareForRole(role, left, right))[0] || null
 }
 
-function pickCloudResponders(cloud: ModelEvaluation[]): ModelEvaluation[] {
-  const bestByProvider = new Map<string, ModelEvaluation>()
-  for (const candidate of cloud) {
-    const current = bestByProvider.get(candidate.provider)
-    if (!current || compareForRole('orchestrator', candidate, current) < 0) {
-      bestByProvider.set(candidate.provider, candidate)
-    }
-  }
-  return [...bestByProvider.values()].sort((left, right) => compareForRole('orchestrator', left, right)).slice(0, 4)
-}
-
-function buildSelectedProviderModels(
-  settings: ProviderConfigurationSettings,
-  candidates: ModelEvaluation[],
-): Record<string, string[]> {
-  const next = { ...(settings.provider_selected_models || {}) }
-
-  for (const provider of AI_PROVIDER_DEFINITIONS) {
-    const available = candidates.filter((candidate) => candidate.provider === provider.id)
-    if (!available.length) continue
-    const bestGeneral = pickBest('orchestrator', available)
-    const bestExecutor = pickBest('executor', available)
-    const bestScout = pickBest('scout', available)
-    const availableIds = new Set(available.map((candidate) => candidate.model))
-    const existing = normalizeModelList(next[provider.id] || []).filter((model) => availableIds.has(model))
-    next[provider.id] = normalizeModelList([...existing, bestGeneral?.model, bestExecutor?.model, bestScout?.model])
-  }
-
-  return next
-}
-
-export function buildAutomaticSetupPlan(settings: ProviderConfigurationSettings): AutomaticSetupPlan {
+export function buildAutomaticSetupPlan(settings: Record<string, unknown>): AutomaticSetupPlan {
   const candidates = collectCandidates(settings)
-  const local = candidates.filter((candidate) => candidate.local)
-  const cloud = candidates.filter((candidate) => !candidate.local)
-  if (!local.length && !cloud.length) {
-    throw new Error('No suitable local or validated cloud model is available for Auto Setup.')
+  if (!candidates.length) {
+    throw new Error('No suitable local model is available for Auto Setup.')
   }
 
-  const cloudResponders = pickCloudResponders(cloud)
-  const localOrchestrator = pickBest('orchestrator', local)
-  const localExecutor = pickBest('executor', local)
-  const localScout = pickBest('scout', local)
-  const localOverwatcher = pickBest('overwatcher', local)
-  const cloudOrchestrator = pickBest('orchestrator', cloud)
-  const cloudExecutor = pickBest('executor', cloud) || cloudOrchestrator
-  const cloudScout = pickBest('scout', cloud) || cloudOrchestrator
-  const cloudOverwatcher = pickBest('overwatcher', cloud) || cloudOrchestrator
-  const primary = cloudResponders[0] || localOrchestrator || cloudOrchestrator!
-
-  const agentModels: AgentModelEntry[] = []
-  cloudResponders.forEach((candidate, index) => {
-    agentModels.push(makeEntry('orchestrator', candidate, index === 0))
-  })
-  if (localOrchestrator) {
-    agentModels.push(makeEntry('orchestrator', localOrchestrator, cloudResponders.length === 0))
-  } else if (!cloudResponders.length && cloudOrchestrator) {
-    agentModels.push(makeEntry('orchestrator', cloudOrchestrator, true))
-  }
-  if (localExecutor || cloudExecutor) agentModels.push(makeEntry('executor', localExecutor || cloudExecutor!))
-  if (localScout || cloudScout) agentModels.push(makeEntry('scout', localScout || cloudScout!))
-  if (localOverwatcher || cloudOverwatcher) {
-    agentModels.push(makeEntry('overwatcher', localOverwatcher || cloudOverwatcher!))
-  }
-
-  const selected: Partial<Record<AgentRoleId, ModelEvaluation>> = {
-    orchestrator: primary,
-    executor: localExecutor || cloudExecutor || primary,
-    scout: localScout || cloudScout || primary,
-    overwatcher: localOverwatcher || cloudOverwatcher || primary,
-  }
-  const distinctModelBindings = new Set(
-    agentModels.map((entry) => `${entry.provider}:${entry.model}:${entry.keyId}`.toLowerCase()),
-  ).size
+  const orchestrator = pickBest('orchestrator', candidates) || candidates[0]
+  const executor = pickBest('executor', candidates) || orchestrator
+  const scout = pickBest('scout', candidates) || orchestrator
+  const overwatcher = pickBest('overwatcher', candidates) || orchestrator
+  const agentModels = [
+    makeEntry('orchestrator', orchestrator, true),
+    makeEntry('executor', executor, true),
+    makeEntry('scout', scout, true),
+    makeEntry('overwatcher', overwatcher, true),
+  ]
+  const selectedModels = normalizeModelList(candidates.map((candidate) => candidate.model))
+  const distinctModelBindings = new Set(agentModels.map((entry) => entry.model.toLowerCase())).size
 
   return {
     patch: {
-      provider_selected_models: buildSelectedProviderModels(settings, candidates),
+      provider_selected_models: { local: selectedModels },
       agent_models: agentModels,
       agent_multi_enabled: true,
       agent_peer_consult_enabled: true,
       agent_peer_review: 'suggested',
       agent_model_routing: distinctModelBindings > 1 ? 'on' : 'off',
-      ai_provider: primary.provider,
-      ai_model: primary.model,
-      agent_execution_policy: primary.local ? 'local_only' : 'hybrid',
+      ai_provider: 'local',
+      ai_model: orchestrator.model,
+      agent_execution_policy: 'local_only',
     },
-    selected,
+    selected: {
+      orchestrator,
+      executor,
+      scout,
+      overwatcher,
+    },
     summary: [
-      localOrchestrator ? `Local worker: ${localOrchestrator.model}` : 'Local worker: none (cloud-only profile)',
-      cloudResponders.length
-        ? `Cloud responders: ${cloudResponders.map((candidate) => candidate.model).join(', ')}`
-        : 'Cloud use disabled: no validated cloud models were found',
+      `Local worker: ${orchestrator.model}`,
+      'Cloud use disabled: the coding runtime is local-only',
     ],
   }
 }
