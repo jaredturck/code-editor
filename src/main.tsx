@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { install_copy_context_menu } from './components/CopyContextMenu'
 import { hydrateDurableStore } from '@/platform/localStorageStore'
 import './index.css'
 import './themes.css'
@@ -41,4 +42,5 @@ async function start_renderer() {
   )
 }
 
+install_copy_context_menu()
 void start_renderer()
