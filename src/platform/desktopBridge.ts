@@ -1,12 +1,8 @@
 export * from './desktopBridgeBase'
-export * from './documentBridge'
 
 import * as base from './desktopBridgeBase'
-import { runVisionTask } from './agent/visionTask'
 import { acquireAgentWriteLease, clearAgentWriteLeases, releaseAgentWriteLease } from './agent/writeLease'
 import { loadProjectSkillDefinitions, mergeProjectSkillDefinitions } from './projectSkillLoader'
-import { captureAgentScreen } from './screenCaptureBridge'
-import { readOrbSettings } from './settingsStorage'
 import type {
   BridgeAutomationCapabilities,
   BridgeFileNode,
@@ -23,7 +19,6 @@ export interface EditorFileAuthority {
 
 let editor_file_authority: EditorFileAuthority | null = null
 let editor_workspace_root: Promise<string> | null = null
-let agent_vision_objective = ''
 const observed_agent_revisions = new Map<string, string>()
 
 interface AgentFileOperationOptions {
@@ -123,57 +118,8 @@ export function setEditorFileAuthority(authority: EditorFileAuthority | null) {
     : null
 }
 
-export function setAgentVisionObjective(objective: string | null) {
-  agent_vision_objective = String(objective || '')
-    .trim()
-    .slice(0, 2400)
-}
-
 export async function getAutomationCapabilities(): Promise<BridgeAutomationCapabilities & BridgeRecord> {
-  const capabilities = await base.getAutomationCapabilities()
-  const settings = readOrbSettings()
-  if (settings.permissions_screen_capture !== true) {
-    return { ...capabilities, screenCapture: false }
-  }
-
-  try {
-    const frame = await captureAgentScreen({ maxWidth: 1600, maxHeight: 1000 })
-    const objective =
-      agent_vision_objective ||
-      'Inspect the current desktop for visible evidence relevant to the active coding task. Identify errors, dialogs, browser or application state, build/test output, or other UI evidence that should influence the next safe action.'
-    const vision = await runVisionTask(objective, frame.dataUrl, settings as unknown as Record<string, unknown>)
-
-    let execution: BridgeRecord | null = null
-
-    if (settings.permissions_mouse_control === true && vision.actions.length > 0) {
-      try {
-        execution = (await base.executeAutomationActions(vision.actions as unknown as BridgeRecord[], {
-          cwd: String(settings.agent_working_dir || '').trim() || undefined,
-        })) as BridgeRecord
-      } catch (error) {
-        execution = {
-          error: error instanceof Error ? error.message : 'The approved visual action plan failed.',
-        }
-      }
-    }
-
-    return {
-      ...capabilities,
-      screenCapture: true,
-      source: frame.source,
-      vision: {
-        ...vision,
-        actionsExecuted: Boolean(execution && !execution.error),
-      },
-      ...(execution ? { execution } : {}),
-    }
-  } catch (error) {
-    return {
-      ...capabilities,
-      screenCapture: true,
-      visionError: error instanceof Error ? error.message : 'Visual inspection failed.',
-    }
-  }
+  return base.getAutomationCapabilities()
 }
 
 export async function listSkillDefinitions(
