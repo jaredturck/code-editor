@@ -95,8 +95,15 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
       .then((status) => {
         if (cancelled) return
         set_image_status(status)
-        if (!status.ready && readOrbSettings().image_generation_enabled === true) {
-          writeOrbSettings({ ...readOrbSettings(), image_generation_enabled: false })
+        const current = readOrbSettings()
+        if (status.ready && current.image_generation_auto_enabled_v1 !== true) {
+          writeOrbSettings({
+            ...current,
+            image_generation_enabled: true,
+            image_generation_auto_enabled_v1: true,
+          })
+        } else if (!status.ready && current.image_generation_enabled === true) {
+          writeOrbSettings({ ...current, image_generation_enabled: false })
         }
       })
       .catch((error) => {
@@ -135,17 +142,20 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
 
   const install_image_models = async () => {
     set_image_busy(true)
-    set_image_message('Downloading and verifying the pinned Z-Image Turbo models…')
+    set_image_message('Downloading and verifying Z-Image Turbo models…')
     const poll = window.setInterval(() => {
       void refresh_image_status().catch(() => undefined)
     }, 1000)
     try {
       const status = await installImageGenerationModels()
       set_image_status(status)
+      if (status.ready) {
+        update({ image_generation_enabled: true, image_generation_auto_enabled_v1: true })
+      }
       set_image_message(
         status.engineAvailable
-          ? 'Z-Image Turbo is ready for the coding agent.'
-          : 'Model weights are installed. A packaged stable-diffusion.cpp sd-server runtime is still required.',
+          ? 'Image generation is ready and enabled.'
+          : 'Models are installed, but the local image-generation runtime was not found.',
       )
     } catch (error) {
       set_image_message(error instanceof Error ? error.message : 'Z-Image Turbo installation failed.')
@@ -159,7 +169,7 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
     <>
       <SettingsSection title="Local inference">
         <SettingsRow
-          description="OpenAI-compatible local endpoint used for every coding-agent role. llama.cpp/llama-server is the primary target."
+          description="Address of the local OpenAI-compatible server used by the coding agent."
           highlighted={highlighted('ai-local-url')}
           id="ai-local-url"
           label="Local model server"
@@ -176,7 +186,7 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           />
         </SettingsRow>
         <SettingsRow
-          description="Default local coding model. Specialist roles may override this below."
+          description="Model used by default for coding. Specialist agents can use a different model below."
           highlighted={highlighted('ai-model')}
           id="ai-model"
           label="Default model"
@@ -202,22 +212,22 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
       </SettingsSection>
       <SettingsSection title="Image generation">
         <SettingsRow
-          description="Expose one native image.generate tool to the coding agent. It uses fixed square, landscape, or portrait resolutions and writes the generated asset directly into the project."
+          description="Allow the coding agent to generate image assets for your projects when useful."
           highlighted={highlighted('image-generation-enabled')}
           id="image-generation-enabled"
-          label="Z-Image Turbo tool"
+          label="Enable image generation"
         >
           <SettingsToggle
             checked={image_status?.ready === true && settings.image_generation_enabled === true}
             disabled={image_status?.ready !== true || image_busy}
-            onChange={(value) => update({ image_generation_enabled: value })}
+            onChange={(value) => update({ image_generation_enabled: value, image_generation_auto_enabled_v1: true })}
           />
         </SettingsRow>
         <SettingsRow
-          description="Pinned Q3_K S3-DiT + Q4_K_M Qwen3-4B text encoder + full VAE. About 6 GB of model weights; generation is isolated to GPU 1 and unloads after five idle minutes."
+          description="Uses the compact Z-Image Turbo models. Downloads about 6 GB, runs on GPU 1, and unloads after five minutes of inactivity."
           highlighted={highlighted('image-generation-runtime')}
           id="image-generation-runtime"
-          label="Local image runtime"
+          label="Z-Image Turbo models"
         >
           <div className="flex items-center gap-2">
             {!image_status?.installed ? (
@@ -243,14 +253,14 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           {image_message || (image_status?.ready
             ? `Ready · GPU ${image_status.gpuIndex} · ${image_status.running ? 'model loaded' : 'loads on first use'}`
             : image_status?.installed && !image_status.engineAvailable
-              ? 'Models installed · stable-diffusion.cpp sd-server runtime not found'
+              ? 'Models installed · local image-generation runtime not found'
               : image_status
                 ? 'Image generation models are not installed.'
-                : 'Checking local image runtime…')}
+                : 'Checking image generation…')}
         </div>
       </SettingsSection>
       <div className="rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3 text-[10px] leading-4 text-[var(--muted)]">
-        Hosted-provider credentials, cloud failover, semantic indexing and automatic coding-model download are intentionally not part of this product.
+        Coding models run locally. Cloud model providers, semantic indexing, and automatic coding-model downloads are not used.
       </div>
     </>
   )
@@ -293,10 +303,10 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
           })}
         </SettingsSection>
         <SettingsSection title="Coordination">
-          <SettingsRow description="Enable orchestrator dispatch to specialist scout/executor/evaluator contexts." highlighted={highlighted('agent-multi-enabled')} id="agent-multi-enabled" label="Specialist agents">
+          <SettingsRow description="Use specialist agents for research, implementation, and review when helpful." highlighted={highlighted('agent-multi-enabled')} id="agent-multi-enabled" label="Specialist agents">
             <SettingsToggle checked={settings.agent_multi_enabled === true} onChange={(value) => update({ agent_multi_enabled: value })} />
           </SettingsRow>
-          <SettingsRow description="Allow focused specialist consultation when it adds real value. Runtime owns scheduling and bookkeeping." highlighted={highlighted('agent-peer-consult')} id="agent-peer-consult" label="Specialist consultation">
+          <SettingsRow description="Allow an agent to ask another specialist for focused help when useful." highlighted={highlighted('agent-peer-consult')} id="agent-peer-consult" label="Specialist consultation">
             <SettingsToggle checked={settings.agent_peer_consult_enabled !== false} onChange={(value) => update({ agent_peer_consult_enabled: value })} />
           </SettingsRow>
         </SettingsSection>
@@ -306,28 +316,28 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
 
   const render_autonomy = () => (
     <>
-      <SettingsSection title="Workspace authority">
-        <SettingsRow description="Allow the coding agent to inspect project files through the brokered workspace boundary." highlighted={highlighted('permissions-file-read')} id="permissions-file-read" label="Read workspace files">
+      <SettingsSection title="Workspace access">
+        <SettingsRow description="Allow the coding agent to read files in the current project." highlighted={highlighted('permissions-file-read')} id="permissions-file-read" label="Read project files">
           <SettingsToggle checked={settings.permissions_file_read === true} onChange={(value) => update({ permissions_file_read: value })} />
         </SettingsRow>
-        <SettingsRow description="Allow controlled project file writes/edits. Live editor revision checks remain authoritative." highlighted={highlighted('permissions-file-write')} id="permissions-file-write" label="Write workspace files">
+        <SettingsRow description="Allow the coding agent to create and edit files in the current project." highlighted={highlighted('permissions-file-write')} id="permissions-file-write" label="Write project files">
           <SettingsToggle checked={settings.permissions_file_write === true} onChange={(value) => update({ permissions_file_write: value })} />
         </SettingsRow>
-        <SettingsRow description="Allow project-scoped terminal commands under the deterministic command safety policy." highlighted={highlighted('permissions-terminal')} id="permissions-terminal" label="Run terminal commands">
+        <SettingsRow description="Allow the coding agent to run terminal commands for the current project." highlighted={highlighted('permissions-terminal')} id="permissions-terminal" label="Run terminal commands">
           <SettingsToggle checked={settings.permissions_terminal === true} onChange={(value) => update({ permissions_terminal: value })} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Execution safety">
-        <SettingsRow description="Permit development commands that use the network, such as package managers, subject to package/site guards." highlighted={highlighted('agent-network')} id="agent-network" label="Network commands">
+        <SettingsRow description="Allow terminal commands that access the network, such as package managers." highlighted={highlighted('agent-network')} id="agent-network" label="Network commands">
           <SettingsToggle checked={settings.agent_allow_network_commands === true} onChange={(value) => update({ agent_allow_network_commands: value })} />
         </SettingsRow>
-        <SettingsRow description="Require approval before installing dependencies not already allowed for the project." highlighted={highlighted('agent-package-guard')} id="agent-package-guard" label="Package install guard">
+        <SettingsRow description="Ask for approval before installing dependencies that have not already been allowed." highlighted={highlighted('agent-package-guard')} id="agent-package-guard" label="Confirm package installs">
           <SettingsToggle checked={settings.agent_package_install_guard !== false} onChange={(value) => update({ agent_package_install_guard: value })} />
         </SettingsRow>
-        <SettingsRow description="Block sudo/elevated shell commands from autonomous coding contexts." highlighted={highlighted('agent-block-sudo')} id="agent-block-sudo" label="Block sudo">
+        <SettingsRow description="Prevent the coding agent from running sudo or other elevated shell commands." highlighted={highlighted('agent-block-sudo')} id="agent-block-sudo" label="Block elevated commands">
           <SettingsToggle checked={settings.agent_block_sudo !== false} onChange={(value) => update({ agent_block_sudo: value })} />
         </SettingsRow>
-        <SettingsRow description="Individual model contexts hand off after this many minutes. This is not a project time limit." highlighted={highlighted('agent-context-minutes')} id="agent-context-minutes" label="Context handoff minutes">
+        <SettingsRow description="Start a fresh model context after this many minutes. The overall project continues." highlighted={highlighted('agent-context-minutes')} id="agent-context-minutes" label="Context handoff time">
           <input
             className={`${input_class} w-24`}
             min={1}
@@ -337,7 +347,7 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
             value={Number(settings.agent_session_minutes || 18)}
           />
         </SettingsRow>
-        <SettingsRow description="Maximum native tool actions in one model context before a fresh-context handoff." highlighted={highlighted('agent-context-actions')} id="agent-context-actions" label="Context action handoff">
+        <SettingsRow description="Start a fresh model context after this many tool actions." highlighted={highlighted('agent-context-actions')} id="agent-context-actions" label="Context action limit">
           <input
             className={`${input_class} w-24`}
             min={16}
@@ -353,13 +363,13 @@ function AISettingsPanel({ active_section, editor_ai, highlighted_setting, on_ed
 
   const render_skills = () => (
     <SettingsSection title="Development skills">
-      <SettingsRow description="Load focused coding skill instructions for the active specialist role." highlighted={highlighted('skills-enabled')} id="skills-enabled" label="Skills">
+      <SettingsRow description="Load task-specific coding instructions when they are relevant." highlighted={highlighted('skills-enabled')} id="skills-enabled" label="Skills">
         <SettingsToggle checked={settings.skills_enabled !== false} onChange={(value) => update({ skills_enabled: value })} />
       </SettingsRow>
-      <SettingsRow description="Automatically choose the most relevant installed development skill profile." highlighted={highlighted('skills-auto-switch')} id="skills-auto-switch" label="Automatic skill selection">
+      <SettingsRow description="Automatically choose the most relevant installed skill for the current work." highlighted={highlighted('skills-auto-switch')} id="skills-auto-switch" label="Automatic skill selection">
         <SettingsToggle checked={settings.skills_auto_switch !== false} onChange={(value) => update({ skills_auto_switch: value })} />
       </SettingsRow>
-      <SettingsRow description="Maximum skill instruction context loaded into an individual agent context." highlighted={highlighted('skills-token-budget')} id="skills-token-budget" label="Skill context budget">
+      <SettingsRow description="Maximum amount of skill instructions loaded into one model context." highlighted={highlighted('skills-token-budget')} id="skills-token-budget" label="Skill context budget">
         <input className={`${input_class} w-28`} min={256} max={16000} onChange={(event) => update({ skills_token_budget: clamp_number(event.target.value, 256, 16000, 2200) })} type="number" value={Number(settings.skills_token_budget || 2200)} />
       </SettingsRow>
     </SettingsSection>
