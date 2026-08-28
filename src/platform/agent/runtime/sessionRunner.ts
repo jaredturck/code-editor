@@ -32,12 +32,13 @@ const CODE_NAVIGATION_TOOL_DEFINITIONS = [
 
 const CODING_TOOL_SURFACE = new Set([
   'files.list', 'files.find', 'files.read', 'files.write', 'files.edit', 'files.patch', 'files.stat', 'files.diff',
+  'image.generate',
   'terminal.exec', 'code.definition', 'code.references', 'search.web', 'web.fetch', 'browser.inspect',
   'diagnostics.check', 'agent.delegate', 'agent.consult', 'agent.review', 'user.ask', 'approval.request',
 ])
 
 const SERIAL_TOOLS = new Set([
-  'files.write', 'files.edit', 'files.patch', 'terminal.exec', 'agent.delegate', 'agent.consult',
+  'files.write', 'files.edit', 'files.patch', 'image.generate', 'terminal.exec', 'agent.delegate', 'agent.consult',
   'agent.review', 'user.ask', 'approval.request',
 ])
 
@@ -109,6 +110,7 @@ function toolDefinitions(settings, safetyConfig, approvalState) {
     : null
   return [...TOOL_DEFINITIONS, ...CODE_NAVIGATION_TOOL_DEFINITIONS].filter((tool) => {
     if (!CODING_TOOL_SURFACE.has(tool.name)) return false
+    if (tool.name === 'image.generate' && settings?.image_generation_enabled !== true) return false
     if (tool.name.startsWith('code.')) return !scoped || scoped.has(tool.name) || automaticMode(settings)
     if (!available.has(tool.name)) return false
     if (scoped && !scoped.has(tool.name)) return false
