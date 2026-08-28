@@ -78,6 +78,22 @@ function normalizeToolCalls(value: unknown): ToolCall[] {
     })
 }
 
+async function responseErrorDetail(response: Awaited<ReturnType<ProviderFetch>>) {
+  const raw = await response.text().catch(() => '')
+  let detail = raw.slice(0, 500)
+  try {
+    const parsed = JSON.parse(raw)
+    detail = String(parsed?.error?.message || parsed?.error || detail)
+  } catch {
+    // Keep bounded response text.
+  }
+  return detail
+}
+
+function isRetryableQwenToolParseFailure(status: number, detail: string) {
+  return status === 500 && /expected element type <function> but have <parameter>|qwen(?:3\.5)? tool call parsing failed/i.test(detail)
+}
+
 export async function callLocalLLM(
   messages: readonly AIMessage[],
   baseUrl: string,
@@ -100,26 +116,24 @@ export async function callLocalLLM(
     body.parallel_tool_calls = true
   }
 
-  const response = await fetchFn(
-    `${root}/v1/chat/completions`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    },
-    { provider: 'local' },
-  )
+  const request = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  }
+  let response = await fetchFn(`${root}/v1/chat/completions`, request, { provider: 'local' })
 
   if (!response.ok) {
-    const raw = await response.text().catch(() => '')
-    let detail = raw.slice(0, 500)
-    try {
-      const parsed = JSON.parse(raw)
-      detail = String(parsed?.error?.message || parsed?.error || detail)
-    } catch {
-      // Keep bounded response text.
+    const detail = await responseErrorDetail(response)
+    if (!isRetryableQwenToolParseFailure(response.status, detail)) {
+      throw new Error(`Local Qwen server request failed (${response.status})${detail ? `: ${detail}` : ''}`)
     }
+    response = await fetchFn(`${root}/v1/chat/completions`, request, { provider: 'local' })
+  }
+
+  if (!response.ok) {
+    const detail = await responseErrorDetail(response)
     throw new Error(`Local Qwen server request failed (${response.status})${detail ? `: ${detail}` : ''}`)
   }
 
