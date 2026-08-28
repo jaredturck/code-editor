@@ -64,10 +64,13 @@ export function build_core_agent_settings(
 ) {
   const base = buildLegacyCoreAgentSettings(settings, workspace_root, run_mode)
   const automatic = run_mode !== 'plan_first'
+  const image_generation_enabled =
+    base.image_generation_auto_enabled_v1 !== true || base.image_generation_enabled === true
 
   if (!automatic) {
     return {
       ...base,
+      image_generation_enabled,
       agent_planning_mode: true,
       agent_require_explicit_approval: true,
     }
@@ -79,6 +82,7 @@ export function build_core_agent_settings(
 
   return {
     ...base,
+    image_generation_enabled,
     permissions_file_read: project_scoped,
     permissions_file_write: project_scoped,
     permissions_terminal: project_scoped,
@@ -111,11 +115,14 @@ export function build_core_agent_settings(
 
 export function build_project_run_input(goal: string, run_mode: ProjectRunMode, resume = false) {
   const clean_goal = String(goal || '').trim()
+  const tool_guidance =
+    'IMAGE ASSETS: When image.generate is available and the task needs raster images, use it and save the generated asset directly into the project. Never create fake .jpg, .jpeg, .png, .webp, .gif, .avif, .bmp, or .ico files with text placeholders or base64 labels. SVG is text and may be written normally when an SVG is actually appropriate. TOOL NAMES: Run shell commands with terminal.exec; do not invent files.exec or other undeclared tools.'
+
   if (resume) {
-    return `Resume this project goal from the current files and persisted project ledger. Continue unfinished requirements without redoing completed work.\n\n${clean_goal}`
+    return `Resume this project goal from the current files and persisted project ledger. Continue unfinished requirements without redoing completed work.\n\n${tool_guidance}\n\n${clean_goal}`
   }
   if (run_mode === 'plan_first') {
-    return `Plan before substantive changes and ask for approval once the plan is ready.\n\nGoal:\n${clean_goal}`
+    return `Plan before substantive changes and ask for approval once the plan is ready.\n\n${tool_guidance}\n\nGoal:\n${clean_goal}`
   }
-  return clean_goal
+  return `${clean_goal}\n\n${tool_guidance}`
 }
