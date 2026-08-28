@@ -92,7 +92,7 @@ export function build_core_agent_settings(
   const base = buildLegacyCoreAgentSettings(settings, workspace_root, run_mode)
   const automatic = run_mode !== 'plan_first'
   const image_generation_enabled =
-    base.image_generation_auto_enabled_v1 !== true || base.image_generation_enabled === true
+    settings.image_generation_auto_enabled_v1 !== true || settings.image_generation_enabled === true
 
   if (!automatic) {
     return {
