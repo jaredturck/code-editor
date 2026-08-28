@@ -5,7 +5,7 @@ import net from 'node:net'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { resolveWritablePathWithinRoot } from '../shared/filesystemBoundary.js'
 
 export type ImageGenerationFormat = 'square' | 'landscape' | 'portrait'
@@ -85,7 +85,7 @@ const SERVER_HOST = '127.0.0.1'
 const DEFAULT_GPU_INDEX = 1
 
 let runtimeConfig: ImageGenerationRuntimeConfig | null = null
-let serverProcess: ChildProcessWithoutNullStreams | null = null
+let serverProcess: ChildProcessByStdio<null, Readable, Readable> | null = null
 let serverPort = 0
 let serverError = ''
 let serverIdleTimer: ReturnType<typeof setTimeout> | null = null
@@ -299,7 +299,7 @@ async function startImageGenerationServer() {
       ...process.env,
       CUDA_VISIBLE_DEVICES: String(DEFAULT_GPU_INDEX),
     },
-  }) as ChildProcessWithoutNullStreams
+  })
   serverProcess = child
   child.stdout.on('data', () => undefined)
   child.stderr.on('data', (chunk: Buffer) => {
