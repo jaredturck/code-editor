@@ -14,8 +14,6 @@ import {
 } from './desktopBridge/storage/encryptedDatabase.js'
 import { removeLegacyPlaintextStorage } from './desktopBridge/storage/legacyCleanup.js'
 import { closeManagedDevEnvironment } from './desktopBridge/services/launcherService.js'
-import { clearFileSemanticRuntimeCache } from './desktopBridge/services/fileSemanticService.js'
-import { clearFileThumbnailCache } from './desktopBridge/services/fileBrowserService.js'
 import {
   configureDuckDuckGoBrowserProvider,
   type DuckDuckGoBrowserSearch,
@@ -247,8 +245,6 @@ export async function startLocalBridgeServer({
           releaseDuckDuckGoBrowserProvider()
           void closeManagedDevEnvironment()
             .catch(() => undefined)
-            .then(() => clearFileSemanticRuntimeCache())
-            .then(() => clearFileThumbnailCache())
             .then(() => closeEncryptedDatabase())
             .finally(resolve)
         })
