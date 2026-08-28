@@ -5,8 +5,6 @@ import { project_run_progress } from '../chat/projectRunController'
 import type { ProjectRunState } from '../chat/projectRunController'
 import type { ApprovalRequest } from '../platform-features/chat-ui/types'
 import MarkdownView from './MarkdownView'
-import AgentChatVoiceControls from './AgentChatVoiceControls'
-import AgentRuntimePanel from './AgentRuntimePanel'
 import AgentActivityTimeline from './AgentActivityTimeline'
 
 interface AIChatPanelProps {
@@ -30,7 +28,6 @@ function format_seconds(seconds: number) {
 interface ProjectRunCardProps {
   state: ProjectRunState
   elapsed_seconds: number
-  budget_minutes: number
   generating: boolean
   onPause: () => void
   onResume: () => void
@@ -44,7 +41,6 @@ function format_run_status(status: string) {
 function ProjectRunCard({
   state,
   elapsed_seconds,
-  budget_minutes,
   generating,
   onPause,
   onResume,
@@ -65,8 +61,6 @@ function ProjectRunCard({
             <span>{format_run_status(state.status)}</span>
             <span>·</span>
             <span>{format_seconds(elapsed_seconds)}</span>
-            <span>·</span>
-            <span>{budget_minutes}m budget</span>
           </div>
           {state.last_activity && <div className="mt-0.5 truncate">{state.last_activity}</div>}
         </div>
@@ -298,7 +292,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
 
       {chat.project_run && (
         <ProjectRunCard
-          budget_minutes={chat.project_run_budget_minutes}
           elapsed_seconds={chat.project_run_elapsed_seconds}
           generating={chat.generating}
           onCancel={chat.cancel_project_run}
@@ -307,8 +300,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
           state={chat.project_run}
         />
       )}
-
-      <AgentRuntimePanel generating={chat.generating} />
 
       <div
         className="min-h-0 flex-1 overflow-auto px-3 py-4"
@@ -320,8 +311,8 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             <div className="mb-2 text-2xl opacity-50">✦</div>
             <p>Ask your configured agent about the current project.</p>
             <p className="mt-1 text-[10px]">
-              The agent can edit the workspace, run tools and tests, coordinate peers, inspect runtime health, and
-              verify visible application state.
+              The agent can edit the workspace, run development tools, coordinate specialists, inspect application state, and
+              verify the result.
             </p>
             <p className="mt-1 text-[10px]">Attach the active file to include unsaved changes.</p>
           </div>
@@ -417,27 +408,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
           </div>
         )}
 
-        {chat.speech_model_prompt && (
-          <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/8 p-2 text-[10px] text-[var(--text)]">
-            <p>The configured Granite speech model is not installed. Install it through Ollama?</p>
-            <div className="mt-2 flex justify-end gap-2">
-              <button
-                className="rounded px-2 py-1 text-[var(--muted)] hover:bg-[var(--hover)]"
-                onClick={() => chat.set_speech_model_prompt(false)}
-                type="button"
-              >
-                Not now
-              </button>
-              <button
-                className="rounded bg-amber-500 px-2 py-1 font-medium text-black hover:bg-amber-400"
-                onClick={() => void chat.install_speech_model()}
-                type="button"
-              >
-                Install model
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-2 focus-within:border-sky-500">
           <div className="mb-2 flex items-center justify-between gap-2 text-[9px] text-[var(--muted)]">
@@ -487,10 +457,6 @@ function AIChatPanel({ chat, width, onClose, onResize }: AIChatPanelProps) {
             >
               Attach…
             </button>
-            <AgentChatVoiceControls
-              disabled={chat.generating || project_run_needs_resolution}
-              setPrompt={chat.set_prompt}
-            />
 
             {chat.generating ? (
               <button
