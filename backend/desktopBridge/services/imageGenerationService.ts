@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import net from 'node:net'
@@ -29,6 +29,32 @@ interface ImageGenerationRequest {
   format: ImageGenerationFormat
 }
 
+interface ImageGenerationJobResult {
+  jobId: string
+  nativeJobId?: string
+  saved: boolean
+  path: string
+  relativePath: string
+  format: ImageGenerationFormat
+  width: number
+  height: number
+  generationMs: number
+  error?: string
+}
+
+interface ImageGenerationJob {
+  id: string
+  workspaceRoot: string
+  path: string
+  promise: Promise<ImageGenerationJobResult>
+}
+
+export interface ImageGenerationWaitResult {
+  waited: number
+  completed: ImageGenerationJobResult[]
+  failed: ImageGenerationJobResult[]
+}
+
 interface RuntimeStatus {
   configured: boolean
   installed: boolean
@@ -42,6 +68,7 @@ interface RuntimeStatus {
   modelDir: string
   enginePath: string
   gpuIndex: number
+  pendingJobs: number
   missingFiles: string[]
   error: string
 }
@@ -89,9 +116,11 @@ let serverProcess: ChildProcessByStdio<null, Readable, Readable> | null = null
 let serverPort = 0
 let serverError = ''
 let serverIdleTimer: ReturnType<typeof setTimeout> | null = null
+let serverStartPromise: Promise<void> | null = null
 let installPromise: Promise<RuntimeStatus> | null = null
 let installCompletedBytes = 0
-let activeGeneration = false
+let activeGenerationCount = 0
+const imageJobs = new Map<string, ImageGenerationJob>()
 
 function runtimeRoot() {
   return runtimeConfig ? path.join(runtimeConfig.dataDir, 'image-generation') : ''
@@ -282,11 +311,7 @@ function serverArgs(port: number) {
   ]
 }
 
-async function startImageGenerationServer() {
-  if (await serverReady()) {
-    clearIdleTimer()
-    return
-  }
+async function startImageGenerationServerFresh() {
   if (!runtimeConfig) throw new Error('Image generation runtime is not configured.')
   const missing = await missingModelFiles()
   if (missing.length) throw new Error(`Image generation models are not installed: ${missing.join(', ')}`)
@@ -334,6 +359,19 @@ async function startImageGenerationServer() {
   throw new Error(serverError || 'stable-diffusion.cpp did not become ready before the startup timeout.')
 }
 
+async function startImageGenerationServer() {
+  if (await serverReady()) {
+    clearIdleTimer()
+    return
+  }
+  if (!serverStartPromise) serverStartPromise = startImageGenerationServerFresh()
+  try {
+    await serverStartPromise
+  } finally {
+    serverStartPromise = null
+  }
+}
+
 async function waitForJob(jobId: string) {
   const deadline = Date.now() + GENERATION_TIMEOUT_MS
   while (Date.now() < deadline) {
@@ -364,6 +402,78 @@ function outputFormat(extension: string) {
   return 'webp'
 }
 
+async function runImageGenerationJob(
+  jobId: string,
+  request: ImageGenerationRequest,
+  targetPath: string,
+  relativePath: string,
+  extension: string,
+): Promise<ImageGenerationJobResult> {
+  const size = generationSize(request.format)
+  const startedAt = Date.now()
+  activeGenerationCount += 1
+  clearIdleTimer()
+  try {
+    await startImageGenerationServer()
+    const response = await fetch(`${serverBaseUrl()}/sdcpp/v1/img_gen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: request.prompt,
+        width: size.width,
+        height: size.height,
+        seed: -1,
+        batch_count: 1,
+        sample_params: {
+          sample_steps: 8,
+          guidance: { txt_cfg: 1.0 },
+        },
+        output_format: outputFormat(extension),
+        output_compression: extension === '.webp' ? 88 : 95,
+      }),
+    })
+    if (response.status !== 202) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(
+        `Image generation request failed (${response.status})${detail ? `: ${detail.slice(0, 500)}` : ''}`,
+      )
+    }
+    const submitted = (await response.json()) as Record<string, any>
+    const nativeJobId = String(submitted.id || '')
+    if (!nativeJobId) throw new Error('Image generation server did not return a job id.')
+    const completed = await waitForJob(nativeJobId)
+    const image = completed?.result?.images?.[0]?.b64_json
+    if (!image) throw new Error('Image generation completed without image data.')
+    await fs.writeFile(targetPath, Buffer.from(String(image), 'base64'))
+    return {
+      jobId,
+      nativeJobId,
+      saved: true,
+      path: targetPath,
+      relativePath,
+      format: request.format,
+      width: size.width,
+      height: size.height,
+      generationMs: Date.now() - startedAt,
+    }
+  } catch (error) {
+    return {
+      jobId,
+      saved: false,
+      path: targetPath,
+      relativePath,
+      format: request.format,
+      width: size.width,
+      height: size.height,
+      generationMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  } finally {
+    activeGenerationCount = Math.max(0, activeGenerationCount - 1)
+    if (activeGenerationCount === 0) scheduleIdleShutdown()
+  }
+}
+
 export function configureImageGenerationRuntime(config: ImageGenerationRuntimeConfig) {
   runtimeConfig = { dataDir: path.resolve(config.dataDir) }
 }
@@ -388,6 +498,7 @@ export async function getImageGenerationStatus(): Promise<RuntimeStatus> {
     modelDir: configured ? modelDir() : '',
     enginePath,
     gpuIndex: DEFAULT_GPU_INDEX,
+    pendingJobs: activeGenerationCount,
     missingFiles,
     error: serverError,
   }
@@ -410,12 +521,11 @@ export async function installImageGenerationModels() {
 }
 
 export async function generateProjectImage(request: ImageGenerationRequest) {
-  if (activeGeneration) throw new Error('Another image generation is already running.')
   const prompt = String(request.prompt || '').trim()
   if (!prompt) throw new Error('Image prompt is required.')
   if (prompt.length > 4000) throw new Error('Image prompt is too long.')
 
-  const workspaceRoot = request.workspaceRoot
+  const workspaceRoot = path.resolve(String(request.workspaceRoot || ''))
   const requestedPath = String(request.outputPath || '').trim()
   if (!requestedPath) throw new Error('Image output path is required.')
   const requestedExtension = path.extname(requestedPath).toLowerCase()
@@ -425,57 +535,47 @@ export async function generateProjectImage(request: ImageGenerationRequest) {
   const extension = outputExtension(requestedPath)
   const normalizedPath = requestedExtension ? requestedPath : `${requestedPath}${extension}`
   const targetPath = await resolveWritablePathWithinRoot(normalizedPath, workspaceRoot)
+  const relativePath = path.relative(workspaceRoot, targetPath).split(path.sep).join('/')
   await fs.mkdir(path.dirname(targetPath), { recursive: true })
 
-  activeGeneration = true
-  clearIdleTimer()
-  const startedAt = Date.now()
-  try {
-    await startImageGenerationServer()
-    const size = generationSize(request.format)
-    const response = await fetch(`${serverBaseUrl()}/sdcpp/v1/img_gen`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        width: size.width,
-        height: size.height,
-        seed: -1,
-        batch_count: 1,
-        sample_params: {
-          sample_steps: 8,
-          guidance: { txt_cfg: 1.0 },
-        },
-        output_format: outputFormat(extension),
-        output_compression: extension === '.webp' ? 88 : 95,
-      }),
-    })
-    if (response.status !== 202) {
-      const detail = await response.text().catch(() => '')
-      throw new Error(
-        `Image generation request failed (${response.status})${detail ? `: ${detail.slice(0, 500)}` : ''}`,
-      )
-    }
-    const submitted = (await response.json()) as Record<string, any>
-    const jobId = String(submitted.id || '')
-    if (!jobId) throw new Error('Image generation server did not return a job id.')
-    const completed = await waitForJob(jobId)
-    const image = completed?.result?.images?.[0]?.b64_json
-    if (!image) throw new Error('Image generation completed without image data.')
-    await fs.writeFile(targetPath, Buffer.from(String(image), 'base64'))
-    return {
-      saved: true,
-      path: targetPath,
-      relativePath: path.relative(workspaceRoot, targetPath).split(path.sep).join('/'),
-      format: request.format,
-      width: size.width,
-      height: size.height,
-      generationMs: Date.now() - startedAt,
-    }
-  } finally {
-    activeGeneration = false
-    scheduleIdleShutdown()
+  const jobId = randomUUID()
+  const queuedRequest = { ...request, prompt, workspaceRoot }
+  const promise = runImageGenerationJob(jobId, queuedRequest, targetPath, relativePath, extension)
+  imageJobs.set(jobId, { id: jobId, workspaceRoot, path: relativePath, promise })
+  const size = generationSize(request.format)
+
+  return {
+    queued: true,
+    saved: false,
+    jobId,
+    path: relativePath,
+    relativePath,
+    format: request.format,
+    width: size.width,
+    height: size.height,
   }
+}
+
+export async function waitForProjectImages(workspaceRoot: string): Promise<ImageGenerationWaitResult> {
+  const root = path.resolve(String(workspaceRoot || ''))
+  const completed: ImageGenerationJobResult[] = []
+  const failed: ImageGenerationJobResult[] = []
+  let waited = 0
+
+  for (;;) {
+    const jobs = [...imageJobs.values()].filter((job) => job.workspaceRoot === root)
+    if (!jobs.length) break
+    const results = await Promise.all(jobs.map((job) => job.promise))
+    waited += jobs.length
+    for (let index = 0; index < jobs.length; index += 1) {
+      imageJobs.delete(jobs[index].id)
+      const result = results[index]
+      if (result.saved) completed.push(result)
+      else failed.push(result)
+    }
+  }
+
+  return { waited, completed, failed }
 }
 
 export async function stopImageGenerationServer() {
