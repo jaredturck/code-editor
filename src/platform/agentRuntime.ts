@@ -1,14 +1,12 @@
 /**
  * Stable agent-runtime API.
  *
- * Legacy helpers remain exported for compatibility. Automatic workspace projects are owned by
- * the durable long-running lifecycle; plan-first and non-project chat retain the direct runtime.
+ * Legacy helpers remain exported for compatibility while workspace projects use the surviving
+ * direct coding runtime.
  */
 export * from '@/platform/agentRuntimeLegacy'
 
 import { terminalCommandLikelyMutatesSource } from '@/platform/agent/repetitionAdvisory'
-import { runLongRunningProject } from '@/platform/agent/longRunningProjectRuntime'
-import { recoverInterruptedProjectTasks } from '@/platform/agent/projectTaskRecovery'
 import {
   persistedTaskMatchesInput,
   runAgentSession as runDirectAgentSession,
@@ -127,10 +125,7 @@ function buildEfficiencyMetrics(result: AgentSessionResult) {
 
 export async function runAgentSession(input: AgentSessionInput): Promise<AgentSessionResult> {
   const workspaceProject = isWorkspaceProjectRun(input)
-  const automatic = String(input.settings?.agent_project_run_mode || 'automatic') !== 'plan_first'
-  if (workspaceProject && automatic) recoverInterruptedProjectTasks(projectChatId(input))
-
-  const result = workspaceProject && automatic ? await runLongRunningProject(input) : await runDirectAgentSession(input)
+  const result = await runDirectAgentSession(input)
   if (!workspaceProject) return result
   return {
     ...result,
