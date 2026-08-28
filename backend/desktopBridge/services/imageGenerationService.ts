@@ -102,8 +102,6 @@ function modelDir() {
 }
 
 function configuredEnginePath() {
-  const configured = String(process.env.CODE_EDITOR_SD_SERVER_PATH || '').trim()
-  if (configured) return configured
   const executable = process.platform === 'win32' ? 'sd-server.exe' : 'sd-server'
   return path.join(runtimeRoot(), 'runtime', executable)
 }
@@ -146,10 +144,17 @@ async function resolveEnginePath() {
   return (await executableExists(fallback)) ? fallback : preferred
 }
 
+async function modelFilePresent(file: ImageModelFile) {
+  const target = modelPath(file)
+  if (!(await fileExists(target))) return false
+  const stat = await fs.stat(target)
+  return stat.isFile() && stat.size === file.bytes
+}
+
 async function missingModelFiles() {
   const missing: string[] = []
   for (const file of MODEL_FILES) {
-    if (!(await fileExists(modelPath(file)))) missing.push(file.filename)
+    if (!(await modelFilePresent(file))) missing.push(file.filename)
   }
   return missing
 }
@@ -260,8 +265,8 @@ function serverArgs(port: number) {
   const textEncoder = modelPath(MODEL_FILES[1])
   const vae = modelPath(MODEL_FILES[2])
   return [
-    '--host', SERVER_HOST,
-    '--port', String(port),
+    '--listen-ip', SERVER_HOST,
+    '--listen-port', String(port),
     '--diffusion-model', diffusion,
     '--llm', textEncoder,
     '--vae', vae,
@@ -281,7 +286,7 @@ async function startImageGenerationServer() {
 
   const enginePath = await resolveEnginePath()
   if (!(await executableExists(enginePath))) {
-    throw new Error('stable-diffusion.cpp sd-server is not installed. Configure CODE_EDITOR_SD_SERVER_PATH or install the packaged runtime.')
+    throw new Error('stable-diffusion.cpp sd-server is not installed. Install the packaged runtime or make sd-server available on PATH.')
   }
 
   await stopImageGenerationServer()
