@@ -59,6 +59,12 @@ export function applyAgentRoot(rawPath: unknown, settings: SafetySettings | null
   return `${root}/${input.replace(/^\.\//, '')}`
 }
 
+function pathIsWithinAgentRoot(resolvedPath: string, settings: SafetySettings | null | undefined) {
+  const root = resolveAgentRootBase(settings).replace(/\/$/, '')
+  if (!root || root === '~') return true
+  return resolvedPath === root || resolvedPath.startsWith(`${root}/`)
+}
+
 export function assertSafePath(pathInput: unknown, { operation = 'read', settings }: SafePathOptions = {}): string {
   const requested = normalizePath(pathInput)
   if (!requested) throw new Error('Path is required.')
@@ -66,6 +72,9 @@ export function assertSafePath(pathInput: unknown, { operation = 'read', setting
   if (/(?:^|\/)\.\.(?:\/|$)/.test(requested)) throw new Error('Path traversal is blocked for agent file tools.')
 
   const resolved = applyAgentRoot(requested, settings)
+  if (!pathIsWithinAgentRoot(resolved, settings)) {
+    throw new Error('Path is outside the open project workspace.')
+  }
   if (GIT_METADATA_PATH.test(resolved)) {
     throw new Error('Git metadata is managed by Source Control and is not available through agent file tools.')
   }
