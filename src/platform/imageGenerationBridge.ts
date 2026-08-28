@@ -15,8 +15,28 @@ export interface ImageGenerationStatus extends BridgeRecord {
   modelDir: string
   enginePath: string
   gpuIndex: number
+  pendingJobs: number
   missingFiles: string[]
   error: string
+}
+
+export interface ProjectImageJobResult extends BridgeRecord {
+  jobId: string
+  nativeJobId?: string
+  saved: boolean
+  path: string
+  relativePath: string
+  format: ImageGenerationFormat
+  width: number
+  height: number
+  generationMs: number
+  error?: string
+}
+
+export interface ProjectImageWaitResult extends BridgeRecord {
+  waited: number
+  completed: ProjectImageJobResult[]
+  failed: ProjectImageJobResult[]
 }
 
 function bridgeToken() {
@@ -54,6 +74,10 @@ export function generateProjectImage(
   workspaceRoot: string,
 ) {
   return imageRequest('/image/generate', 'POST', { prompt, path, format, workspaceRoot })
+}
+
+export function waitForProjectImages(workspaceRoot: string) {
+  return imageRequest<ProjectImageWaitResult>('/image/wait', 'POST', { workspaceRoot })
 }
 
 export function unloadImageGeneration() {
