@@ -39,7 +39,7 @@ function parseRipgrep(output: unknown, kind: CodeNavigationMatch['kind'], symbol
         kind,
       } satisfies CodeNavigationMatch
     })
-    .filter((item): item is CodeNavigationMatch => Boolean(item))
+    .filter(Boolean) as CodeNavigationMatch[]
 }
 
 export async function searchCodeText(
