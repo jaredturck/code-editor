@@ -138,7 +138,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: 'image.generate',
     module: 'Files',
     description:
-      'Generate a quick synthetic image asset for the current project. Use for website photography, hero imagery, backgrounds, product-style imagery, or other visual assets when generated imagery is useful.',
+      'Queue a synthetic image asset for the current project. The request returns immediately while generation continues in the background, so continue independent coding work after enqueueing it.',
     args: {
       prompt: 'string',
       path: 'string',
@@ -250,6 +250,9 @@ const TOOL_ALIAS_MAP: Record<string, string> = {
   edit_file: 'files.edit',
   str_replace: 'files.edit',
   patch_file: 'files.patch',
+  image_generate: 'image.generate',
+  generate_image: 'image.generate',
+  generate_project_image: 'image.generate',
   run_command: 'terminal.exec',
   shell_exec: 'terminal.exec',
   web_search: 'search.web',
@@ -260,7 +263,7 @@ const TOOL_ALIAS_MAP: Record<string, string> = {
 
 const TOOL_TIMEOUT_MS_BY_NAME: Record<string, number> = {
   'terminal.exec': 5 * 60_000,
-  'image.generate': 4 * 60_000,
+  'image.generate': 60_000,
   'search.web': 90_000,
   'web.fetch': 60_000,
   'browser.inspect': 60_000,
