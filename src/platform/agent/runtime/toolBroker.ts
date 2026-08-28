@@ -73,7 +73,7 @@ function mutationSucceeded(toolName: string, args: Record<string, unknown>, resu
   if (toolName === 'files.write') return result.saved === true || result.dirty === true
   if (toolName === 'files.edit') return result.applied === true
   if (toolName === 'files.patch') return args.dryRun !== true && result.applied !== false
-  if (toolName === 'image.generate') return result.saved === true
+  if (toolName === 'image.generate') return result.saved === true || result.queued === true
   return false
 }
 
