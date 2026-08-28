@@ -35,8 +35,27 @@ const initial_editor_command_state: EditorCommandState = {
   column: 1,
 }
 
+function normalize_preview_path(file_path: string) {
+  const normalized = file_path.replace(/\\/g, '/').replace(/\/$/, '')
+  return window.editor_api.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 function App() {
   const editor = useEditorState()
+  const [preview_document_id, set_preview_document_id] = useState<number | null>(null)
+  const preview_document_id_ref = useRef<number | null>(null)
+  const pending_preview_path_ref = useRef<string | null>(null)
+  preview_document_id_ref.current = preview_document_id
+
+  const clear_preview_document = () => {
+    preview_document_id_ref.current = null
+    set_preview_document_id(null)
+  }
+
+  const pin_document = (document_id: number) => {
+    if (preview_document_id_ref.current === document_id) clear_preview_document()
+  }
+
   const active_file_path =
     editor.active_document?.kind === 'text' || editor.active_document?.kind === 'media'
       ? editor.active_document.file_path
@@ -90,6 +109,7 @@ function App() {
           document.saved_content = content
           document.deleted = false
         }
+        pin_document(document.id)
         editor.update_document(document.id, content)
         if (!agent_follow_suspended_ref.current && editor.active_document_id !== document.id) {
           editor.select_document(document.id)
@@ -101,6 +121,38 @@ function App() {
   const editor_ref = useRef<CodeEditorHandle>(null)
   const restore_workspace_started_ref = useRef(false)
   const [editor_command_state, set_editor_command_state] = useState(initial_editor_command_state)
+
+  useEffect(() => {
+    const preview_id = preview_document_id_ref.current
+    if (preview_id !== null && !editor.documents.some((document) => document.id === preview_id)) {
+      clear_preview_document()
+    }
+
+    const pending_path = pending_preview_path_ref.current
+    const active_document = editor.active_document
+    if (
+      pending_path &&
+      active_document &&
+      (active_document.kind === 'text' || active_document.kind === 'media') &&
+      active_document.file_path &&
+      normalize_preview_path(active_document.file_path) === pending_path
+    ) {
+      preview_document_id_ref.current = active_document.id
+      set_preview_document_id(active_document.id)
+      pending_preview_path_ref.current = null
+    }
+  }, [editor.active_document, editor.documents])
+
+  useEffect(() => {
+    const pin_preview_on_save = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
+      const preview_id = preview_document_id_ref.current
+      if (preview_id !== null) pin_document(preview_id)
+    }
+
+    window.addEventListener('keydown', pin_preview_on_save, true)
+    return () => window.removeEventListener('keydown', pin_preview_on_save, true)
+  }, [])
 
   useEffect(() => {
     if (chat.generating) agent_follow_suspended_ref.current = false
@@ -164,6 +216,32 @@ function App() {
       editor.show_notice(`${file_name} no longer exists.`)
       return
     }
+
+    const normalized_file_path = normalize_preview_path(file_path)
+    const existing_document = editor.documents.find(
+      (document) =>
+        (document.kind === 'text' || document.kind === 'media') &&
+        document.file_path &&
+        normalize_preview_path(document.file_path) === normalized_file_path,
+    )
+    if (existing_document) {
+      pending_preview_path_ref.current = null
+      await editor.open_file_path(file_path)
+      return
+    }
+
+    const preview_id = preview_document_id_ref.current
+    if (preview_id !== null) {
+      const preview_document = editor.documents.find((document) => document.id === preview_id)
+      if (preview_document?.kind === 'text' && preview_document.dirty) {
+        pin_document(preview_id)
+      } else {
+        clear_preview_document()
+        editor.close_document(preview_id)
+      }
+    }
+
+    pending_preview_path_ref.current = normalized_file_path
     await editor.open_file_path(file_path)
   }
 
@@ -203,8 +281,14 @@ function App() {
           void editor.open_recent_file(file_path)
         }}
         onRunEditorCommand={run_editor_command}
-        onSave={() => void editor.save_document()}
-        onSaveAs={() => void editor.save_document(true)}
+        onSave={() => {
+          if (editor.active_document_id !== null) pin_document(editor.active_document_id)
+          void editor.save_document()
+        }}
+        onSaveAs={() => {
+          if (editor.active_document_id !== null) pin_document(editor.active_document_id)
+          void editor.save_document(true)
+        }}
         onSplitTerminal={() => editor.split_terminal(workspace.root_path)}
         onToggleAiChat={editor.toggle_ai_chat}
         onToggleMenu={editor.toggle_menu}
@@ -273,8 +357,15 @@ function App() {
             diagnostics={editor.diagnostics}
             documents={editor.documents}
             editorRef={editor_ref}
-            onCloseDocument={editor.close_document}
-            onCloseDocuments={editor.close_documents}
+            onCloseDocument={(document_id) => {
+              pin_document(document_id)
+              editor.close_document(document_id)
+            }}
+            onCloseDocuments={(document_ids) => {
+              const preview_id = preview_document_id_ref.current
+              if (preview_id !== null && document_ids.includes(preview_id)) clear_preview_document()
+              editor.close_documents(document_ids)
+            }}
             onEditorCommandStateChange={set_editor_command_state}
             onFocusDocument={editor.validate_document_path}
             onOpenFilePath={(file_path) => {
@@ -283,6 +374,7 @@ function App() {
             }}
             onOpenContainingFolder={workspace.reveal_entry}
             onParserDiagnostics={editor.update_parser_diagnostics}
+            onPinDocument={pin_document}
             onSelectDocument={(document_id) => {
               mark_manual_editor_focus()
               editor.select_document(document_id)
@@ -292,7 +384,11 @@ function App() {
               void workspace.reveal_path(file_path)
             }}
             onToggleMarkdownView={editor.toggle_markdown_view}
-            onUpdateDocument={editor.update_document}
+            onUpdateDocument={(document_id, content) => {
+              pin_document(document_id)
+              editor.update_document(document_id, content)
+            }}
+            previewDocumentId={preview_document_id}
             settings={editor.settings}
             theme={code_editor_theme}
             workspaceRoot={workspace.root_path}
