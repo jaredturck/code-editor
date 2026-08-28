@@ -21,22 +21,22 @@ export const ai_settings_sections: Array<{ id: AISettingsSection; label: string 
 export const agent_role_details: Record<AgentRoleId, { label: string; description: string; default_tier: number }> = {
   orchestrator: {
     label: 'Orchestrator',
-    description: 'Owns the project objective, chooses work and coordinates specialists.',
+    description: 'Plans the work and coordinates the other agents.',
     default_tier: 3,
   },
   executor: {
     label: 'Executor',
-    description: 'Implements bounded coding work, normally in an isolated worker workspace.',
+    description: 'Writes and edits code for assigned tasks.',
     default_tier: 2,
   },
   scout: {
     label: 'Scout',
-    description: 'Investigates repository structure and external development evidence without mutating code.',
+    description: 'Explores the codebase and researches information without changing files.',
     default_tier: 1,
   },
   overwatcher: {
     label: 'Evaluator',
-    description: 'Independently checks implementation and verification evidence against requirements.',
+    description: 'Reviews completed work and checks it against the task requirements.',
     default_tier: 1,
   },
 }
