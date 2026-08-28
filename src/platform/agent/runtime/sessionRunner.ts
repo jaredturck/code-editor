@@ -2,7 +2,7 @@
 /** Native Qwen coding-agent session loop. */
 import { callAIWithMeta } from '@/platform/aiService'
 import { buildJsonSchemaTools } from '@/platform/agent/toolSchema'
-import { TOOL_DEFINITIONS } from '@/platform/agent/toolCatalog'
+import { TOOL_DEFINITIONS, resolveCatalogToolRequest } from '@/platform/agent/toolCatalog'
 import { createToolGuard } from '@/platform/agent/toolGuard'
 import { createModuleBroker } from '@/platform/agent/runtime/toolBroker'
 import { buildCapabilitySnapshot, resolveSafetyConfig } from '@/platform/agent/runtime/runtimeSupport'
@@ -59,7 +59,6 @@ const SERIAL_TOOLS = new Set([
   'files.write',
   'files.edit',
   'files.patch',
-  'image.generate',
   'terminal.exec',
   'agent.delegate',
   'agent.consult',
@@ -169,6 +168,13 @@ function limitedString(value, maxCharacters = 6000) {
 
 function recordValue(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function canonicalToolName(value) {
+  const requested = String(value || '').trim()
+  if (!requested || requested.startsWith('code.')) return requested
+  const resolved = resolveCatalogToolRequest(requested)
+  return resolved.resolved || requested
 }
 
 function resultSummary(toolName, args, result) {
@@ -373,7 +379,8 @@ export async function runAgentSession({
       break
     }
 
-    const toolCalls = Array.isArray(meta?.toolCalls) ? meta.toolCalls : []
+    const rawToolCalls = Array.isArray(meta?.toolCalls) ? meta.toolCalls : []
+    const toolCalls = rawToolCalls.map((call) => ({ ...call, name: canonicalToolName(call?.name) }))
     const text = String(meta?.text || '').trim()
     const reasoning = String(meta?.thinkingText || '').trim()
     if (reasoning) emit(onEvent, timeline, { type: 'thinking', summary: reasoning.slice(0, 4000), step })
@@ -387,7 +394,7 @@ export async function runAgentSession({
     thread.push({ role: 'assistant', content: text, toolCalls })
 
     const executeOne = async (call) => {
-      const toolName = String(call?.name || '')
+      const toolName = canonicalToolName(call?.name)
       const args = call?.args && typeof call.args === 'object' ? call.args : {}
       emit(onEvent, timeline, {
         type: 'tool_call',
@@ -441,7 +448,7 @@ export async function runAgentSession({
     }
 
     const canParallelize =
-      toolCalls.length > 1 && toolCalls.every((call) => !SERIAL_TOOLS.has(String(call?.name || '')))
+      toolCalls.length > 1 && toolCalls.every((call) => !SERIAL_TOOLS.has(canonicalToolName(call?.name)))
     const toolResults = canParallelize
       ? await Promise.all(toolCalls.map(executeOne))
       : await toolCalls.reduce(
