@@ -23,6 +23,7 @@ interface EditorPanelProps {
   diagnostics: EditorDiagnostic[]
   documents: EditorDocument[]
   editorRef: RefObject<CodeEditorHandle | null>
+  previewDocumentId?: number | null
   settings: EditorSettings
   theme: Exclude<ThemeMode, 'system'>
   onCloseDocument: (document_id: number) => void
@@ -32,6 +33,7 @@ interface EditorPanelProps {
   onOpenFilePath: (file_path: string) => void
   onOpenContainingFolder: (file_path: string) => void
   onParserDiagnostics: (document_id: number, diagnostics: EditorDiagnostic[]) => void
+  onPinDocument?: (document_id: number) => void
   onSelectDocument: (document_id: number) => void
   onRevealInExplorer: (file_path: string) => void
   onToggleMarkdownView: (document_id: number, view: TextEditorDocument['markdown_view']) => void
@@ -86,6 +88,7 @@ function EditorPanel({
   diagnostics,
   documents,
   editorRef,
+  previewDocumentId = null,
   settings,
   theme,
   onCloseDocument,
@@ -95,6 +98,7 @@ function EditorPanel({
   onOpenFilePath,
   onOpenContainingFolder,
   onParserDiagnostics,
+  onPinDocument,
   onSelectDocument,
   onRevealInExplorer,
   onToggleMarkdownView,
@@ -198,6 +202,7 @@ function EditorPanel({
       >
         {documents.map((document, document_index) => {
           const is_active = document.id === active_document.id
+          const is_preview = document.id === previewDocumentId
           const deleted = (document.kind === 'text' || document.kind === 'media') && document.deleted
           const dirty = document.kind === 'text' && document.dirty
 
@@ -216,6 +221,7 @@ function EditorPanel({
                 aria-selected={is_active}
                 className="flex min-w-0 flex-1 items-center gap-2 px-3 text-left text-xs outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500/70"
                 onClick={() => focus_tab(document.id)}
+                onDoubleClick={() => onPinDocument?.(document.id)}
                 onKeyDown={(event) => handle_tab_key(event, document_index)}
                 ref={(element) => {
                   if (element) {
@@ -232,7 +238,11 @@ function EditorPanel({
                     ●
                   </span>
                 )}
-                <span className={`truncate ${deleted ? 'text-red-400 line-through decoration-2' : ''}`}>
+                <span
+                  className={`truncate ${is_preview ? 'italic' : ''} ${
+                    deleted ? 'text-red-400 line-through decoration-2' : ''
+                  }`}
+                >
                   {document.name}
                 </span>
               </button>
