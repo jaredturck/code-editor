@@ -208,6 +208,18 @@ describe('ExplorerPanel', () => {
     expect(on_select_path).toHaveBeenCalledWith('/project/README.md')
     expect(on_open_file).toHaveBeenCalledWith('/project/README.md')
   })
+
+  it('keeps modifier-assisted file selection from opening a file', () => {
+    const on_open_file = vi.fn()
+
+    render_open_explorer({ onOpenFile: on_open_file })
+    fireEvent.click(screen.getByText('index.html'), { ctrlKey: true })
+    fireEvent.click(screen.getByText('package.json'), { metaKey: true })
+    fireEvent.click(screen.getByText('README.md'), { shiftKey: true })
+
+    expect(on_open_file).not.toHaveBeenCalled()
+  })
+
   it('selects a visible range with Shift', () => {
     const on_select_paths = vi.fn()
 
