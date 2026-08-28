@@ -89,7 +89,7 @@ export async function probeModelHealthOnce(settings: Settings): Promise<ModelHea
     for (const group of groups.values()) {
       // discoverModelsForProvider is deliberately fail-soft and returns [] on network/auth errors.
       // Therefore an empty result is inconclusive and must never create more failure records.
-      const available = await discoverModelsForProvider(group.provider, settings as never, group.keyId)
+      const available = await discoverModelsForProvider(group.provider, settings as never)
       const listed = new Set(available.map(lower))
       if (listed.size) positiveEvidence = true
       for (const model of group.models) {
