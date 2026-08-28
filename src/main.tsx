@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import { install_copy_context_menu } from './components/CopyContextMenu'
+import { install_copy_context_menu } from '@/platform/copyContextMenu'
 import { hydrateDurableStore } from '@/platform/localStorageStore'
 import './index.css'
 import './themes.css'
