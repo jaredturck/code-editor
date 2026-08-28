@@ -5,14 +5,19 @@
  */
 export * from '@/chat/agentChatLegacy'
 
-import { build_core_agent_settings as buildLegacyCoreAgentSettings } from '@/chat/agentChatLegacy'
+import {
+  build_core_agent_settings as buildLegacyCoreAgentSettings,
+  normalize_agent_activity_event as normalizeLegacyAgentActivityEvent,
+} from '@/chat/agentChatLegacy'
 import type { ProjectRunMode } from '@/chat/projectRunController'
 import type { OrbSettings } from '@/platform/settingsStorage'
+import type { AgentActivityItem } from '@/types/editor'
 
 // Compatibility sentinel for the inherited session runner, which currently treats 0 as "use the
 // old 15-minute default". The outer project lifecycle has no duration completion budget; this
 // merely keeps the legacy inner-context check-in unreachable until that runner is replaced.
 const LONG_RUNNING_PROJECT_SESSION_MINUTES = 10 * 365 * 24 * 60
+const CHAT_ACTIVITY_LIMIT = 200
 
 const automatic_blocked_tools = new Set([
   'approval.request',
@@ -61,6 +66,22 @@ function image_generation_tool_allowlist(value: unknown, enabled: boolean) {
   if (!Array.isArray(value) || !enabled) return value
   if (value.some((tool) => String(tool || '') === 'image.generate')) return value
   return [...value, 'image.generate']
+}
+
+export function sanitize_agent_timeline(value: unknown): AgentActivityItem[] {
+  if (!Array.isArray(value)) return []
+  const normalized = value
+    .map((event, index) =>
+      event && typeof event === 'object'
+        ? normalizeLegacyAgentActivityEvent(event as Record<string, unknown>, index)
+        : null,
+    )
+    .filter((event): event is AgentActivityItem => Boolean(event))
+  const planning = normalized.filter((event) => event.type === 'planning').slice(-8)
+  const recent = normalized
+    .filter((event) => event.type !== 'planning')
+    .slice(-Math.max(0, CHAT_ACTIVITY_LIMIT - planning.length))
+  return [...planning, ...recent]
 }
 
 export function build_core_agent_settings(
