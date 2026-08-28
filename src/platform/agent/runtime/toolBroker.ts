@@ -29,6 +29,7 @@ import {
 import { evaluateToolAccess } from '@/platform/agent/runtime/capabilityPolicy'
 import { assertAllowedTool, assertSafePath } from '@/platform/agent/runtime/safetyPolicy'
 import { inspectBrowserRuntime } from '@/platform/browserInspectionBridge'
+import { generateProjectImage } from '@/platform/imageGenerationBridge'
 import { analyzeWorkspaceFile } from '@/platform/workspaceDiagnosticsBridge'
 import { createModuleBroker as createLegacyModuleBroker } from '@/platform/agent/runtime/toolBrokerLegacy'
 import {
@@ -37,7 +38,7 @@ import {
   terminalCommandEscapesWorkspace,
 } from '@/platform/agent/runtime/readOnlyTerminalPolicy'
 
-const editorNativeTools = new Set(['browser.inspect', 'diagnostics.check'])
+const editorNativeTools = new Set(['browser.inspect', 'diagnostics.check', 'image.generate'])
 
 const workspaceFileTools = new Set([
   'files.list',
@@ -72,6 +73,7 @@ function mutationSucceeded(toolName: string, args: Record<string, unknown>, resu
   if (toolName === 'files.write') return result.saved === true || result.dirty === true
   if (toolName === 'files.edit') return result.applied === true
   if (toolName === 'files.patch') return args.dryRun !== true && result.applied !== false
+  if (toolName === 'image.generate') return result.saved === true
   return false
 }
 
@@ -159,7 +161,7 @@ async function attachAgentRuntimeContext(
     workspace_mutated: workspaceMutated,
   })
 
-  const shouldRefreshDiagnostics = workspaceMutated || toolName === 'diagnostics.check'
+  const shouldRefreshDiagnostics = (workspaceMutated && toolName !== 'image.generate') || toolName === 'diagnostics.check'
   let snapshot = null
   let diagnosticsError = ''
   if (shouldRefreshDiagnostics) {
@@ -398,6 +400,27 @@ export function createModuleBroker(options: LegacyBrokerOptions) {
       }
 
       assertEditorNativeAccess(toolName, options)
+
+      if (toolName === 'image.generate') {
+        const path = assertSafePath(String(args.path || ''), {
+          operation: 'write',
+          settings: options?.settings,
+        })
+        const prompt = String(args.prompt || '').trim()
+        const format = ['square', 'landscape', 'portrait'].includes(String(args.format || ''))
+          ? String(args.format) as 'square' | 'landscape' | 'portrait'
+          : 'landscape'
+        const result = await generateProjectImage(prompt, path, format, workspaceRoot)
+        updateMutationEpoch(state, toolName, args, result)
+        const record = result && typeof result === 'object' && !Array.isArray(result)
+          ? result as Record<string, unknown>
+          : {}
+        const normalizedResult = {
+          ...record,
+          path: String(record.relativePath || record.path || path),
+        }
+        return attachAgentRuntimeContext(options, runtimeContextState, workspaceRoot, toolName, args, normalizedResult)
+      }
 
       if (toolName === 'browser.inspect') {
         const url = String(args.url || '').trim()
