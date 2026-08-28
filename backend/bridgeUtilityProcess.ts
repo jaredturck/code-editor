@@ -5,10 +5,6 @@ import type {
   DuckDuckGoBrowserSearchResponse,
   DuckDuckGoSearchMode,
 } from './desktopBridge/services/duckDuckGoBrowserProvider.js'
-import type {
-  ScreenCaptureProviderRequest,
-  ScreenCaptureProviderResult,
-} from './desktopBridge/services/screenCaptureProvider.js'
 import type { BridgePermissionState } from './desktopBridge/shared/bridgeAuthorization.js'
 
 interface ParentPortLike {
@@ -44,8 +40,6 @@ interface StartMessage {
   duckDuckGoSearchMode: DuckDuckGoSearchMode
 }
 
-const SCREEN_CAPTURE_PROVIDER_KEY = '__irisScreenCaptureProvider'
-const SCREEN_RPC_TIMEOUT_MS = 20_000
 const DDG_RPC_TIMEOUT_MS = 70_000
 const pending_requests = new Map<string, PendingRequest>()
 let bridge_handle: BridgeHandle | null = null
@@ -100,26 +94,6 @@ function handle_rpc_response(message: Record<string, unknown>) {
     return
   }
   pending.resolve(message.result)
-}
-
-function request_screen_capture(request: ScreenCaptureProviderRequest = {}): Promise<ScreenCaptureProviderResult> {
-  const id = next_request_id('screen')
-  return new Promise<ScreenCaptureProviderResult>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      const pending = pending_requests.get(id)
-      if (!pending) return
-      pending_requests.delete(id)
-      pending.cleanup?.()
-      pending.reject(new Error('Screen capture request timed out waiting for the Electron main process.'))
-    }, SCREEN_RPC_TIMEOUT_MS)
-    timeout.unref?.()
-    pending_requests.set(id, {
-      resolve: (value) => resolve(value as ScreenCaptureProviderResult),
-      reject,
-      cleanup: () => clearTimeout(timeout),
-    })
-    parent_port.postMessage({ type: 'screen-request', id, request })
-  })
 }
 
 function request_browser_search(request: DuckDuckGoBrowserSearchRequest): Promise<DuckDuckGoBrowserSearchResponse> {
@@ -178,7 +152,6 @@ async function start_bridge(message: StartMessage) {
 
   const received_key = message.masterKey instanceof Uint8Array ? message.masterKey : new Uint8Array(message.masterKey)
   const master_key = Buffer.from(received_key)
-  ;(globalThis as Record<string, unknown>)[SCREEN_CAPTURE_PROVIDER_KEY] = request_screen_capture
 
   try {
     bridge_handle = await startLocalBridgeServer({
@@ -200,7 +173,6 @@ async function start_bridge(message: StartMessage) {
       permissions: bridge_handle.getPermissions?.(),
     })
   } catch (error) {
-    delete (globalThis as Record<string, unknown>)[SCREEN_CAPTURE_PROVIDER_KEY]
     parent_port.postMessage({ type: 'failed', error: error_message(error) })
     process.exitCode = 1
   } finally {
@@ -219,7 +191,6 @@ async function close_bridge() {
   if (closing) return
   closing = true
   reject_pending_requests('Local bridge utility process is shutting down.')
-  delete (globalThis as Record<string, unknown>)[SCREEN_CAPTURE_PROVIDER_KEY]
   const current = bridge_handle
   bridge_handle = null
   if (current?.close) await current.close()
@@ -243,7 +214,7 @@ async function handle_parent_message(value: unknown) {
     await close_bridge()
     return
   }
-  if (type === 'screen-result' || type === 'ddg-result' || type === 'ddg-progress') {
+  if (type === 'ddg-result' || type === 'ddg-progress') {
     handle_rpc_response(message)
   }
 }
